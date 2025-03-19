@@ -5,7 +5,7 @@
 
 # Get full file paths of all R files in the api directory
 # base::source all files using lapply()
-lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
+# lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
 
 # Initialize functions needed for the progress bar
 initializeLoadingAnimation <- function(steps) {
@@ -17,7 +17,7 @@ initializeLoadingAnimation <- function(steps) {
       getOption("width", 80) - 10  # Fallback to R's width setting
     }
   }, error = function(e) 80)  # Default if all else fails
-
+  
   list(
     steps = steps,
     current = 0,
@@ -75,19 +75,19 @@ formatDuration <- function(duration) {
 #'
 #' @return A data frame containing the requested REDCap data
 #' @export
-getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
-                      redcap_event_name = NULL, batch_size = 1000,
+getRedcap <- function(instrument_name = NULL, raw_or_label = "raw", 
+                      redcap_event_name = NULL, batch_size = 1000, 
                       records = NULL, fields = NULL) {
   start_time <- Sys.time()
-
+  
   if (!require(config)) install.packages("config"); library(config)
   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
   if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
-
+  
   # Validate secrets
 #   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
-
+  
   # Input validation and config setup
   if (is.null(instrument_name)) {
     forms_data <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
@@ -99,7 +99,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
                  forms_table, example_text),
          call. = FALSE)
   }
-
+  
   # Validate config
 #   base::source("api/ConfigEnv.R")
   validate_config("redcap")
@@ -113,7 +113,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   }
   completeLoadingAnimation(pb)
   message("")
-
+  
   # First try the simple approach
   tryCatch({
     df <- REDCapR::redcap_read(
@@ -127,7 +127,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
       raw_or_label_headers = "raw",
       verbose = TRUE
     )$data
-
+    
     # Quick validation check - if we're missing key data, throw an error to trigger fallback
     required_cols <- c("src_subject_id", "subjectkey")  # Add other required columns as needed
     if (!all(required_cols %in% names(df))) {
@@ -136,7 +136,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   }, error = function(e) {
     # If simple approach fails, try the separate keys approach
     message("\nAttempting alternative data retrieval method...")
-
+    
     # Get super_keys data
     super_keys_data <- REDCapR::redcap_read(
       redcap_uri = uri,
@@ -148,7 +148,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
       raw_or_label_headers = "raw",
       verbose = TRUE
     )$data
-
+    
     # Get instrument data
     instrument_data <- REDCapR::redcap_read(
       redcap_uri = uri,
@@ -161,30 +161,30 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
       raw_or_label_headers = "raw",
       verbose = TRUE
     )$data
-
+    
     # Get join keys while preserving redcap_event_name
     join_keys <- base::intersect(names(super_keys_data), names(instrument_data))
     join_keys <- join_keys[join_keys != "redcap_event_name"]
-
+    
     # Merge while preserving the instrument data's redcap_event_name
     df <- base::merge(super_keys_data, instrument_data, by = join_keys, all.y = TRUE)
   })
-
+  
   # Add measure column
   # df$measure <- instrument_name
-
+  
   # For interview_age columns
   age_cols <- grep("_interview_age$", base::names(df))
   if (length(age_cols) > 0) {
     base::names(df)[age_cols] <- "interview_age"
   }
-
+  
   # For interview_date columns
   date_cols <- grep("_interview_date$", base::names(df))
   if (length(date_cols) > 0) {
     base::names(df)[date_cols] <- "interview_date"
   }
-
+  
   # Apply redcap_event_name filter if specified
   if (!is.null(redcap_event_name)) {
     if (!"redcap_event_name" %in% names(df)) {
@@ -192,25 +192,27 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
     }
     df <- df[df$redcap_event_name == redcap_event_name, ]
   }
-
+  
   # Study-specific processing
   if (config$study_alias == "impact-mh") {
     if ("dob" %in% colnames(df)) {
       df <- subset(df, select = -dob)
     }
   }
-
+  
   if (config$study_alias == "capr") {
 #     base::source("api/redcap/capr-logic.R")
     df <- processCaprData(df, instrument_name)
   }
-
+  
   # Show duration
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "secs")
   message(sprintf("\nData frame '%s' retrieved in %s.", instrument_name, formatDuration(duration)))
 
-  return(df)
+  #return(df)
+  # comment into add prefixes (will break code)
+  return(add_prefix_to_columns(df,instrument_name))
 }
 
 
@@ -222,9 +224,9 @@ getForms <- function() {
   # Validate secrets
 #   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
-
+  
   forms <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
-
+  
   # Option 1: Using knitr::kable for a clean table
   return(knitr::kable(forms, format = "simple"))
 }
@@ -235,7 +237,7 @@ getDictionary <- function(instrument_name) {
   # Validate secrets
 #   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
-
+  
   metadata <- REDCapR::redcap_metadata_read(redcap_uri = uri, token = token, verbose = TRUE, config_options = NULL)$data
   dictionary <- metadata[metadata$form_name == instrument_name, ]
   # View(dictionary)

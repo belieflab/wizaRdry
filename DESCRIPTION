@@ -19,4 +19,5 @@ Imports:
     parallel,
     qualtRics,
     R6,
-    REDCapR
+    REDCapR,
+    stringdist

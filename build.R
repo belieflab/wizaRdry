@@ -9,8 +9,10 @@ usethis::use_package("mongolite")
 usethis::use_package("future")
 usethis::use_package("future.apply")
 usethis::use_package("parallel")
+usethis::use_package("stringdist")
 
-#source("sync.R")
+# syncs all functions from dev (belieflab/api) to wizaRdry
+source("sync.R")
 # Generate documentation from roxygen comments
 devtools::document()
 devtools::load_all()  # Load the package with the new name
@@ -25,4 +27,4 @@ devtools::install()
 
 wizaRdry::getRedcap("measure_1")
 rgpts <- wizaRdry::getQualtrics("rgpts")
-prl <- wizaRdry::getMongo("dd", "capr")
+dd <- wizaRdry::getMongo("dd", "capr")

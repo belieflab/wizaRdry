@@ -41,7 +41,10 @@ process_file("../api/getSurvey.R", "R/getQualtrics.R")
 
 process_file("../api/getTask.R", "R/getMongo.R")
 
+file.copy(from = "../api/src/addPrefixToColumns.R", to = "R/addPrefixToColumns.R", overwrite = TRUE)
 
 
-process_file("../api/dataRequest.R", "R/dataRequest.R")
-process_file("../api/ndaRequest.R", "R/ndaRequest.R")
+
+
+#process_file("../api/dataRequest.R", "R/dataRequest.R")
+#process_file("../api/ndaRequest.R", "R/ndaRequest.R")
