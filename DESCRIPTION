@@ -12,7 +12,10 @@ Imports:
     cli,
     config,
     dplyr,
+    future,
+    future.apply,
     knitr,
+    mongolite,
     qualtRics,
     R6,
     REDCapR

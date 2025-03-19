@@ -5,6 +5,10 @@ usethis::use_package("knitr")
 usethis::use_package("REDCapR")
 usethis::use_package("cli")
 usethis::use_package("R6")
+usethis::use_package("mongolite")
+usethis::use_package("future")
+usethis::use_package("future.apply")
+
 #source("sync.R")
 # Generate documentation from roxygen comments
 devtools::document()
@@ -19,3 +23,4 @@ devtools::build()
 devtools::install()
 
 wizaRdry::getRedcap("measure_1")
+rgpts <- wizaRdry::getQualtrics("rgpts")

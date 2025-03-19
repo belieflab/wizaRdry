@@ -45,8 +45,8 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                            # Method to handle variable substitutions like ${study_alias}
                            process_substitutions = function() {
                              # Process mongo collection name if it references study_alias
-                             if (!is.null(self$config$mongo) && 
-                                 !is.null(self$config$mongo$collection) && 
+                             if (!is.null(self$config$mongo) &&
+                                 !is.null(self$config$mongo$collection) &&
                                  self$config$mongo$collection == "${study_alias}") {
                                
                                if (!is.null(self$config$study_alias)) {
@@ -92,7 +92,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              
                              # Check if the API type is supported
                              if (!api_type %in% names(self$api_specs)) {
-                               stop("Unknown API type: '", api_type, "'. Valid options are: ", 
+                               stop("Unknown API type: '", api_type, "'. Valid options are: ",
                                     paste(names(self$api_specs), collapse=", "))
                              }
                              
@@ -100,7 +100,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              
                              # Check if API section exists
                              if (!self$has_value(api_type)) {
-                               stop("The '", api_type, "' section is missing in ", self$config_file, 
+                               stop("The '", api_type, "' section is missing in ", self$config_file,
                                     ". Please add a ", api_type, " section with the necessary configuration.")
                              }
                              
@@ -122,11 +122,16 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                  all_errors <- c(all_errors, "The 'collection' setting cannot be empty")
                                }
                              } else if (api_type == "qualtrics") {
-                               # Check if survey_ids file exists
+                               # Check if survey_ids exists and is a list
                                if (self$has_value("qualtrics.survey_ids")) {
-                                 survey_ids_file <- self$get_value("qualtrics.survey_ids")
-                                 if (!file.exists(survey_ids_file)) {
-                                   all_errors <- c(all_errors, paste("The survey_ids file '", survey_ids_file, "' does not exist"))
+                                 survey_ids <- self$get_value("qualtrics.survey_ids")
+                                 if (!is.list(survey_ids)) {
+                                   all_errors <- c(all_errors, "The 'survey_ids' setting must be a nested structure")
+                                 } else {
+                                   # Check if there are any institutions defined
+                                   if (length(names(survey_ids)) == 0) {
+                                     all_errors <- c(all_errors, "No institutions defined in 'survey_ids'")
+                                   }
                                  }
                                }
                              } else if (api_type == "redcap") {
@@ -137,7 +142,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              
                              # If we found any errors, report them all at once
                              if (length(all_errors) > 0) {
-                               stop(api_type, " configuration errors in ", self$config_file, ":\n- ", 
+                               stop(api_type, " configuration errors in ", self$config_file, ":\n- ",
                                     paste(all_errors, collapse="\n- "), call. = FALSE)
                              } else {
                                message("The ", api_type, " configuration in ", self$config_file, " is valid.")
@@ -161,7 +166,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              
                              # If we found any errors, report them all at once
                              if (length(all_errors) > 0) {
-                               stop("Core configuration errors in ", self$config_file, ":\n- ", 
+                               stop("Core configuration errors in ", self$config_file, ":\n- ",
                                     paste(all_errors, collapse="\n- "), call. = FALSE)
                              } else {
                                # message("The core configuration in ", self$config_file, " is valid.")

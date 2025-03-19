@@ -82,10 +82,10 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
 
   if (!require(config)) install.packages("config"); library(config)
   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
-  #if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
+  if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
 
   # Validate secrets
-  # base::source("api/SecretsEnv.R")
+#   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
 
   # Input validation and config setup
@@ -101,7 +101,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   }
 
   # Validate config
-  # base::source("api/ConfigEnv.R")
+#   base::source("api/ConfigEnv.R")
   validate_config("redcap")
 
   # Progress bar
@@ -201,7 +201,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   }
 
   if (config$study_alias == "capr") {
-    base::source("api/redcap/capr-logic.R")
+#     base::source("api/redcap/capr-logic.R")
     df <- processCaprData(df, instrument_name)
   }
 
@@ -220,7 +220,7 @@ getForms <- function() {
   if (!require(knitr)) install.packages("knitr"); library(knitr)
 
   # Validate secrets
-  # base::source("api/SecretsEnv.R")
+#   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
 
   forms <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
@@ -233,7 +233,7 @@ getDictionary <- function(instrument_name) {
   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
 
   # Validate secrets
-  # base::source("api/SecretsEnv.R")
+#   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
 
   metadata <- REDCapR::redcap_metadata_read(redcap_uri = uri, token = token, verbose = TRUE, config_options = NULL)$data
