@@ -8,6 +8,7 @@ usethis::use_package("R6")
 usethis::use_package("mongolite")
 usethis::use_package("future")
 usethis::use_package("future.apply")
+usethis::use_package("parallel")
 
 #source("sync.R")
 # Generate documentation from roxygen comments
@@ -24,3 +25,4 @@ devtools::install()
 
 wizaRdry::getRedcap("measure_1")
 rgpts <- wizaRdry::getQualtrics("rgpts")
+prl <- wizaRdry::getMongo("dd", "capr")

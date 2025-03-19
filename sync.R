@@ -3,9 +3,12 @@ process_file <- function(source_path, dest_path) {
   # Read the original file
   lines <- readLines(source_path)
 
-  # Process each line - comment out lines starting with "api/"
+  # Process each line - comment out lines with api/ references
   modified_lines <- sapply(lines, function(line) {
-    if (grepl("^\\s*api/", line) || grepl("source\\([\"']api/", line)) {
+    if (grepl("^\\s*api/", line) ||
+        grepl("source\\([\"']api/", line) ||
+        grepl("list\\.files\\([\"']api/", line) ||
+        grepl("\\bapi/", line)) {
       return(paste0("# ", line))  # Comment out the line
     } else {
       return(line)  # Keep line as is
@@ -14,11 +17,9 @@ process_file <- function(source_path, dest_path) {
 
   # Write to new location
   writeLines(modified_lines, dest_path)
-
   message(sprintf("File copied from %s to %s with api/ references commented out",
                   source_path, dest_path))
 }
-
 
 process_file("../api/getRedcap.R", "R/getRedcap.R")
 
@@ -31,7 +32,7 @@ file.copy(from = "../api/ConfigEnv.R", to = "R", overwrite = TRUE)
 
 
 
-file.copy(from = "../api/src/shortcuts.R", to = "R/shortcuts.R", overwrite = TRUE)
+file.copy(from = "../api/src/shortcuts.R", to = "R/aliases.R", overwrite = TRUE)
 file.copy(from = "../api/src/animations.R", to = "R/animations.R", overwrite = TRUE)
 
 # Use the function

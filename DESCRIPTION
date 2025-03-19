@@ -16,6 +16,7 @@ Imports:
     future.apply,
     knitr,
     mongolite,
+    parallel,
     qualtRics,
     R6,
     REDCapR
