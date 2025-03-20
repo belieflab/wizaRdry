@@ -6,10 +6,23 @@
 \alias{wizaRdry-package}
 \title{wizaRdry: A Framework For Collaborative & Reproducable Data Analysis}
 \description{
-What the package does (one paragraph).
+The wizaRdry package is a powerful data integration framework that solves the fundamental problem of inconsistent access to research data across multiple platforms. It eliminates repetitive boilerplate code by providing a unified interface to REDCap, MongoDB, and Qualtrics through its core functions: getRedcap(), getMongo(), and getQualtrics(). The package implements memory-aware parallel processing that automatically scales to available system resources, robust configuration validation, and comprehensive error handling with intelligent fallback strategies. By standardizing data retrieval across platforms and automating field harmonization, wizaRdry significantly reduces the risk of inconsistencies in multi-researcher environments. This package is essential for any research team working with distributed data sources who need reproducible, validated access to their research data.
 }
 \author{
-\strong{Maintainer}: First Last \email{first.last@example.com}
+\strong{Maintainer}: Joshua Kenney \email{joshua.kenney@yale.edu}
+
+Authors:
+\itemize{
+  \item Minerva Pappu \email{minerva.pappu@yale.edu}
+  \item Trevor Williams \email{trevormsu@gmail.com}
+}
+
+Other contributors:
+\itemize{
+  \item Victor Pokorny \email{victor.pokorny@northwestern.edu} [contributor]
+  \item Christian Horgan \email{christian.horgan@yale.edu} [contributor]
+  \item Michael Spilka \email{michael.j.spilka@gmail.com} [contributor]
+}
 
 }
 \keyword{internal}

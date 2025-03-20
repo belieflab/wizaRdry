@@ -64,7 +64,6 @@ getQualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE) {
     verbose = FALSE,
     label = label,
     convert = label,
-    force_request = TRUE,
     add_column_map = TRUE
   )
   
@@ -164,7 +163,6 @@ getQualtricsData <- function(qualtrics_alias, label) {
       verbose = FALSE,
       label = label,
       convert = label,
-      force_request = TRUE,
       add_column_map = TRUE
     )
     if (!is.data.frame(df)) {

@@ -1,9 +1,15 @@
 Package: wizaRdry
 Title: A Framework For Collaborative & Reproducable Data Analysis
 Version: 0.0.0.9000
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Authors@R: c(
+    person("Joshua", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
+    person("Minerva", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
+    person("Trevor", "Williams", email = "trevormsu@gmail.com", role = "aut"),
+    person("Victor", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
+    person("Christian", "Horgan", email = "christian.horgan@yale.edu", role = "ctb"),
+    person("Michael", "Spilka", email = "michael.j.spilka@gmail.com", role = "ctb")
+  )
+Description: The wizaRdry package is a powerful data integration framework that solves the fundamental problem of inconsistent access to research data across multiple platforms. It eliminates repetitive boilerplate code by providing a unified interface to REDCap, MongoDB, and Qualtrics through its core functions: getRedcap(), getMongo(), and getQualtrics(). The package implements memory-aware parallel processing that automatically scales to available system resources, robust configuration validation, and comprehensive error handling with intelligent fallback strategies. By standardizing data retrieval across platforms and automating field harmonization, wizaRdry significantly reduces the risk of inconsistencies in multi-researcher environments. This package is essential for any research team working with distributed data sources who need reproducible, validated access to their research data.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

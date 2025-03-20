@@ -12,8 +12,6 @@ usethis::use_package("parallel")
 usethis::use_package("stringdist")
 usethis::use_package("rlang")
 
-
-
 # syncs all functions from dev (belieflab/api) to wizaRdry
 source("dev/sync.R")
 
@@ -33,9 +31,10 @@ devtools::build()
 devtools::install()
 
 # run test cases
-wizaRdry::getRedcap("measure_1")
+measure_1 <- wizaRdry::getRedcap("measure_1")
 rgpts <- wizaRdry::getQualtrics("rgpts")
 dd <- wizaRdry::getMongo("dd", "capr")
 
-# remove previous version
+# !!! remove previous version !!!
 remove.packages("wizaRdry")
+

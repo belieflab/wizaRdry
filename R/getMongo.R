@@ -6,6 +6,7 @@
 
 #' Cross-platform memory check function
 #' @return List containing total and available memory in GB
+#' @noRd
 getAvailableMemory <- function() {
       tryCatch({
         if (.Platform$OS.type == "windows") {
@@ -128,6 +129,7 @@ getAvailableMemory <- function() {
 #' @param mem_info Memory information structure
 #' @param num_cores Number of CPU cores
 #' @return List containing optimal chunk size and number of workers
+#' @noRd
 calculateResourceParams <- function(total_records, mem_info, num_cores) {
   # Default values
   params <- list(
@@ -162,6 +164,7 @@ calculateResourceParams <- function(total_records, mem_info, num_cores) {
 #' Initialize a clean loading animation
 #' @param steps Number of steps in the process
 #' @return Loading animation object
+#' @noRd
 initializeLoadingAnimation <- function(steps) {
   list(
     steps = steps,
@@ -174,6 +177,7 @@ initializeLoadingAnimation <- function(steps) {
 #' Update the loading animation
 #' @param pb Loading animation object
 #' @param current Current step
+#' @noRd
 updateLoadingAnimation <- function(pb, current) {
   pb$current <- current
   percentage <- round(current / pb$steps * 100)
@@ -188,6 +192,7 @@ updateLoadingAnimation <- function(pb, current) {
 
 #' Complete the loading animation
 #' @param pb Loading animation object
+#' @noRd
 completeLoadingAnimation <- function(pb) {
   updateLoadingAnimation(pb, pb$steps)
   cat("\n")
@@ -198,6 +203,7 @@ completeLoadingAnimation <- function(pb) {
 #' @name formatDuration
 #' @param duration The duration to format in seconds or minutes
 #' @return A formatted string representing the duration
+#' @noRd
 formatDuration <- function(duration) {
   secs <- as.numeric(duration, units = "secs")
   if (secs < 60) {
@@ -244,7 +250,7 @@ getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_s
   options(mongolite.quiet = TRUE)
   
   # Get configuration
-  cfg <- config::get()
+  cfg <- validate_config("mongo")
   
   if (is.null(db_name)) {
     db_name <- cfg$mongo$collection
@@ -260,7 +266,7 @@ getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_s
   }
   
   # Try connecting - will now throw explicit error if collection doesn't exist
-  Mongo <- Connect(collection_name, db_name)
+  Mongo <- ConnectMongo(collection_name, db_name)
   
   # Find valid identifier
   if (is.null(identifier)) {
@@ -358,7 +364,7 @@ message(sprintf("Processing: %d chunks x %d records in parallel (%d workers)",
       })
       
       tryCatch({
-        chunk_mongo <- Connect(collection_name, db_name)
+        chunk_mongo <- ConnectMongo(collection_name, db_name)
         batch_info <- chunks[[i]]
         if (!is.null(batch_info) && !is.null(batch_info$start) && !is.null(batch_info$size)) {
           data_chunk <- getMongoData(chunk_mongo, identifier, batch_info)
@@ -428,12 +434,14 @@ createChunks <- function(total_records, chunk_size) {
 #' @param collection_name The name of the collection you want to connect to.
 #' @param db_name The name of the database you cant to connect to.
 #' @return A mongolite::mongo object representing the connection to the MongoDB collection.
-Connect <- function(collection_name, db_name) {
+#' @noRd
+ConnectMongo <- function(collection_name, db_name) {
   # Validate secrets
 #   base::source("api/SecretsEnv.R")
   validate_secrets("mongo")
   
-  config <- config::get()
+#   base::source("api/ConfigEnv.R")
+  config <- validate_config("mongo")
   
   if (is.null(db_name)) {
     db_name = config$mongo$collection
@@ -511,7 +519,7 @@ disconnectMongo <- function(mongo) {
 #' # This example assumes 'Mongo' is a MongoDB connection
 #' # batch_info <- list(start = 0, size = 100)
 #' # df <- getMongoData(Mongo, "src_subject_id", batch_info)
-#' @export
+#' @noRd
 getMongoData <- function(Mongo, identifier, batch_info) {
   # Check for both exists AND non-empty
   query_json <- sprintf('{"%s": {"$exists": true, "$ne": ""}}', identifier)
@@ -612,8 +620,8 @@ getCollections <- function() {
   })
   
   # Connect to any default collection just to get connection
-  # Mongo <- Connect("system.namespaces", silent_validation = TRUE)
-  Mongo <- Connect("system.namespaces")
+  # Mongo <- ConnectMongo("system.namespaces", silent_validation = TRUE)
+  Mongo <- ConnectMongo("system.namespaces")
   collections <- getCollectionsFromConnection(Mongo)
   return(collections)
 }

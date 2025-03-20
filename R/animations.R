@@ -16,16 +16,18 @@ progress_callback <- function(count, total) {
   setTxtProgressBar(pb, count) # Update the loading animation
 }
 
+#' @noRd
 initializeLoadingAnimation <- function(max_progress) {
   # cat("Loading...\n")
   pb <- txtProgressBar(min = 0, max = max_progress, style = 3)
   return(pb)
 }
 
+#' @noRd
 updateLoadingAnimation <- function(pb, current_progress) {
   setTxtProgressBar(pb, current_progress)
 }
-
+#' @noRd
 completeLoadingAnimation <- function(pb) {
   close(pb)
 }

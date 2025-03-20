@@ -8,6 +8,7 @@
 # lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
 
 # Initialize functions needed for the progress bar
+#' @noRd
 initializeLoadingAnimation <- function(steps) {
   # Get console width
   width <- tryCatch({
@@ -26,6 +27,7 @@ initializeLoadingAnimation <- function(steps) {
   )
 }
 
+#' @noRd
 updateLoadingAnimation <- function(pb, current) {
   pb$current <- current
   percentage <- round(current / pb$steps * 100)
@@ -38,6 +40,7 @@ updateLoadingAnimation <- function(pb, current) {
   utils::flush.console()
 }
 
+#' @noRd
 completeLoadingAnimation <- function(pb) {
   updateLoadingAnimation(pb, pb$steps)
   cat("\n")
@@ -48,6 +51,7 @@ completeLoadingAnimation <- function(pb) {
 #' @name formatDuration
 #' @param duration The duration to format in seconds or minutes
 #' @return A formatted string representing the duration
+#' @noRd 
 formatDuration <- function(duration) {
   secs <- as.numeric(duration, units = "secs")
   if (secs < 60) {
@@ -107,7 +111,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   
   # Validate config
 #   base::source("api/ConfigEnv.R")
-  validate_config("redcap")
+  config <- validate_config("redcap")
 
   # Progress bar
   pb <- initializeLoadingAnimation(20)
