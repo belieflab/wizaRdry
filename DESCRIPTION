@@ -3,11 +3,12 @@ Title: A Framework For Collaborative & Reproducible Data Analysis
 Version: 0.1.0
 Authors@R: c(
     person("Joshua", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
-    person("Minerva", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
-    person("Trevor", "Williams", email = "trevormsu@gmail.com", role = "aut"),
+    person("Minerva K.", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
+    person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
     person("Victor", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
+    person("Santiago", "Castiello de Obeso", email = "santiago.castiellodeobeso@yale.edu", role = "ctb"),
     person("Christian", "Horgan", email = "christian.horgan@yale.edu", role = "ctb"),
-    person("Michael", "Spilka", email = "michael.j.spilka@gmail.com", role = "ctb")
+    person("Michael J.", "Spilka", email = "michael.j.spilka@gmail.com", role = "ctb")
   )
 Description: A comprehensive data analysis framework specifically designed for 
     NIH-funded research with built-in NIH Data Archive (NDA) integration.

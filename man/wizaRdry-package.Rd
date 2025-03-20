@@ -21,15 +21,16 @@ Useful links:
 
 Authors:
 \itemize{
-  \item Minerva Pappu \email{minerva.pappu@yale.edu}
-  \item Trevor Williams \email{trevormsu@gmail.com}
+  \item Minerva K. Pappu \email{minerva.pappu@yale.edu}
+  \item Trevor F. Williams \email{trevormsu@gmail.com}
 }
 
 Other contributors:
 \itemize{
   \item Victor Pokorny \email{victor.pokorny@northwestern.edu} [contributor]
+  \item Santiago Castiello de Obeso \email{santiago.castiellodeobeso@yale.edu} [contributor]
   \item Christian Horgan \email{christian.horgan@yale.edu} [contributor]
-  \item Michael Spilka \email{michael.j.spilka@gmail.com} [contributor]
+  \item Michael J. Spilka \email{michael.j.spilka@gmail.com} [contributor]
 }
 
 }

@@ -26,3 +26,5 @@ process_file("../api/src/createNda.R", "R/createNda.R")
 process_file("../api/dataFilter.R", "R/dataFilter.R")
 process_file("../api/dataMerge.R", "R/dataMerge.R")
 process_file("../api/dataParse.R", "R/dataParse.R")
+
+process_file("../api/scry.R", "R/scry.R")
