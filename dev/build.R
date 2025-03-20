@@ -15,6 +15,10 @@ usethis::use_package("httr")
 usethis::use_package("jsonlite")
 usethis::use_package("testthat")
 usethis::use_package("haven")
+usethis::use_package("beepr")
+usethis::use_build_ignore(".github")
+usethis::use_build_ignore("dev")
+
 # syncs all functions from dev (belieflab/api) to wizaRdry
 source("dev/sync.R")
 

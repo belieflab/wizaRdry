@@ -2,14 +2,19 @@ process_file <- function(source_path, dest_path) {
   # Read the original file
   lines <- readLines(source_path)
 
-  # Process each line - comment out lines with api/ references and library/require calls
+  # Process each line with more robust patterns
   modified_lines <- sapply(lines, function(line) {
-    if (grepl("source\\([\"']api/", line) ||               # source() calls with "api/"
-        grepl("list\\.files\\([\"']api/", line) ||         # list.files() calls with "api/"
-        grepl("\\bapi/[^_]", line) ||                      # "api/" but not followed by underscore
-        grepl("if\\s*\\(!require\\(", line) ||             # require() checks
-        grepl("library\\(", line) ||                        # library() calls
-        grepl("require\\(", line)) {                        # require() calls
+    # Define more precise patterns for library and require calls
+    library_pattern <- "\\b(library|require)\\s*\\([^)]+\\)"
+    require_check_pattern <- "\\bif\\s*\\(\\s*!\\s*require\\s*\\("
+    api_pattern <- "(source|list\\.files)\\s*\\([\"']api/"
+    api_ref_pattern <- "\\bapi/[^_]"
+
+    # Check if line matches any pattern
+    if (grepl(library_pattern, line) ||
+        grepl(require_check_pattern, line) ||
+        grepl(api_pattern, line) ||
+        grepl(api_ref_pattern, line)) {
       return(paste0("# ", line))  # Comment out the line
     } else {
       return(line)  # Keep line as is

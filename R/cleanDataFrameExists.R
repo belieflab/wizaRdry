@@ -7,7 +7,6 @@
 #' @param measure_alias A string representing the alias name of the dataset to be checked.
 #' @param measure_type A string indicating the type of measure, currently not utilized in the function but reserved for future use.
 #' @return This function does not return a value but outputs a message indicating whether the specified clean data frame exists.
-#' @export
 #' @examples
 #' \dontrun{
 #' cleanDataFrameExists("your_dataset_alias", "qualtrics")

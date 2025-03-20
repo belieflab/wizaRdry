@@ -351,8 +351,8 @@ display_tree <- function(path) {
       is_sub_dir <- file.info(sub_item)$isdir
       
       # Determine connector
-      sub_connector <- if (is_sub_last) "└── " else "├── "
-      sub_prefix <- if (is_sub_last) "    " else "│   "
+      sub_connector <- if (is_sub_last) "\u2514\u2500\u2500 " else "\u251c\u2500\u2500 "
+      sub_prefix <- if (is_sub_last) "    " else "\u2502   "
       
       # Print item
       sub_name <- basename(sub_item)
@@ -388,7 +388,7 @@ display_tree <- function(path) {
     is_dir <- file.info(item)$isdir
     
     # Determine connector
-    connector <- if (is_last) "└── " else "├── "
+    connector <- if (is_last) "\u2514\u2500\u2500 " else "\u251c\u2500\u2500 "
     
     # Print item
     item_name <- basename(item)
@@ -396,7 +396,7 @@ display_tree <- function(path) {
       cat(paste0(connector, item_name, "\n"))
       
       # Process items in this directory
-      process_dir(item, if (is_last) "    " else "│   ")
+      process_dir(item, if (is_last) "    " else "\u2502   ")
     } else {
       cat(paste0(connector, item_name, "\n"))
     }

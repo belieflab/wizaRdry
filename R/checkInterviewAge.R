@@ -8,7 +8,6 @@
 #'        The dataset should have a column 'interview_age' and 'src_subject_id'.
 #' @return The function itself does not return a value but will output a message listing the subject IDs
 #'         with 'interview_age' outside the 12 to 70 years range if such cases exist.
-#' @export
 #' @examples
 #' \dontrun{
 #' checkInterviewAge("your_dataset_alias")

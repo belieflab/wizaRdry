@@ -9,7 +9,6 @@
 #' @param nda_required_variables A vector of strings representing the initial set of NDA required variables to check for.
 #'        This parameter is overwritten inside the function but can be used to extend the functionality in the future.
 #' @return This function does not return a value but uses the `testthat` package to assert the presence of all NDA required variables and provides detailed feedback if any are missing.
-#' @export
 #' @examples
 #' \dontrun{
 #' ndaRequiredVariablesExist("your_dataset_alias", "qualtrics", c("src_subject_id", "phenotype"))

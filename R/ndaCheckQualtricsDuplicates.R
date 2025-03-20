@@ -8,7 +8,6 @@
 #' @param measure_type A string specifying the type of measure, currently supports 'qualtrics' only.
 #' @return The function does not return a value but will generate a CSV file if duplicates are found
 #'         and display those duplicates in the RStudio viewer.
-#' @export
 #' @examples
 #' \dontrun{
 #' checkDuplicates("your_dataset_alias", "qualtrics")

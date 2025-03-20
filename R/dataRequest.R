@@ -27,7 +27,7 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
     mongo_objects <- ls(envir = .GlobalEnv, pattern = "^Mongo|_mongo$|^mongo", all.names = TRUE)
     for (obj in mongo_objects) {
       if (exists(obj, envir = .GlobalEnv)) {
-        conn <- get(obj, envir = .GlobalEnv)
+        conn <- base::get(obj, envir = .GlobalEnv)
         if (is.environment(conn) && exists("disconnect", envir = conn)) {
           tryCatch({
             conn$disconnect()
@@ -160,7 +160,7 @@ processData <- function(measure, source, csv, rdata, spss, identifier) {
     df_name <- paste0(measure, "_clean")  # Construct the name of the cleaned data frame
     
     # Assuming createExtract is a function to create data extracts
-    createExtract(get(df_name), df_name, csv, rdata, spss)  # Create data extracts
+    createExtract(base::get(df_name), df_name, csv, rdata, spss)  # Create data extracts
   }, error = function(e) {
     # Check if identifier is valid (you can modify this logic based on your criteria)
     if (length(identifier) == 0 || all(is.na(identifier))) {

@@ -97,7 +97,7 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
     cat("\n\nField standardization summary:")
     for(transform_name in names(transformations)) {
       transform <- transformations[[transform_name]]
-      cat(sprintf("\n- %s → %s", transform$from, transform$to))
+      cat(sprintf("\n- %s -> %s", transform$from, transform$to))
       cat(sprintf("\n  Processed %d rows (%d valid)",
                   transform$total, transform$valid))
     }
@@ -261,7 +261,7 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
                 float_examples <- head(df[[field_name]][float_mask])
                 rounded_examples <- round(float_examples)
                 for(j in seq_along(float_examples)) {
-                  cat(sprintf("\n    %.2f → %d", 
+                  cat(sprintf("\n    %.2f -> %d", 
                               float_examples[j], 
                               rounded_examples[j]))
                 }
@@ -305,7 +305,7 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
   if(verbose && length(conversion_summary) > 0) {
     cat("\n\nType conversion summary:")
     for(field in names(conversion_summary)) {
-      cat(sprintf("\n- %s → %s", field, conversion_summary[[field]]$type))
+      cat(sprintf("\n- %s -> %s", field, conversion_summary[[field]]$type))
       if(conversion_summary[[field]]$nas_introduced > 0) {
         cat(sprintf(" (%d NAs)", conversion_summary[[field]]$nas_introduced))
       }
@@ -540,12 +540,12 @@ parse_array_string <- function(value) {
 }
 
 # Helper function to fetch structure elements from API
-fetch_structure_elements <- function(structure_name, api_base_url) {
+fetch_structure_elements <- function(structure_name, nda_base_url) {
   
-  if (!require(httr)) {install.packages("httr")}; library(httr)
-  if (!require(jsonlite)) {install.packages("jsonlite")}; library(jsonlite)
+#   if (!require(httr)) {install.packages("httr")}; library(httr)
+#   if (!require(jsonlite)) {install.packages("jsonlite")}; library(jsonlite)
   
-  url <- sprintf("%s/datastructure/%s", api_base_url, structure_name)
+  url <- sprintf("%s/datastructure/%s", nda_base_url, structure_name)
   response <- httr::GET(url)
   
   if (httr::status_code(response) != 200) {
@@ -762,7 +762,7 @@ validate_structure <- function(df, elements, measure_name, verbose = FALSE) {
     #   if(verbose) {
     #     cat("\nDropped unknown fields from dataframe")
     #   }
-    #   assign(measure_name, df, envir = .GlobalEnv)
+    #   assign(measure_name, df, envir = .wizaRdry_env)
     # }
     
     # Check for unknown fields
@@ -819,7 +819,7 @@ validate_structure <- function(df, elements, measure_name, verbose = FALSE) {
           if(any(tolower(values) %in% c("true", "false"))) {
             if(verbose) cat("\n  Converting boolean values to 0/1")
             df[[col]] <- standardize_binary(values)
-            assign(measure_name, df, envir = .GlobalEnv)
+            assign(measure_name, df, envir = .wizaRdry_env)
           }
         }
         
@@ -950,7 +950,7 @@ standardize_column_names <- function(df, structure_name, verbose = FALSE) {
   if (any(changed) && verbose) {
     cat("\n\nColumn name changes:")
     for (i in which(changed)) {
-      cat(sprintf("\n  %s → %s", old_names[i], new_names[i]))
+      cat(sprintf("\n  %s -> %s", old_names[i], new_names[i]))
     }
     
     # Add summary
@@ -1161,12 +1161,12 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
 ndaValidator <- function(measure_name,
                          source,
                          limited_dataset = FALSE,
-                         api_base_url = "https://nda.nih.gov/api/datadictionary/v2",
+#                          nda_base_url = "https://nda.nih.gov/api/datadictionary/v2",
                          verbose = TRUE,
                          debug = FALSE) {
   tryCatch({
     # Get the dataframe from the global environment
-    df <- base::get(measure_name, envir = .GlobalEnv)
+    df <- base::get(measure_name, envir = .wizaRdry_env)
     debug_print("Initial dataframe loaded", df, debug = debug)
     
     # Get structure name
@@ -1185,11 +1185,11 @@ ndaValidator <- function(measure_name,
     df <- standardize_field_names(df, measure_name, verbose = verbose)
     
     # Save standardized dataframe back to global environment
-    assign(measure_name, df, envir = .GlobalEnv)
+    assign(measure_name, df, envir = .wizaRdry_env)
     
     # Continue with structure fetching and validation...
     message("\n\nFetching ", structure_name, " Data Structure from NDA API...")
-    elements <- fetch_structure_elements(structure_name, api_base_url)
+    elements <- fetch_structure_elements(structure_name, nda_base_url)
     
     if (is.null(elements) || nrow(elements) == 0) {
       stop("No elements found in the structure definition")
@@ -1201,7 +1201,7 @@ ndaValidator <- function(measure_name,
     missing_required <- required_fields[!required_fields %in% names(df)]
     if(length(missing_required) > 0) {
       df <- handle_missing_fields(df, elements, missing_required, verbose = TRUE)
-      assign(measure_name, df, envir = .GlobalEnv)
+      assign(measure_name, df, envir = .wizaRdry_env)
     }
     
     # Then continue with the rest of the transformations
@@ -1225,14 +1225,14 @@ ndaValidator <- function(measure_name,
     })
     
     # Save processed dataframe back to global environment
-    assign(measure_name, df, envir = .GlobalEnv)
+    assign(measure_name, df, envir = .wizaRdry_env)
     
     # Check and add any missing required fields BEFORE validation
     required_fields <- elements$name[elements$required == "Required"]
     missing_required <- required_fields[!required_fields %in% names(df)]
     if(length(missing_required) > 0) {
       df <- handle_missing_fields(df, elements, missing_required, verbose = TRUE)
-      assign(measure_name, df, envir = .GlobalEnv)
+      assign(measure_name, df, envir = .wizaRdry_env)
     }
     
     # Now validate the complete dataset
@@ -1265,7 +1265,7 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
             cat(sprintf("\n\nField: %s", field_name))
             cat("\n  Rules found:")
             for(rule_name in names(rules)) {
-              cat(sprintf("\n    %s → %s", rule_name, rules[[rule_name]]))
+              cat(sprintf("\n    %s -> %s", rule_name, rules[[rule_name]]))
             }
           }
           

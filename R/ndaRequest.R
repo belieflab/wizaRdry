@@ -34,7 +34,7 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
     mongo_objects <- ls(envir = .GlobalEnv, pattern = "^Mongo|_mongo$|^mongo", all.names = TRUE)
     for (obj in mongo_objects) {
       if (exists(obj, envir = .GlobalEnv)) {
-        conn <- get(obj, envir = .GlobalEnv)
+        conn <- base::get(obj, envir = .GlobalEnv)
         if (is.environment(conn) && exists("disconnect", envir = conn)) {
           tryCatch({
             conn$disconnect()

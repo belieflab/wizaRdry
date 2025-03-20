@@ -1,3 +1,5 @@
 ^dataWizardry\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^\.github$
+^dev$

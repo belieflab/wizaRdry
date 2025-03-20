@@ -7,7 +7,6 @@
 #' @param measure_type A string specifying the type of dataset, supports 'qualtrics' or 'redcap'.
 #' @param nda_required_variables A vector of strings listing the NDA required variables which are excluded from the naming convention check.
 #' @return The function does not return a value but outputs an error message if any non-NDA columns do not follow the naming convention.
-#' @export
 #' @examples
 #' \dontrun{
 #' checkColumnPrefix("dataset_name", "qualtrics", c("nda_var1", "nda_var2"))
