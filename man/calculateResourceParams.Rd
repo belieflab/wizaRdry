@@ -8,6 +8,10 @@ calculateResourceParams(total_records, mem_info, num_cores)
 }
 \arguments{
 \item{total_records}{Total number of records to process}
+
+\item{mem_info}{Memory information structure}
+
+\item{num_cores}{Number of CPU cores}
 }
 \value{
 List containing optimal chunk size and number of workers

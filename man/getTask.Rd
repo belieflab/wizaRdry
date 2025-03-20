@@ -2,10 +2,27 @@
 % Please edit documentation in R/getMongo.R
 \name{getTask}
 \alias{getTask}
-\title{Alias for 'getTask'}
+\title{Alias for 'getMongo'}
 \usage{
 getTask(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL)
 }
+\arguments{
+\item{collection_name}{The name of the MongoDB collection}
+
+\item{db_name}{The database name (optional)}
+
+\item{identifier}{Field to use as identifier (optional)}
+
+\item{chunk_size}{Number of records per chunk (optional)}
+}
+\value{
+A data frame containing the MongoDB data
+}
 \description{
-Alias for 'getTask'
+This is a legacy alias for the 'getMongo' function to maintain compatibility with older code.
+}
+\examples{
+\dontrun{
+survey_data <- getTask("task_alias")
+}
 }

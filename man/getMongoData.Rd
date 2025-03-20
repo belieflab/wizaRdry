@@ -21,5 +21,7 @@ Retrieves data from MongoDB based on the specified batch information and query c
 It filters out entries where the specified identifier doesn't exist or is empty.
 }
 \examples{
-df <- getMongoData("task_name", list(start = 0, size = 100), Mongo, "src_subject_id")
+# This example assumes 'Mongo' is a MongoDB connection
+# batch_info <- list(start = 0, size = 100)
+# df <- getMongoData(Mongo, "src_subject_id", batch_info)
 }

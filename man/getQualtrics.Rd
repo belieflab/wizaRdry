@@ -20,9 +20,8 @@ A cleaned and harmonized data frame containing the survey data.
 Retrieve Survey Data from Qualtrics
 }
 \examples{
+\dontrun{
 # Get survey by alias (will search all institutions)
 survey_data <- getQualtrics("rgpts")
-
-# Get survey by institution and alias
-survey_data <- getQualtrics("iipsc", institution = "nu")
+}
 }

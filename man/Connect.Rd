@@ -9,7 +9,7 @@ Connect(collection_name, db_name)
 \arguments{
 \item{collection_name}{The name of the collection you want to connect to.}
 
-\item{db_dname}{The name of the database you cant to connect to.}
+\item{db_name}{The name of the database you cant to connect to.}
 }
 \value{
 A mongolite::mongo object representing the connection to the MongoDB collection.

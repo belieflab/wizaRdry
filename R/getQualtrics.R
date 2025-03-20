@@ -7,11 +7,10 @@
 #' @importFrom dplyr %>% select mutate
 #' @export
 #' @examples
+#' \dontrun{
 #' # Get survey by alias (will search all institutions)
 #' survey_data <- getQualtrics("rgpts")
-#'
-#' # Get survey by institution and alias
-#' survey_data <- getQualtrics("iipsc", institution = "nu")
+#' }
 getQualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE) {
   
 #   lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
@@ -77,7 +76,7 @@ getQualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE) {
   identifier <- cfg$identifier
   
   # Harmonize the data
-  clean_df <- dataHarmonization(df, identifier, qualtrics_alias)
+  clean_df <- qualtricsHarmonization(df, identifier, qualtrics_alias)
   
   return(clean_df)
 }
@@ -188,9 +187,9 @@ getQualtricsData <- function(qualtrics_alias, label) {
 #' @return Harmonized data frame.
 #' @importFrom dplyr mutate
 #' @noRd
-dataHarmonization <- function(df, identifier, qualtrics_alias) {
+qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
   if (!is.data.frame(df)) {
-    stop("Input to dataHarmonization is not a data frame")
+    stop("Input to qualtricsHarmonization is not a data frame")
   }
   
   # check for visit variable, if not add baseline
@@ -214,9 +213,9 @@ dataHarmonization <- function(df, identifier, qualtrics_alias) {
   # select visit
   # df <- df[df$visit==visit,]
   
-  #suppressWarnings(return(df))
+  suppressWarnings(return(df))
   # comment into add prefixes (will break code)
-  suppressWarnings(return(add_prefix_to_columns(df,qualtrics_alias)))
+  #suppressWarnings(return(add_prefix_to_columns(df,qualtrics_alias)))
 }
 
 #' Extract Column Mapping from Qualtrics Data Frame
@@ -230,14 +229,15 @@ getDictionary <- function(qualtrics_df) {
   return(qualtRics::extract_colmap(respdata = qualtrics_df))
 }
 
-#' Alias for 'getSurvey'
+#' Alias for 'getQualtrics'
 #'
-#' This is an alias for the 'getSurvey' function for ease of use.
+#' This is a legacy alias for the 'getQualtrics' function to maintain compatibility with older code.
 #'
-#' @inheritParams getSurvey
-#' @inherit getSurvey return
+#' @inheritParams getQualtrics
+#' @inherit getQualtrics return
 #' @export
 #' @examples
-#' survey_data <- getQualtrics("your_survey_alias")
-#' @aliases getQualtrics getSurvey
+#' \dontrun{
+#' survey_data <- getSurvey("your_survey_alias")
+#' }
 getSurvey <- getQualtrics

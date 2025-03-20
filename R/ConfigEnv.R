@@ -3,7 +3,10 @@ if (!require(R6)) install.packages("R6"); library(R6)
 # Install config package if needed
 if (!require(config)) install.packages("config"); library(config)
 
-# Define a ConfigEnv class
+#' Configuration Environment Class
+#' 
+#' @importFrom R6 R6Class
+#' @noRd
 ConfigEnv <- R6::R6Class("ConfigEnv",
                          public = list(
                            # Store configuration
@@ -177,13 +180,17 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                          )
 )
 
-# Create a function to validate configuration and expose the config globally
+# Create a function to validate configuration and return the config
 validate_config <- function(api_type = NULL, config_file = "config.yml") {
   config_env <- ConfigEnv$new(config_file)
   
-  # Make the config object available in the global environment
-  assign("config", config_env$config, envir = .GlobalEnv)
-  
   # Validate the configuration
-  return(config_env$validate_config(api_type))
+  validation_result <- config_env$validate_config(api_type)
+  
+  # If validation passes, return the config
+  if (validation_result) {
+    return(config_env$config)
+  } else {
+    return(NULL)  # Or handle failure appropriately
+  }
 }

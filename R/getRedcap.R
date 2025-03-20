@@ -43,6 +43,11 @@ completeLoadingAnimation <- function(pb) {
   cat("\n")
 }
 
+#' Format a time duration in a human-readable way
+#' 
+#' @name formatDuration
+#' @param duration The duration to format in seconds or minutes
+#' @return A formatted string representing the duration
 formatDuration <- function(duration) {
   secs <- as.numeric(duration, units = "secs")
   if (secs < 60) {
@@ -80,9 +85,9 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
                       records = NULL, fields = NULL) {
   start_time <- Sys.time()
   
-  if (!require(config)) install.packages("config"); library(config)
-  if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
-  if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
+#   if (!require(config)) install.packages("config"); library(config)
+#   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
+#   if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
   
   # Validate secrets
 #   base::source("api/SecretsEnv.R")
@@ -210,16 +215,16 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   duration <- difftime(end_time, start_time, units = "secs")
   message(sprintf("\nData frame '%s' retrieved in %s.", instrument_name, formatDuration(duration)))
 
-  #return(df)
+  return(df)
   # comment into add prefixes (will break code)
-  return(add_prefix_to_columns(df,instrument_name))
+  #return(add_prefix_to_columns(df,instrument_name))
 }
 
 
 
 getForms <- function() {
-  if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
-  if (!require(knitr)) install.packages("knitr"); library(knitr)
+#   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
+#   if (!require(knitr)) install.packages("knitr"); library(knitr)
 
   # Validate secrets
 #   base::source("api/SecretsEnv.R")
@@ -232,7 +237,7 @@ getForms <- function() {
 }
 
 getDictionary <- function(instrument_name) {
-  if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
+#   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
 
   # Validate secrets
 #   base::source("api/SecretsEnv.R")

@@ -1,7 +1,10 @@
 # First, install R6 if you don't have it
 if (!require(R6)) install.packages("R6"); library(R6)
 
-# Define a Secrets class
+#' Configuration Environment Class
+#' 
+#' @importFrom R6 R6Class
+#' @noRd
 SecretsEnv <- R6::R6Class("SecretsEnv",
                           public = list(
                             config_specs = list(
@@ -135,7 +138,8 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                       fixed_uri <- paste0(uri_value, "/")
                                       
                                       # Update the variable in memory
-                                      assign("uri", fixed_uri, envir = .GlobalEnv)
+                                      # assign("uri", fixed_uri, envir = .GlobalEnv)
+                                      assign("uri", fixed_uri, envir = .wizaRdry_env)
                                       
                                       # Update the secrets.R file
                                       if (file.exists(self$secrets_file)) {
@@ -150,7 +154,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                                                                file_content[uri_line_index])
                                           writeLines(file_content, self$secrets_file)
                                           message("Note: Added trailing slash to uri in ", self$secrets_file,
-                                                  " (", uri_value, " → ", fixed_uri, ")")
+                                            " (", uri_value, " -> ", fixed_uri, ")")
                                         } else {
                                           message("Note: Added trailing slash to uri in memory, but couldn't update ",
                                                   self$secrets_file, " automatically.")

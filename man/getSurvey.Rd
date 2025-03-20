@@ -2,14 +2,25 @@
 % Please edit documentation in R/getQualtrics.R
 \name{getSurvey}
 \alias{getSurvey}
-\alias{getQualtrics}
-\title{Alias for 'getSurvey'}
+\title{Alias for 'getQualtrics'}
 \usage{
 getSurvey(qualtrics_alias, institution = NULL, label = FALSE)
 }
+\arguments{
+\item{qualtrics_alias}{The alias for the Qualtrics survey to be retrieved.}
+
+\item{institution}{Optional. The institution name (e.g., "temple" or "nu"). If NULL, all institutions will be searched.}
+
+\item{label}{Logical indicating whether to return coded values or their associated labels (default is FALSE).}
+}
+\value{
+A cleaned and harmonized data frame containing the survey data.
+}
 \description{
-This is an alias for the 'getSurvey' function for ease of use.
+This is a legacy alias for the 'getQualtrics' function to maintain compatibility with older code.
 }
 \examples{
-survey_data <- getQualtrics("your_survey_alias")
+\dontrun{
+survey_data <- getSurvey("your_survey_alias")
+}
 }

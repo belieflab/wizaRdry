@@ -20,4 +20,5 @@ Imports:
     qualtRics,
     R6,
     REDCapR,
+    rlang,
     stringdist

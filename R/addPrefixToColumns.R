@@ -7,6 +7,7 @@
 #' @param normalize_case Whether to normalize column case (lowercase, etc)
 #' @param normalize_type Type of case normalization ("lower", "upper", "title", etc)
 #' @return A data frame with prefixed and normalized column names
+#' @importFrom stringdist stringdist
 add_prefix_to_columns <- function(df, collection_name, 
                                   excluded_cols = c("src_subject_id", "visit", "phenotype", 
                                                     "interview_age", "interview_date", "site", 
@@ -18,8 +19,7 @@ add_prefix_to_columns <- function(df, collection_name,
   
   # Ensure stringdist package is available
   if (!requireNamespace("stringdist", quietly = TRUE)) {
-    install.packages("stringdist")
-    library(stringdist)
+    stop("The stringdist package is required. Please install it with install.packages('stringdist')")
   }
   
   # Helper function to check if a column has a similar prefix
