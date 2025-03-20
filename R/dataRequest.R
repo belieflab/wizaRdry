@@ -102,11 +102,11 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   }
   validateMeasures(data_list)
   
-  # Process each measure using processMeasure function
+  # Process each measure using processData function
   for (measure in data_list) {
     sourceCategory <- ifelse(measure %in% redcap_list, "redcap", ifelse(measure %in% qualtrics_list, "qualtrics", "task"))
 #     base::source("api/dataRequest.R")
-    processMeasure(measure, sourceCategory, csv, rdata, spss, identifier)
+    processData(measure, sourceCategory, csv, rdata, spss, identifier)
   }
   
   # Clean up and record processing time
@@ -119,7 +119,7 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   
 }
 
-processMeasure <- function(measure, source, csv, rdata, spss, identifier) {
+processData <- function(measure, source, csv, rdata, spss, identifier) {
   # Check if input is a dataframe
   if (is.data.frame(measure)) {
     # Get the name of the dataframe as a string

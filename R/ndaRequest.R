@@ -108,10 +108,10 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   }
   validateMeasures(data_list)
   
-  # Process each measure using processMeasure function
+  # Process each measure using processNda function
   for (measure in data_list) {
     api <- ifelse(measure %in% redcap_list, "redcap", ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
-    processMeasure(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset)
+    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset)
   }
   
   # Clean up and record processing time
@@ -119,7 +119,7 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   # print(Sys.time() - start_time)  # Print time taken for processing
 }
 
-processMeasure <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE) {
+processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE) {
   # Check if input is a dataframe
   if (is.data.frame(measure)) {
     # Get the name of the dataframe as a string
