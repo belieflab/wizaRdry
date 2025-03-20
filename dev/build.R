@@ -35,6 +35,8 @@ measure_1 <- wizaRdry::getRedcap("measure_1")
 rgpts <- wizaRdry::getQualtrics("rgpts")
 dd <- wizaRdry::getMongo("dd", "capr")
 
+wizaRdry::dataRequest("measure1")
+
 # !!! remove previous version !!!
 remove.packages("wizaRdry")
 
