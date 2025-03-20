@@ -50,7 +50,6 @@ The function creates the following directory structure:
 \item mongo/
 \item qualtrics/
 \item redcap/
-\item tmp/
 }
 \item tmp/
 }

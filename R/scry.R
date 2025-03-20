@@ -27,7 +27,6 @@
 #'   - mongo/
 #'   - qualtrics/
 #'   - redcap/
-#'   - tmp/
 #' - tmp/
 #'
 #' It also creates template config.yml and secrets.R files, and optionally an R project file.
@@ -59,7 +58,6 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
     file.path(path, "nda", "mongo"),
     file.path(path, "nda", "qualtrics"),
     file.path(path, "nda", "redcap"),
-    file.path(path, "nda", "tmp"),
     file.path(path, "tmp")
   )
   
@@ -328,6 +326,12 @@ display_tree <- function(path) {
     dirs <- all_items[is_dir]
     files <- all_items[!is_dir]
     
+    # Check specifically for main.R file and add it if it exists
+    main_r_file <- file.path(dir_path, "main.R")
+    if (file.exists(main_r_file) && !(main_r_file %in% files)) {
+      files <- c(files, main_r_file)
+    }
+    
     # Sort each group
     dirs <- sort(dirs)
     files <- sort(files)
@@ -335,7 +339,6 @@ display_tree <- function(path) {
     # Combine with directories first
     return(c(dirs, files))
   }
-  
   # Function to process a directory - define this BEFORE using it
   process_dir <- function(dir_path, prefix) {
     sub_items <- list_all(dir_path)
