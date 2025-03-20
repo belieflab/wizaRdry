@@ -250,6 +250,7 @@ getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_s
   options(mongolite.quiet = TRUE)
   
   # Get configuration
+#   base::source("api/ConfigEnv.R")
   cfg <- validate_config("mongo")
   
   if (is.null(db_name)) {

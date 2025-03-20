@@ -85,7 +85,7 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
     invalid_list <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, task_list), data_list)
     
     if (length(invalid_list) > 0) {
-      stop(paste(invalid_list, collapse = ", "), " does not have a cleaning script, please create one.\n")
+      stop(paste(invalid_list, collapse = ", "), " does not have a cleaning script, please create one in clean/.\n")
     }
   }
   

@@ -20,6 +20,9 @@ Imports:
     dplyr,
     future,
     future.apply,
+    haven,
+    httr,
+    jsonlite,
     knitr,
     mongolite,
     parallel,
@@ -27,4 +30,5 @@ Imports:
     R6,
     REDCapR,
     rlang,
-    stringdist
+    stringdist,
+    testthat

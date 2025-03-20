@@ -18,4 +18,28 @@ file.copy(from = "../api/redcap/capr-logic.R", to = "R/processCaprData.R", overw
 
 
 process_file("../api/dataRequest.R", "R/dataRequest.R")
-#process_file("../api/ndaRequest.R", "R/ndaRequest.R")
+
+process_file("../api/ndaValidator.R", "R/ndaValidator.R")
+
+process_file("../api/ndaRequest.R", "R/ndaRequest.R")
+
+process_file("../api/testSuite.R", "R/testSuite.R")
+
+process_file("../api/test/ndaCheckQualtricsDuplicates.R", "R/ndaCheckQualtricsDuplicates.R")
+
+process_file("../api/test/checkQualtricsDuplicates.R", "R/checkQualtricsDuplicates.R")
+
+process_file("../api/test/cleanDataFrameExists.R", "R/cleanDataFrameExists.R")
+
+process_file("../api/test/ndaRequiredVariablesExist.R", "R/ndaRequiredVariablesExist.R")
+
+process_file("../api/test/checkColumnPrefix.R", "R/checkColumnPrefix.R")
+
+process_file("../api/test/checkInterviewAge.R", "R/checkInterviewAge.R")
+
+
+process_file("../api/src/createCsv.R", "R/createCsv.R")
+process_file("../api/src/createRda.R", "R/createRda.R")
+process_file("../api/src/createSpss.R", "R/createSpss.R")
+
+process_file("../api/src/ndaTemplate.R", "R/ndaTemplate.R")

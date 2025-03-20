@@ -11,7 +11,10 @@ usethis::use_package("future.apply")
 usethis::use_package("parallel")
 usethis::use_package("stringdist")
 usethis::use_package("rlang")
-
+usethis::use_package("httr")
+usethis::use_package("jsonlite")
+usethis::use_package("testthat")
+usethis::use_package("haven")
 # syncs all functions from dev (belieflab/api) to wizaRdry
 source("dev/sync.R")
 
@@ -36,6 +39,8 @@ rgpts <- wizaRdry::getQualtrics("rgpts")
 dd <- wizaRdry::getMongo("dd", "capr")
 
 wizaRdry::dataRequest("measure1")
+
+wizaRdry::ndaRequest("eefrt01")
 
 # !!! remove previous version !!!
 remove.packages("wizaRdry")
