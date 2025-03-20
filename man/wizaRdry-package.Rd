@@ -4,9 +4,17 @@
 \name{wizaRdry-package}
 \alias{wizaRdry}
 \alias{wizaRdry-package}
-\title{wizaRdry: A Framework For Collaborative & Reproducable Data Analysis}
+\title{wizaRdry: A Framework For Collaborative & Reproducible Data Analysis}
 \description{
-The wizaRdry package is a powerful data integration framework that solves the fundamental problem of inconsistent access to research data across multiple platforms. It eliminates repetitive boilerplate code by providing a unified interface to REDCap, MongoDB, and Qualtrics through its core functions: getRedcap(), getMongo(), and getQualtrics(). The package implements memory-aware parallel processing that automatically scales to available system resources, robust configuration validation, and comprehensive error handling with intelligent fallback strategies. By standardizing data retrieval across platforms and automating field harmonization, wizaRdry significantly reduces the risk of inconsistencies in multi-researcher environments. This package is essential for any research team working with distributed data sources who need reproducible, validated access to their research data.
+A comprehensive data analysis framework specifically designed for NIH-funded research with built-in NIH Data Archive (NDA) integration. The package implements an analytical workflow where dataRequest() first provides unified access to data across multiple modalities (REDCap, MongoDB, Qualtrics), followed by dataFilter() to refine analytical samples and dataMerge() to combine data frames for comprehensive analysis. For NIH Data Archive submissions, ndaRequest() prepares and validates analysis outputs in submission-ready templates. The data access layer includes specialized getter functions (getRedcap(), getMongo(), getQualtrics()) while analytical export utilities (createCsv(), createRda(), createSpss(), createNda()) offer flexible output formats for further analysis and data sharing. Additional analytical tools include dataParse() for decomposing multi-survey data and supporting reproducible research workflows. The framework features memory-aware parallel processing, automatic validation, and consistent field harmonization across research teams, significantly enhancing reproducibility and collaborative analysis of multi-modal research data.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/belieflab/wizaRdry}
+  \item Report bugs at \url{https://github.com/belieflab/wizaRdry/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Joshua Kenney \email{joshua.kenney@yale.edu}

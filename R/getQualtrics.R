@@ -213,7 +213,7 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
   
   suppressWarnings(return(df))
   # comment into add prefixes (will break code)
-  #suppressWarnings(return(add_prefix_to_columns(df,qualtrics_alias)))
+  #suppressWarnings(return(addPrefixToColumnss(df,qualtrics_alias)))
 }
 
 #' Extract Column Mapping from Qualtrics Data Frame

@@ -221,7 +221,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
 
   return(df)
   # comment into add prefixes (will break code)
-  #return(add_prefix_to_columns(df,instrument_name))
+  #return(addPrefixToColumnss(df,instrument_name))
 }
 
 

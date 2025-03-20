@@ -34,13 +34,17 @@ devtools::build()
 devtools::install()
 
 # run test cases
-measure_1 <- wizaRdry::getRedcap("measure_1")
-rgpts <- wizaRdry::getQualtrics("rgpts")
-dd <- wizaRdry::getMongo("dd", "capr")
+#measure_1 <- wizaRdry::getRedcap("measure_1")
+#rgpts <- wizaRdry::getQualtrics("rgpts")
+#dd <- wizaRdry::getMongo("dd", "capr")
+#wizaRdry::dataRequest("measure1")
+#wizaRdry::ndaRequest("eefrt01")
 
-wizaRdry::dataRequest("measure1")
+devtools::spell_check()
+devtools::release()
 
-wizaRdry::ndaRequest("eefrt01")
+rhub::rhub_setup()
+
 
 # !!! remove previous version !!!
 remove.packages("wizaRdry")

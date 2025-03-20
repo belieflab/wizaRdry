@@ -205,9 +205,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     # audio alert of validation
     ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
     
-#     base::source("api/src/ndaTemplate.R")
+#     base::source("api/src/createNda.R")
     # Create data upload template regardless of if test passes
-    ndaTemplate(measure)
+    createNda(measure)
     formatElapsedTime(start_time)
     
   }, error = function(e) {

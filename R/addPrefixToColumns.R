@@ -9,7 +9,7 @@
 #' @return A data frame with prefixed and normalized column names
 #' @importFrom stringdist stringdist
 #' @noRd
-add_prefix_to_columns <- function(df, collection_name, 
+addPrefixToColumnss <- function(df, collection_name, 
                                   excluded_cols = c("src_subject_id", "visit", "phenotype", 
                                                     "interview_age", "interview_date", "site", 
                                                     "sex", "subjectkey", "arm", "handedness", 

@@ -604,7 +604,7 @@ taskHarmonization <- function(df, identifier, collection_name) {
   
   return(df)
   # comment into add prefixes (will break code)
-  #return(add_prefix_to_columns(df,collection_name))
+  #return(addPrefixToColumnss(df,collection_name))
   
 }
 

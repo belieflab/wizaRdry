@@ -1,6 +1,6 @@
 Package: wizaRdry
-Title: A Framework For Collaborative & Reproducable Data Analysis
-Version: 0.0.0.9000
+Title: A Framework For Collaborative & Reproducible Data Analysis
+Version: 0.1.0
 Authors@R: c(
     person("Joshua", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
     person("Minerva", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
@@ -9,7 +9,21 @@ Authors@R: c(
     person("Christian", "Horgan", email = "christian.horgan@yale.edu", role = "ctb"),
     person("Michael", "Spilka", email = "michael.j.spilka@gmail.com", role = "ctb")
   )
-Description: The wizaRdry package is a powerful data integration framework that solves the fundamental problem of inconsistent access to research data across multiple platforms. It eliminates repetitive boilerplate code by providing a unified interface to REDCap, MongoDB, and Qualtrics through its core functions: getRedcap(), getMongo(), and getQualtrics(). The package implements memory-aware parallel processing that automatically scales to available system resources, robust configuration validation, and comprehensive error handling with intelligent fallback strategies. By standardizing data retrieval across platforms and automating field harmonization, wizaRdry significantly reduces the risk of inconsistencies in multi-researcher environments. This package is essential for any research team working with distributed data sources who need reproducible, validated access to their research data.
+Description: A comprehensive data analysis framework specifically designed for 
+    NIH-funded research with built-in NIH Data Archive (NDA) integration.
+    The package implements an analytical workflow where dataRequest() first provides 
+    unified access to data across multiple modalities (REDCap, MongoDB, Qualtrics), 
+    followed by dataFilter() to refine analytical samples and dataMerge() to combine 
+    data frames for comprehensive analysis. For NIH Data Archive submissions, ndaRequest() 
+    prepares and validates analysis outputs in submission-ready templates. The data 
+    access layer includes specialized getter functions (getRedcap(), getMongo(), 
+    getQualtrics()) while analytical export utilities (createCsv(), createRda(), 
+    createSpss(), createNda()) offer flexible output formats for further analysis 
+    and data sharing. Additional analytical tools include dataParse() for decomposing 
+    multi-survey data and supporting reproducible research workflows. The framework 
+    features memory-aware parallel processing, automatic validation, and consistent 
+    field harmonization across research teams, significantly enhancing reproducibility 
+    and collaborative analysis of multi-modal research data.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -32,3 +46,7 @@ Imports:
     rlang,
     stringdist,
     testthat
+URL: https://github.com/belieflab/wizaRdry
+BugReports: https://github.com/belieflab/wizaRdry/issues
+Suggests:
+    rmarkdown
