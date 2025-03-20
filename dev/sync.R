@@ -19,7 +19,7 @@ file.copy(from = "../api/redcap/capr-logic.R", to = "R/processCaprData.R", overw
 
 process_file("../api/dataRequest.R", "R/dataRequest.R")
 
-process_file("../api/ndaValidator.R", "R/ndaValidator.R")
+file.copy(from = "../api/ndaValidator.R", to = "R/ndaValidator.R", overwrite = TRUE)
 
 process_file("../api/ndaRequest.R", "R/ndaRequest.R")
 
