@@ -4,7 +4,7 @@
 \name{wizaRdry-package}
 \alias{wizaRdry}
 \alias{wizaRdry-package}
-\title{wizaRdry: A Framework For Collaborative & Reproducible Data Analysis}
+\title{wizaRdry: A Framework for Collaborative & Reproducible Data Analysis}
 \description{
 A comprehensive data analysis framework specifically designed for NIH-funded research with built-in NIH Data Archive (NDA) integration. The package implements an analytical workflow where dataRequest() first provides unified access to data across multiple modalities (REDCap, MongoDB, Qualtrics), followed by dataFilter() to refine analytical samples and dataMerge() to combine data frames for comprehensive analysis. For NIH Data Archive submissions, ndaRequest() prepares and validates analysis outputs in submission-ready templates. The data access layer includes specialized getter functions (getRedcap(), getMongo(), getQualtrics()) while analytical export utilities (createCsv(), createRda(), createSpss(), createNda()) offer flexible output formats for further analysis and data sharing. Additional analytical tools include dataParse() for decomposing multi-survey data and supporting reproducible research workflows. The framework features memory-aware parallel processing, automatic validation, and consistent field harmonization across research teams, significantly enhancing reproducibility and collaborative analysis of multi-modal research data.
 }

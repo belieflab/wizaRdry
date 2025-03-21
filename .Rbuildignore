@@ -1,6 +1,8 @@
-^dataWizardry\.Rproj$
+^wizaRdry\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^README\.md$
 ^\.github$
 ^dev$
 ^CRAN-SUBMISSION$
+cran-comments.md
