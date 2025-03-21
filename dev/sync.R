@@ -8,7 +8,7 @@ file.copy(from = "../api/src/animations.R", to = "R/animations.R", overwrite = T
 process_file("../api/getSurvey.R", "R/getQualtrics.R")
 process_file("../api/getTask.R", "R/getMongo.R")
 file.copy(from = "../api/src/addPrefixToColumns.R", to = "R/addPrefixToColumns.R", overwrite = TRUE)
-file.copy(from = "../api/redcap/capr-logic.R", to = "R/processCaprData.R", overwrite = TRUE)
+file.copy(from = "../api/redcap/capr-logic-wizaRdry.R", to = "R/processCaprData.R", overwrite = TRUE)
 process_file("../api/dataRequest.R", "R/dataRequest.R")
 #file.copy(from = "../api/ndaValidator.R", to = "R/ndaValidator.R", overwrite = TRUE)
 
