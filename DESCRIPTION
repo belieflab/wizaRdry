@@ -7,13 +7,14 @@ Authors@R: c(
     person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
     person("Victor", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
     person("Santiago", "Castiello de Obeso", email = "santiago.castiellodeobeso@yale.edu", role = "ctb"),
+    person("Praveen", "Suthaharan", email = "praveen.suthaharan@yale.edu", role = "ctb"),
     person("Christian", "Horgan", email = "christian.horgan@yale.edu", role = "ctb"),
     person("Michael J.", "Spilka", email = "michael.j.spilka@gmail.com", role = "ctb")
   )
 Description: A comprehensive data analysis framework specifically designed for 
-    NIH-funded research with built-in NIH Data Archive (NDA) integration.
+    NIH-funded research with built-in NIH Data Archive ('NDA') integration.
     The package implements an analytical workflow where dataRequest() first provides 
-    unified access to data across multiple modalities (REDCap, MongoDB, Qualtrics), 
+    unified access to data across multiple modalities ('REDCap', 'MongoDB', 'Qualtrics'), 
     followed by dataFilter() to refine analytical samples and dataMerge() to combine 
     data frames for comprehensive analysis. For NIH Data Archive submissions, ndaRequest() 
     prepares and validates analysis outputs in submission-ready templates. The data 
