@@ -1,11 +1,9 @@
 ## Re-Submission
 This is an re-submission. In this version I have:
 * Addressed all notes regarding:
-	* Title case correction
-	* R dependency specification
-	* Invalid file URI
-	* Non-standard top-level file
-	* Possible spelling issues
+	* Single quote software names in Description fields of DESCRIPTION
+	* Added Reference in DESCRIPTION
+* Updated scry() to include more detailed example cleaning scripts
 
 ## Test environments
 * local macOS install, R 4.4.2
