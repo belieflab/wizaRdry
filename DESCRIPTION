@@ -2,13 +2,14 @@ Package: wizaRdry
 Title: A Framework for Collaborative & Reproducible Data Analysis
 Version: 0.1.0
 Authors@R: c(
-    person("Joshua", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
+    person("Joshua G.", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
     person("Minerva K.", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
     person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
-    person("Victor", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
+    person("Danielle N. Pratt", email = "danielle.pratt33@gmail.com", role = "ctb"),
+    person("Victor J.", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
     person("Santiago", "Castiello de Obeso", email = "santiago.castiellodeobeso@yale.edu", role = "ctb"),
     person("Praveen", "Suthaharan", email = "praveen.suthaharan@yale.edu", role = "ctb"),
-    person("Christian", "Horgan", email = "christian.horgan@yale.edu", role = "ctb"),
+    person("Christian R.", "Horgan", email = "christian.horgan@yale.edu", role = "ctb"),
     person("Michael J.", "Spilka", email = "michael.j.spilka@gmail.com", role = "ctb")
   )
 Description: A comprehensive data analysis framework specifically designed for 
@@ -54,3 +55,10 @@ URL: https://github.com/belieflab/wizaRdry
 BugReports: https://github.com/belieflab/wizaRdry/issues
 Suggests:
     rmarkdown
+References: Mittal VA, Ellman LM, Strauss GP, Walker EF, 
+    Corlett PR, Schiffman J, Woods SW, Powers AR, 
+    Silverstein SM, Waltz JA, Zinbarg Z, Chen S, 
+    Williams T, Kenney J, Gold JM (2021).
+    "Computerized assessment of psychosis risk."
+    Journal of Psychiatry and Brain Science, 6(3), e210011.
+    doi:10.20900/jpbs.20210011
