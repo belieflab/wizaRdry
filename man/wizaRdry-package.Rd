@@ -21,18 +21,18 @@ Useful links:
 
 Authors:
 \itemize{
-  \item Minerva K. Pappu \email{minerva.pappu@yale.edu}
+  \item Michael J. Spilka \email{michael.j.spilka@gmail.com}
   \item Trevor F. Williams \email{trevormsu@gmail.com}
 }
 
 Other contributors:
 \itemize{
+  \item Minerva K. Pappu \email{minerva.pappu@yale.edu} [contributor]
   \item Danielle N. Pratt \email{danielle.pratt33@gmail.com} [contributor]
   \item Victor J. Pokorny \email{victor.pokorny@northwestern.edu} [contributor]
   \item Santiago Castiello de Obeso \email{santiago.castiellodeobeso@yale.edu} [contributor]
   \item Praveen Suthaharan \email{praveen.suthaharan@yale.edu} [contributor]
   \item Christian R. Horgan \email{christian.horgan@yale.edu} [contributor]
-  \item Michael J. Spilka \email{michael.j.spilka@gmail.com} [contributor]
 }
 
 }
