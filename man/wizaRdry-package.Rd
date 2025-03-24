@@ -32,7 +32,7 @@ Other contributors:
   \item Victor J. Pokorny \email{victor.pokorny@northwestern.edu} [contributor]
   \item Santiago Castiello de Obeso \email{santiago.castiellodeobeso@yale.edu} [contributor]
   \item Praveen Suthaharan \email{praveen.suthaharan@yale.edu} [contributor]
-  \item Christian R. Horgan \email{christian.horgan@yale.edu} [contributor]
+  \item Christian Horgan \email{christian.horgan@yale.edu} [contributor]
 }
 
 }
