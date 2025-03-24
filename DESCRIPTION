@@ -3,9 +3,9 @@ Title: A Framework for Collaborative & Reproducible Data Analysis
 Version: 0.1.0
 Authors@R: c(
     person("Joshua G.", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
-    person("Michael J.", "Spilka", email = "michael.j.spilka@gmail.com", role = "aut"),
     person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
-    person("Minerva K.", "Pappu", email = "minerva.pappu@yale.edu", role = "ctb"),
+    person("Minerva K.", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
+    person("Michael J.", "Spilka", email = "michael.j.spilka@gmail.com", role = "aut"),
     person("Danielle N. Pratt", email = "danielle.pratt33@gmail.com", role = "ctb"),
     person("Victor J.", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
     person("Santiago", "Castiello de Obeso", email = "santiago.castiellodeobeso@yale.edu", role = "ctb"),
