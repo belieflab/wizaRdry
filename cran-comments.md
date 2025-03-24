@@ -1,9 +1,7 @@
 ## Re-Submission
 This is an re-submission. In this version I have:
 * Addressed all notes regarding:
-	* Single quote software names in Description fields of DESCRIPTION
-	* Added Reference in DESCRIPTION
-* Updated scry() to include more detailed example cleaning scripts
+	* Omits References field and cites inline the Description field of DESCRIPTION
 
 ## Test environments
 * local macOS install, R 4.4.2

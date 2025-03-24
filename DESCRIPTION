@@ -10,7 +10,7 @@ Authors@R: c(
     person("Victor J.", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
     person("Santiago", "Castiello de Obeso", email = "santiago.castiellodeobeso@yale.edu", role = "ctb"),
     person("Praveen", "Suthaharan", email = "praveen.suthaharan@yale.edu", role = "ctb"),
-    person("Christian", "Horgan", email = "christian.horgan@yale.edu", role = "ctb")
+    person("Christian R.", "Horgan", email = "christian.horgan@yale.edu", role = "ctb")
   )
 Description: A comprehensive data analysis framework specifically designed for 
     NIH-funded research with built-in NIH Data Archive ('NDA') integration.
@@ -26,7 +26,9 @@ Description: A comprehensive data analysis framework specifically designed for
     multi-survey data and supporting reproducible research workflows. The framework 
     features memory-aware parallel processing, automatic validation, and consistent 
     field harmonization across research teams, significantly enhancing reproducibility 
-    and collaborative analysis of multi-modal research data.
+    and collaborative analysis of multi-modal research data. These methods support 
+    multi-site collaborative research projects such as those described in Mittal et al. (2021) 
+    <doi:10.20900/jpbs.20210011>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -55,10 +57,3 @@ URL: https://github.com/belieflab/wizaRdry
 BugReports: https://github.com/belieflab/wizaRdry/issues
 Suggests:
     rmarkdown
-References: Mittal VA, Ellman LM, Strauss GP, Walker EF, 
-    Corlett PR, Schiffman J, Woods SW, Powers AR, 
-    Silverstein SM, Waltz JA, Zinbarg Z, Chen S, 
-    Williams T, Kenney J, Gold JM (2021).
-    "Computerized assessment of psychosis risk."
-    Journal of Psychiatry and Brain Science, 6(3), e210011.
-    doi:10.20900/jpbs.20210011

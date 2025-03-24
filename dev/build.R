@@ -48,7 +48,7 @@ devtools::spell_check()
 devtools::release()
 
 rhub::rhub_setup()
-
+devtools::check_win_devel()
 
 # !!! remove previous version !!!
 remove.packages("wizaRdry")
