@@ -39,11 +39,32 @@ library(wizaRdry)
 scry()
 ```
 
-This will create:
-- `clean/` directories for data cleaning scripts
-- `nda/` directories for NDA submission templates
-- `tmp/` directory for temporary outputs
-- Template configuration files
+This will create a standard directory structure that looks like this:
+
+```
+.
+├── clean
+│   ├── mongo
+│   ├── qualtrics
+│   └── redcap
+├── nda
+│   ├── mongo
+│   ├── qualtrics
+│   ├── redcap
+│   └── tmp
+├── tmp
+├── .gitignore
+├── config.yml
+├── main.R
+├── project.Rproj
+└── secrets.R
+```
+
+Each directory has a specific purpose in the wizaRdry workflow:
+- `clean/` - Scripts for cleaning and processing raw data
+- `nda/` - Scripts for preparing NDA submission templates
+- `tmp/` - Temporary output files
+- Configuration files at the root level
 
 ### 2. Configure Secrets
 
@@ -139,7 +160,7 @@ dataParse("overfitting")
 
 ```r
 # NDA Submission Workflow - prepare NDA templates
-ndaRequest(demoses01", "lshrs01", "prl01")
+ndaRequest("demoses01", "lshrs01", "prl01")
 ```
 
 #### Export Functions
@@ -194,12 +215,49 @@ ndaRequest("rgpts01", "wtar01", "prl01", csv = TRUE)
 
 This creates properly formatted NDA submission templates in the `.nda/tmp` directory.
 
+## Script Examples
+
+### Data Cleaning Script Example (clean/qualtrics/rgpts.R)
+
+```r
+# Get raw data from Qualtrics
+rgpts <- getQualtrics("rgpts")
+
+# Cleaning process
+rgpts$interview_date <- as.Date(rgpts$interview_date, "%m/%d/%Y")
+rgpts$src_subject_id <- as.numeric(rgpts$src_subject_id)
+
+# Calculate scores
+rgpts$rgpts_total <- rowSums(rgpts[,grep("^rgpts_q\\d+$", names(rgpts))], na.rm = TRUE)
+
+# Final cleaned dataset
+rgpts_clean <- rgpts
+```
+
+### NDA Remediation Script Example (nda/qualtrics/rgpts01.R)
+
+```r
+# Get data for NDA submission
+rgpts01 <- getQualtrics("rgpts")
+
+# Apply NDA standards
+rgpts01$src_subject_id <- as.character(rgpts01$src_subject_id)
+rgpts01$interview_date <- format(as.Date(rgpts01$interview_date, "%m/%d/%Y"), "%m/%d/%Y")
+
+# Ensure NDA structure compliance
+if (!"visit" %in% names(rgpts01)) {
+  rgpts01$visit <- "baseline"
+}
+
+# Additional NDA-specific processing...
+```
+
 ## Citation
 
 If you use wizaRdry in your research, please cite it:
 
 ```
-Kenney, J., Williams, T., Pappu, M., Spilka, M., Pratt, D., Pokorny, V., Castiello de Obeso, S., Suthaharan, & Horgan, C. (2025). 
+Kenney, J., Williams, T., Pappu, M., Spilka, M., Pratt, D., Pokorny, V., Castiello de Obeso, S., Suthaharan, P., & Horgan, C. (2025). 
 wizaRdry: A Framework For Collaborative & Reproducible Data Analysis. 
 R package version 0.1.0. https://github.com/belieflab/wizaRdry
 ```
