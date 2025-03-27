@@ -30,3 +30,6 @@ process_file("../api/dataMerge.R", "R/dataMerge.R")
 process_file("../api/dataParse.R", "R/dataParse.R")
 
 process_file("../api/scry.R", "R/scry.R")
+
+process_file("../api/src/createExtract.R", "R/createExtract.R")
+

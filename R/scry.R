@@ -194,7 +194,7 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
     "      Institution2:",
     "        lshsr: \"SV_BVw7mJJIp90Pur0\"",
     "  redcap:",
-    "    super_keys: ndar_subject01",
+    "    superkey: ndar_subject01",
     sep = "\n"
   )
   

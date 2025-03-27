@@ -97,8 +97,8 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   
   # Compile data list and validate measures
   data_list <- list(...)
-  
-  #this is so the function doesn't break if user enters a variable storing a character vector 
+
+    #this is so the function doesn't break if user enters a variable storing a character vector 
   #or a list of strings 
   #in other words it let's you do this:
   #vars_i_want <- c('demo','sps','sips_p')
@@ -135,7 +135,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   
   # Construct the path to the measure's cleaning script
   file_path <- sprintf("./nda/%s/%s.R", api, measure)
-  message("\nFetching ", measure, " with nda/", api, "/", measure,".R\n")
+  message("\nFetching ", measure, " with ./nda/", api, "/", measure,".R\n")
   
   # Setup cleanup on exit
   on.exit({
@@ -155,14 +155,20 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   
   result <- tryCatch({
     base::source(file_path)  # Execute the cleaning script for the measure
-    # Apply date format preservation after processing
+    
+    # Initialize the wizaRdry environment if it doesn't exist
+    if (!exists(".wizaRdry_env")) {
+      .wizaRdry_env <- new.env(parent = globalenv())
+    }
+    
     # Get the data frame from global environment
     df <- base::get0(measure, envir = .GlobalEnv)
     
     # Only process if df exists and is a data frame
     if (!is.null(df) && is.data.frame(df)) {
-      # Reassign the processed data frame
+      # Reassign the processed data frame to both environments
       base::assign(measure, df, envir = .GlobalEnv)
+      base::assign(measure, df, envir = .wizaRdry_env)
     }
     
     if (api == "qualtrics") {

@@ -10,11 +10,12 @@ process_file <- function(source_path, dest_path) {
     api_pattern <- "(source|list\\.files)\\s*\\([\"']api/"
     api_ref_pattern <- "\\bapi/[^_]"
 
-    # Check if line matches any pattern
-    if (grepl(library_pattern, line) ||
-        grepl(require_check_pattern, line) ||
-        grepl(api_pattern, line) ||
-        grepl(api_ref_pattern, line)) {
+    # Check if line matches any pattern but exclude lines with nda_base_url
+    if ((grepl(library_pattern, line) ||
+         grepl(require_check_pattern, line) ||
+         grepl(api_pattern, line) ||
+         grepl(api_ref_pattern, line)) &&
+        !grepl("nda_base_url", line)) {
       return(paste0("# ", line))  # Comment out the line
     } else {
       return(line)  # Keep line as is

@@ -22,7 +22,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                required = c("survey_ids")
                              ),
                              redcap = list(
-                               required = c("super_keys")
+                               required = c("superkey")
                              ),
                              sql = list(
                                required = c()  # Add required fields for SQL as needed
@@ -147,9 +147,10 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              if (length(all_errors) > 0) {
                                stop(api_type, " configuration errors in ", self$config_file, ":\n- ",
                                     paste(all_errors, collapse="\n- "), call. = FALSE)
-                             } else {
-                               message("The ", api_type, " configuration in ", self$config_file, " is valid.")
                              }
+                             # else {
+                             #   message("The ", api_type, " configuration in ", self$config_file, " is valid.")
+                             # }
                              
                              return(TRUE)
                            },

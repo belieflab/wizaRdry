@@ -30,5 +30,6 @@ getRedcap(
 A data frame containing the requested REDCap data
 }
 \description{
-Retrieves data from a REDCap instrument
+Retrieves data from a REDCap instrument and ensures subject identifiers
+are propagated across all events
 }

@@ -45,7 +45,7 @@ createNda <- function(df) {
   structure_name <- df  # Assuming '01' is static
   
   # Create the file path
-  path <- file.path('nda/tmp', paste0(df, '_template.csv'))
+  path <- file.path('./nda/tmp', paste0(df, '_template.csv'))
   
   # Get the dataframe
   template <- base::get(df, envir = .GlobalEnv)
@@ -70,5 +70,5 @@ createNda <- function(df) {
   write.table(template, path, row.names = FALSE, col.names = FALSE, append = TRUE, 
               quote = TRUE, sep = ",", na = "")
   
-  message(paste0("\nSubmission Template created at: ", path, "\n"))
+  message(sprintf("\nSubmission Template created at: %s \n", path))
 }

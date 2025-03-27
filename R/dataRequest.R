@@ -132,7 +132,7 @@ processData <- function(measure, source, csv, rdata, spss, identifier) {
   }
   # Construct the path to the measure's cleaning script
   file_path <- sprintf("./clean/%s/%s.R", source, measure)
-  message("\nProcessing ", measure, " from clean/", source, "/", measure)
+  message("\nProcessing ", measure, " from ./clean/", source, "/", measure, ".R")
   
   # Setup cleanup on exit
   on.exit({
@@ -166,7 +166,7 @@ processData <- function(measure, source, csv, rdata, spss, identifier) {
     if (length(identifier) == 0 || all(is.na(identifier))) {
       message("An error occurred: ", e$message)  # General error message
     } else {
-      message("Error with ", measure, ": ", e$message)  # Specific error message
+      message("Error with ./clean/", source, "/", measure, ".R: ", e$message)  # Specific error message
     }
     NULL  # Return NULL on error
   })
