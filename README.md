@@ -110,18 +110,18 @@ default:
 - **NIH Data Archive integration**: Prepares submissions for NDA compliance
 - **Collaborative workflow**: Enables multiple researchers to work from the same data source
 
-### Core Functions
+## Core Functions
 
 wizaRdry provides a suite of functions organized by their purpose in the data workflow:
 
-#### Project Setup
+### Project Setup
 
 ```r
 # Initialize project structure
 scry()
 ```
 
-#### Data Access Functions
+### Data Access
 
 ```r
 # Get data from REDCap
@@ -134,14 +134,14 @@ lshrs01 <- getQualtrics("lshrs01")
 prl01 <- getMongo("prl01")
 ```
 
-#### Data Cleaning
+### Data Cleaning
 
 ```r
 # Data Cleaning Workflow - run cleaning scripts and validation
 dataRequest("demo", "rgpts", "overfitting", csv = TRUE)
 ```
 
-#### Data Processing
+### Data Processing
 
 ```r
 # Filter data
@@ -156,14 +156,14 @@ merged_data <- dataMerge(demo_clean, rgpts_clean)
 dataParse("overfitting")
 ```
 
-#### NDA Submission Template Generation
+### NDA Submission
 
 ```r
 # NDA Submission Workflow - prepare NDA templates
 ndaRequest("demoses01", "lshrs01", "prl01")
 ```
 
-#### Export Functions
+### Data Export
 
 ```r
 # Create CSV output
