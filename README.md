@@ -199,7 +199,7 @@ This creates properly formatted NDA submission templates in the `.nda/tmp` direc
 If you use wizaRdry in your research, please cite it:
 
 ```
-Kenney, J., Williams, T., Pappu, M., Spilka, M., Pratt, D., P, Pokorny, V., Castiello de Obeso, S., Suthaharab, & Horgan, C. (2025). 
+Kenney, J., Williams, T., Pappu, M., Spilka, M., Pratt, D., Pokorny, V., Castiello de Obeso, S., Suthaharan, & Horgan, C. (2025). 
 wizaRdry: A Framework For Collaborative & Reproducible Data Analysis. 
 R package version 0.1.0. https://github.com/belieflab/wizaRdry
 ```
