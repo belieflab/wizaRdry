@@ -1,22 +1,8 @@
----
-output: github_document
----
-
 <!-- README.md is generated from README.Rmd. Please edit that file -->
-
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
-)
-```
 
 # wizaRdry
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/belieflab/wizaRdry/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/belieflab/wizaRdry/actions/workflows/R-CMD-check.yaml)
 [![CRAN status](https://www.r-pkg.org/badges/version/wizaRdry)](https://CRAN.R-project.org/package=wizaRdry)
 [![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 <!-- badges: end -->
@@ -27,69 +13,138 @@ The wizaRdry package provides a comprehensive data analysis framework specifical
 
 ## Installation
 
-You can install the released version of wizaRdry from [CRAN](https://CRAN.R-project.org) with:
+You can install the development version from GitHub:
 
-```{r eval=FALSE}
-install.packages("wizaRdry")
-```
-
-Or install the development version from GitHub:
-
-```{r eval=FALSE}
+```r
 # install.packages("devtools")
 devtools::install_github("belieflab/wizaRdry")
 ```
 
+Once accepted on CRAN, you will be able to install the released version with:
+
+```r
+install.packages("wizaRdry")
+```
+
+## Getting Started
+
+After installation, follow these steps to set up your project:
+
+### 1. Initialize Project Structure
+
+Use the `scry()` function to create the necessary directory structure:
+
+```r
+library(wizaRdry)
+scry()
+```
+
+This will create:
+- `clean/` directories for data cleaning scripts
+- `nda/` directories for NDA submission templates
+- `tmp/` directory for temporary outputs
+- Template configuration files
+
+### 2. Configure Secrets
+
+Edit the generated `secrets.R` file to add your API credentials:
+
+```r
+# REDCap
+uri   <- "https://your-redcap-instance.edu/api/"
+token <- "YOUR_TOKEN"
+
+# Qualtrics
+apiKeys <- c("YOUR_API_KEY")
+baseUrls <- c("YOUR_BASE_URL")
+
+# MongoDB
+connectionString <- "mongodb://your-connection-string"
+```
+
+### 3. Configure Study Settings
+
+Edit the generated `config.yml` file to specify your study settings:
+
+```yaml
+default:
+  study_alias: yourstudy
+  identifier: src_subject_id
+  mongo:
+    collection: ${study_alias}
+  qualtrics:
+    survey_ids:
+      Institution1:
+        survey_alias: "SV_QUALTRICS_ID"
+  redcap:
+    superkey: ndar_subject01
+```
+
 ## Features
 
+- **Project scaffolding**: Creates standard directory structures with `scry()`
 - **Cross-modal data access**: Unified interface to REDCap, MongoDB, and Qualtrics
 - **Memory-aware parallel processing**: Automatically scales to available resources
 - **Field harmonization**: Standardizes data fields across platforms
 - **NIH Data Archive integration**: Prepares submissions for NDA compliance
+- **Collaborative workflow**: Enables multiple researchers to work from the same data source
 
-## Core Functions
+### Core Functions
 
-### Data Access
+wizaRdry provides a suite of functions organized by their purpose in the data workflow:
 
-```{r eval=FALSE}
+#### Project Setup
+
+```r
+# Initialize project structure
+scry()
+```
+
+#### Data Access Functions
+
+```r
 # Get data from REDCap
-redcap_data <- getRedcap("measure_1")
+demoses01 <- getRedcap("demoses01")
 
 # Get data from Qualtrics
-qualtrics_data <- getQualtrics("rgpts")
+lshrs01 <- getQualtrics("lshrs01")
 
 # Get data from MongoDB
-mongo_data <- getMongo("dd", "capr")
+prl01 <- getMongo("prl01")
 ```
 
-### Workflow Functions
+#### Data Cleaning
 
-```{r eval=FALSE}
-# Access data across modalities
-dataRequest("measure1", csv = TRUE)
-
-# Prepare NDA submissions
-ndaRequest("eefrt01", rdata = TRUE)
+```r
+# Data Cleaning Workflow - run cleaning scripts and validation
+dataRequest("demo", "rgpts", "overfitting", csv = TRUE)
 ```
 
-### Data Processing
+#### Data Processing
 
-```{r eval=FALSE}
+```r
 # Filter data
 filtered_data <- dataFilter(df, 
                            rows_of_interest = c("sub001","sub002"),
                            columns_of_interest = c("src_subject_id", "phenotype"))
 
 # Merge datasets
-merged_data <- dataMerge(df1, df2)
+merged_data <- dataMerge(demo_clean, rgpts_clean)
 
 # Parse multi-survey datasets
-dataParse("combined_surveys")
+dataParse("overfitting")
 ```
 
-### Export Functions
+#### NDA Submission Template Generation
 
-```{r eval=FALSE}
+```r
+# NDA Submission Workflow - prepare NDA templates
+ndaRequest(demoses01", "lshrs01", "prl01")
+```
+
+#### Export Functions
+
+```r
 # Create CSV output
 createCsv(df, "data_export")
 
@@ -103,20 +158,48 @@ createSpss(df, "data_export")
 createNda(eefrt01)
 ```
 
-## Configuration
+## Workflows
 
-wizaRdry uses configuration files to securely manage database credentials:
+The wizaRdry package supports two distinct but complementary workflows:
 
-1. Create a `config.yml` file in your project directory
-2. Create a `secrets.R` file for API credentials
-3. See package documentation for detailed configuration instructions
+### 1. Data Cleaning Workflow
+
+This workflow focuses on accessing and cleaning raw data for analysis:
+
+- Place cleaning scripts in the `clean/` directory
+- Scripts should be organized by data source: `clean/qualtrics/`, `clean/redcap/`, `clean/mongo/`
+- Name your cleaned datasets with the `_clean` suffix (e.g., `rgpts_clean`)
+- Access and process data with:
+
+```r
+# Process data from multiple sources in one command
+dataRequest("rgpts", "wtar", "prl", csv = TRUE)
+```
+
+This runs your cleaning scripts, performs validation tests, and exports cleaned data.
+
+### 2. NDA Submission Workflow
+
+This workflow prepares data for NIH Data Archive submission:
+
+- Place NDA remediation scripts in the `nda/` directory
+- Scripts should follow NDA structure naming: `nda/qualtrics/rgpts01.R`
+- NDA structure names typically end with a two-digit suffix (e.g., `01`)
+- Process and validate NDA structures with:
+
+```r
+# Prepare NDA submission templates
+ndaRequest("rgpts01", "wtar01", "prl01", csv = TRUE)
+```
+
+This creates properly formatted NDA submission templates in the `.nda/tmp` directory.
 
 ## Citation
 
 If you use wizaRdry in your research, please cite it:
 
 ```
-Kenney, J., Pappu, M., Williams, T., Pokorny, V., Horgan, C., & Spilka, M. (2025). 
+Kenney, J., Williams, T., Pappu, M., Spilka, M., Pratt, D., P, Pokorny, V., Castiello de Obeso, S., Suthaharab, & Horgan, C. (2025). 
 wizaRdry: A Framework For Collaborative & Reproducible Data Analysis. 
 R package version 0.1.0. https://github.com/belieflab/wizaRdry
 ```
