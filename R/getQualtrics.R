@@ -199,3 +199,16 @@ getQualtricsDictionary <- function(qualtrics_df) {
 #' survey_data <- getSurvey("your_survey_alias")
 #' }
 getSurvey <- getQualtrics
+
+#' Alias for 'getQualtrics'
+#'
+#' This is a legacy alias for the 'getQualtrics' function to maintain compatibility with older code.
+#'
+#' @inheritParams getQualtrics
+#' @inherit getQualtrics return
+#' @export
+#' @examples
+#' \dontrun{
+#' survey_data <- qualtrics("your_survey_alias")
+#' }
+qualtrics <- getQualtrics

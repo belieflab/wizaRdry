@@ -45,10 +45,10 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
 #   if (!require("dplyr")) {install.packages("dplyr")}; library(dplyr)
 #   if (!require("config")) {install.packages("config")}; library(config)
   
-  # Prepare lists for REDCap, Qualtrics, and tasks
+  # Prepare lists for REDCap, Qualtrics, and MongoDB
   redcap_list <- tools::file_path_sans_ext(list.files("./clean/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
-  task_list <- tools::file_path_sans_ext(list.files("./clean/task"))
+  mongo_list <- tools::file_path_sans_ext(list.files("./clean/mongo"))
   
   # Get identifier from config
   config <- config::get()
@@ -82,7 +82,7 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
     }
     
     # Validate measures against predefined lists
-    invalid_list <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, task_list), data_list)
+    invalid_list <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
     
     if (length(invalid_list) > 0) {
       stop(paste(invalid_list, collapse = ", "), " does not have a cleaning script, please create one in clean/.\n")
@@ -104,7 +104,7 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   
   # Process each measure using processData function
   for (measure in data_list) {
-    sourceCategory <- ifelse(measure %in% redcap_list, "redcap", ifelse(measure %in% qualtrics_list, "qualtrics", "task"))
+    sourceCategory <- ifelse(measure %in% redcap_list, "redcap", ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
 #     base::source("api/dataRequest.R")
     processData(measure, sourceCategory, csv, rdata, spss, identifier)
   }

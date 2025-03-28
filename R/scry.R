@@ -299,7 +299,7 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
     prl = list(
       path = file.path(path, "clean", "mongo", "prl.R"),
       content = paste(
-        "prl <- wizaRdry::getMongo(\"lshsr\")",
+        "prl <- wizaRdry::getMongo(\"prl\")",
         "",
         "# cleaning script code...",
         "",

@@ -303,3 +303,17 @@ getRedcapDictionary <- function(instrument_name) {
   # View(dictionary)
   return(dictionary)
 }
+
+
+#' Alias for 'getRedcap'
+#'
+#' This is a legacy alias for the 'getRedcap' function to maintain compatibility with older code.
+#'
+#' @inheritParams getRedcap
+#' @inherit getRedcap return
+#' @export
+#' @examples
+#' \dontrun{
+#' survey_data <- redcap("your_survey_alias")
+#' }
+redcap <- getRedcap
