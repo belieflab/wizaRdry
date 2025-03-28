@@ -8,7 +8,7 @@
 #' @param measure_type A string indicating the type of measure, currently not utilized in the function but reserved for future use.
 #' @return This function does not return a value but outputs a message indicating whether the specified clean data frame exists.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' cleanDataFrameExists("your_dataset_alias", "qualtrics")
 #' }
 #' @importFrom testthat test_that expect_true

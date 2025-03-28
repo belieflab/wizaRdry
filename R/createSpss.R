@@ -13,12 +13,17 @@
 #'   the file's location. This function does not return any value.
 #' @examples
 #' \dontrun{
-#' createSpss(rgpts)
+#' # Create a sample dataframe
+#' sample_df <- data.frame(
+#'   id = 1:3,
+#'   score = c(85, 92, 78),
+#'   group = c("A", "B", "A")
+#' )
+#' createSpss(sample_df)
 #' }
 #' @import haven
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-
 createSpss <- function(df, df_name = NULL) {
   
 #   if(!require(haven)) {install.packages("haven")}; library(haven);

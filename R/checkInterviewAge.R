@@ -9,7 +9,7 @@
 #' @return The function itself does not return a value but will output a message listing the subject IDs
 #'         with 'interview_age' outside the 12 to 70 years range if such cases exist.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' checkInterviewAge("your_dataset_alias")
 #' }
 #' @importFrom testthat test_that expect_true

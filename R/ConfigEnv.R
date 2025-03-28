@@ -1,7 +1,7 @@
 # First, install R6 if you don't have it
-if (!require(R6)) install.packages("R6"); library(R6)
+# if (!require(R6)) install.packages("R6"); library(R6)
 # Install config package if needed
-if (!require(config)) install.packages("config"); library(config)
+# if (!require(config)) install.packages("config"); library(config)
 
 #' Configuration Environment Class
 #' 

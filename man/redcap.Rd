@@ -34,6 +34,6 @@ This is a legacy alias for the 'getRedcap' function to maintain compatibility wi
 }
 \examples{
 \dontrun{
-survey_data <- redcap("your_survey_alias")
+survey_data <- redcap("demographics")
 }
 }

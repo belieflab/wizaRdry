@@ -1,5 +1,5 @@
 # First, install R6 if you don't have it
-if (!require(R6)) install.packages("R6"); library(R6)
+# if (!require(R6)) install.packages("R6"); library(R6)
 
 #' Configuration Environment Class
 #' 
@@ -128,7 +128,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                   if (api_type == "redcap" && "uri" %in% correct_type_vars) {
                                     uri_value <- base::get("uri")
                                     
-                                    # Check if it ends with "api/" (correct format)
+#                                     # Check if it ends with "api/" (correct format)
                                     if (grepl("api/$", uri_value)) {
                                       # Format is correct, do nothing
                                     } 
@@ -138,7 +138,6 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                       fixed_uri <- paste0(uri_value, "/")
                                       
                                       # Update the variable in memory
-                                      # assign("uri", fixed_uri, envir = .GlobalEnv)
                                       assign("uri", fixed_uri, envir = .wizaRdry_env)
                                       
                                       # Update the secrets.R file
@@ -165,7 +164,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                     else {
                                       # Don't add a slash, add an error instead
                                       all_errors <- c(all_errors, paste("URI format error:",
-                                                                        "uri must end with 'api/' for REDCap API access.",
+#                                                                         "uri must end with 'api/' for REDCap API access.",
                                                                         "Please verify REDCap API endpoint in the API Playground"))
                                     }
                                   }

@@ -21,3 +21,9 @@ A data frame containing the MongoDB data
 \description{
 Retrieve data from MongoDB
 }
+\examples{
+\dontrun{
+# Get data from MongoDB collection
+data <- getMongo("collection_name")
+}
+}

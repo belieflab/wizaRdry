@@ -42,7 +42,7 @@ completeLoadingAnimation <- function(pb) {
 #' @param pb An existing txtProgressBar object; if NULL, a new progress bar is created.
 #' @return A txtProgressBar object representing the current state of the progress bar.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' pb <- show_loading_animation_with_chunks(step = 1, total_steps = 20)  # Start new animation
 #' pb <- show_loading_animation_with_chunks(step = 2, total_steps = 20, pb = pb)  # Update animation
 #' }

@@ -37,8 +37,12 @@
 #'
 #' @export
 createNda <- function(df) {
+  # Create directory structure if it doesn't exist
   if (!dir.exists("nda")) {
     dir.create("nda")
+  }
+  if (!dir.exists("nda/tmp")) {
+    dir.create("nda/tmp")
   }
   
   # Define structure_name explicitly
@@ -48,7 +52,7 @@ createNda <- function(df) {
   path <- file.path('./nda/tmp', paste0(df, '_template.csv'))
   
   # Get the dataframe
-  template <- base::get(df, envir = .GlobalEnv)
+  template <- base::get(df)
   
   # Open a connection to overwrite the file
   con <- file(path, "w")

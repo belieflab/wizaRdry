@@ -34,16 +34,13 @@
 #' @examples
 #' \dontrun{
 #' # Initialize in current directory
-#' scry()
-#' 
-#' # Initialize in a specific directory with an R project
-#' scry("path/to/project", create_project = TRUE)
-#' 
-#' # Repair a broken directory structure
 #' scry(repair = TRUE)
 #' 
+#' # Initialize in a specific directory with an R project
+#' scry("path/to/project", create_project = TRUE, repair = TRUE)
+#' 
 #' # Skip the tree display
-#' scry(show_tree = FALSE)
+#' scry(repair = TRUE, show_tree = FALSE)
 #' }
 #'
 #' @export

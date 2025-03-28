@@ -9,7 +9,7 @@
 #' @return The function does not return a value but will generate a CSV file if duplicates are found
 #'         and display those duplicates in the RStudio viewer.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' checkDuplicates("your_dataset_alias", "qualtrics")
 #' }
 #' @importFrom dplyr filter %>% 

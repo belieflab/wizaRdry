@@ -28,12 +28,25 @@
 #'         are specified, returns the entire dataframe with applied row filters.
 #'
 #' @examples
-#' \dontrun{
-#' filtered <- dataFilter(df, 
-#'                             rows_of_interest = c("foo","bar"),
-#'                             columns_of_interest = c("src_subject_id", "phenotype"), 
-#'                             visit = 2, 
-#'                             states = c("complete", "completed baseline"))
+#' \donttest{
+#' # Create a sample dataframe
+#' sample_df <- data.frame(
+#'   src_subject_id = c("SUB001", "SUB002", "SUB003"),
+#'   phenotype = c("A", "B", "A"),
+#'   visit = c(1, 2, 2),
+#'   state = c("complete", "completed baseline", "in progress"),
+#'   stringsAsFactors = FALSE
+#' )
+#' 
+#' # Set row names for demonstration
+#' rownames(sample_df) <- c("foo", "bar", "baz")
+#' 
+#' # Filter the dataframe
+#' filtered <- dataFilter(sample_df, 
+#'                         rows_of_interest = c("foo","bar"),
+#'                         columns_of_interest = c("src_subject_id", "phenotype"), 
+#'                         visit = 2, 
+#'                         states = c("complete", "completed baseline"))
 #' }
 #' @import dplyr
 #' @export
@@ -45,8 +58,8 @@ dataFilter <- function(df, rows_of_interest = NULL, columns_of_interest = NULL,
 #   if (!require(dplyr, quietly = TRUE)) {install.packages("dplyr")}; library(dplyr)
 #   if (!require(lubridate, quietly = TRUE)) {install.packages("lubridate")}; library(lubridate)
   
-  # print("Initial dataframe head:")
-  # print(head(df))
+  # message("Initial dataframe head:")
+  # message(head(df))
   
   parseAnyDate <- function(date_string) {
     if (grepl("-", date_string)) {

@@ -25,7 +25,12 @@ The ".csv" extension is appended automatically to the filename.
 }
 \examples{
 \dontrun{
-createCsv(prl)
+# Create a sample dataframe
+sample_df <- data.frame(
+  id = 1:3,
+  name = c("Alice", "Bob", "Charlie")
+)
+createCsv(sample_df)
 }
 }
 \author{

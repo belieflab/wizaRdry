@@ -237,6 +237,11 @@ formatDuration <- function(duration) {
 #'
 #' @return A data frame containing the MongoDB data
 #' @export
+#' @examples
+#' \dontrun{
+#' # Get data from MongoDB collection
+#' data <- getMongo("collection_name")
+#' }
 getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
@@ -524,27 +529,27 @@ disconnectMongo <- function(mongo) {
 getMongoData <- function(Mongo, identifier, batch_info) {
   # Check for both exists AND non-empty
   query_json <- sprintf('{"%s": {"$exists": true, "$ne": ""}}', identifier)
-  print(paste("Using query:", query_json))
+  message(paste("Using query:", query_json))
   
   # Get initial data
   df <- Mongo$find(query = query_json, skip = batch_info$start, limit = batch_info$size)
-  print(paste("Initial rows:", nrow(df)))
+  message(paste("Initial rows:", nrow(df)))
   
   # Only proceed with filtering if we have data
   if (!is.null(df) && nrow(df) > 0) {
     # Print sample of data before filtering
-    print("Sample before filtering:")
-    print(head(df[[identifier]]))
+    message("Sample before filtering:")
+    message(head(df[[identifier]]))
     
     # Apply both NA and empty string filtering
     df <- df[!is.na(df[[identifier]]) & df[[identifier]] != "", ]
-    print(paste("Rows after complete filtering:", nrow(df)))
+    message(paste("Rows after complete filtering:", nrow(df)))
     
     # Print sample after filtering
-    print("Sample after filtering:")
-    print(head(df[[identifier]]))
+    message("Sample after filtering:")
+    message(head(df[[identifier]]))
   } else {
-    print("No data found in initial query")
+    message("No data found in initial query")
   }
   
   return(df)
@@ -566,7 +571,7 @@ getMongoData <- function(Mongo, identifier, batch_info) {
 #' converted interview dates, and added 'measure' column based on the task.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Create a sample dataset
 #' df <- data.frame(
 #'   src_subject_id = 1:3,
@@ -650,6 +655,6 @@ getTask <- getMongo
 #' @export
 #' @examples
 #' \dontrun{
-#' survey_data <- mongo("task_alias")
+#' survey_data <- getTask("task_alias")
 #' }
 mongo <- getMongo

@@ -50,11 +50,11 @@ processCaprData <- function(df, instrument_name) {
   # Remove rows where phenotype is NA
   # but first print warning and say how many folks are getting removed
   phenotype_nas <- df[is.na(df$phenotype),]
-  print(paste0('removing ', nrow(phenotype_nas),
+  message(paste0('removing ', nrow(phenotype_nas),
                ' subjects because they have NA for phenotype. This generally',
                ' should not happen. Below are the subject IDs and visit dates ',
                'for these people. They should be inspected and fixed in redcap'))
-  print(paste0(phenotype_nas$src_subject_id, ' ', phenotype_nas$visit))
+  message(paste0(phenotype_nas$src_subject_id, ' ', phenotype_nas$visit))
   df <- df[!is.na(df$phenotype), ]
   
   # Remove rows where phenotype is 'ineligible' or 'withdrawn'

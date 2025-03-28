@@ -59,11 +59,24 @@ retains all columns by default. Filters by 'visit' and 'week' if these columns e
 and values for them are provided.
 }
 \examples{
-\dontrun{
-filtered <- dataFilter(df, 
-                            rows_of_interest = c("foo","bar"),
-                            columns_of_interest = c("src_subject_id", "phenotype"), 
-                            visit = 2, 
-                            states = c("complete", "completed baseline"))
+\donttest{
+# Create a sample dataframe
+sample_df <- data.frame(
+  src_subject_id = c("SUB001", "SUB002", "SUB003"),
+  phenotype = c("A", "B", "A"),
+  visit = c(1, 2, 2),
+  state = c("complete", "completed baseline", "in progress"),
+  stringsAsFactors = FALSE
+)
+
+# Set row names for demonstration
+rownames(sample_df) <- c("foo", "bar", "baz")
+
+# Filter the dataframe
+filtered <- dataFilter(sample_df, 
+                        rows_of_interest = c("foo","bar"),
+                        columns_of_interest = c("src_subject_id", "phenotype"), 
+                        visit = 2, 
+                        states = c("complete", "completed baseline"))
 }
 }

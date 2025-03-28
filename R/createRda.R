@@ -13,11 +13,15 @@
 #'   indicating the file's location. This function does not return a value.
 #' @examples
 #' \dontrun{
-#' createRds(kamin)
+#' # Create a sample dataframe
+#' sample_df <- data.frame(
+#'   id = 1:3,
+#'   name = c("Alice", "Bob", "Charlie")
+#' )
+#' createRda(sample_df)
 #' }
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-
 createRda <- function(df, df_name = NULL) {
   if(is.null(df) || nrow(df) == 0) {
     stop("DataFrame is empty or NULL. Cannot save to RDS.")

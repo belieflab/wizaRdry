@@ -8,7 +8,7 @@
 #' @param nda_required_variables A vector of strings listing the NDA required variables which are excluded from the naming convention check.
 #' @return The function does not return a value but outputs an error message if any non-NDA columns do not follow the naming convention.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' checkColumnPrefix("dataset_name", "qualtrics", c("nda_var1", "nda_var2"))
 #' }
 #' @importFrom testthat test_that expect_true

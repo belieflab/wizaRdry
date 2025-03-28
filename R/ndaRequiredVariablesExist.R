@@ -10,7 +10,7 @@
 #'        This parameter is overwritten inside the function but can be used to extend the functionality in the future.
 #' @return This function does not return a value but uses the `testthat` package to assert the presence of all NDA required variables and provides detailed feedback if any are missing.
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' ndaRequiredVariablesExist("your_dataset_alias", "qualtrics", c("src_subject_id", "phenotype"))
 #' }
 #' @importFrom testthat test_that expect_true

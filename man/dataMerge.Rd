@@ -40,12 +40,26 @@ and offers options for exporting the merged data.
 }
 \examples{
 \dontrun{
-# Perform an OUTER JOIN on 'prl' and 'rgpts' using default keys:
-dataMerge(prl, rgpts, all = TRUE)
-# Perform an INNER JOIN using 'subjectkey' as the merge key:
-dataMerge(prl, rgpts, by = "subjectkey", all = FALSE)
-# Merge multiple data frames using specified keys and export to CSV:
-dataMerge(prl, rgpts, lshsr, by = c("src_subject_id", "visit"), csv = TRUE)
+# Create sample dataframes for demonstration
+df1 <- data.frame(
+  src_subject_id = c("S001", "S002", "S003"),
+  visit = c(1, 2, 1),
+  measure1 = c(10, 15, 12),
+  stringsAsFactors = FALSE
+)
+
+df2 <- data.frame(
+  src_subject_id = c("S001", "S002", "S004"),
+  visit = c(1, 2, 2),
+  measure2 = c(85, 92, 78),
+  stringsAsFactors = FALSE
+)
+
+# Perform an OUTER JOIN using default keys:
+merged1 <- dataMerge(df1, df2, all = TRUE)
+
+# Perform an INNER JOIN using specified keys:
+merged2 <- dataMerge(df1, df2, by = "src_subject_id", all = FALSE)
 }
 }
 \author{

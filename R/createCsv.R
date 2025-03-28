@@ -13,11 +13,15 @@
 #'   indicating the file's location. This function does not return a value.
 #' @examples
 #' \dontrun{
-#' createCsv(prl)
+#' # Create a sample dataframe
+#' sample_df <- data.frame(
+#'   id = 1:3,
+#'   name = c("Alice", "Bob", "Charlie")
+#' )
+#' createCsv(sample_df)
 #' }
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-
 createCsv <- function(df, df_name = NULL) {
   # Use df_name if provided, otherwise derive from df variable name
   filename <- if (!is.null(df_name)) {

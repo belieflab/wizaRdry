@@ -81,6 +81,11 @@ formatDuration <- function(duration) {
 #'
 #' @return A data frame containing the requested REDCap data
 #' @export
+#' @examples
+#' \dontrun{
+#' # Get data from a specific instrument
+#' data <- getRedcap("demographics")
+#' }
 getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
                       redcap_event_name = NULL, batch_size = 1000,
                       records = NULL, fields = NULL) {
@@ -103,7 +108,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
     forms_data <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
     forms_filtered <- forms_data[!grepl("nda", forms_data$instrument_name), ]
     random_instrument <- sample(forms_filtered$instrument_name, 1)
-    forms_table <- paste(capture.output(print(getRedcapForms())), collapse = "\n")
+    forms_table <- paste(capture.output(message(getRedcapForms())), collapse = "\n")
     example_text <- sprintf("\n\nExample:\n%s <- getRedcap(\"%s\")", random_instrument, random_instrument)
     stop(sprintf("No REDCap Instrument Name provided!\n%s%s",
                  forms_table, example_text),
@@ -314,6 +319,6 @@ getRedcapDictionary <- function(instrument_name) {
 #' @export
 #' @examples
 #' \dontrun{
-#' survey_data <- redcap("your_survey_alias")
+#' survey_data <- redcap("demographics")
 #' }
 redcap <- getRedcap

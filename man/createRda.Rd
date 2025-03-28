@@ -25,7 +25,12 @@ The ".Rda" extension is appended automatically to the filename.
 }
 \examples{
 \dontrun{
-createRds(kamin)
+# Create a sample dataframe
+sample_df <- data.frame(
+  id = 1:3,
+  name = c("Alice", "Bob", "Charlie")
+)
+createRda(sample_df)
 }
 }
 \author{

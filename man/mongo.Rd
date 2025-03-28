@@ -23,6 +23,6 @@ This is a legacy alias for the 'getMongo' function to maintain compatibility wit
 }
 \examples{
 \dontrun{
-survey_data <- mongo("task_alias")
+survey_data <- getTask("task_alias")
 }
 }

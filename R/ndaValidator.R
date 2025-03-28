@@ -167,7 +167,7 @@ apply_null_transformations <- function(df, elements) {
       
       if (!is.null(rules) && length(rules) > 0) {
         cat(sprintf("\nRules for field '%s':\n", field_name))
-        print(rules)
+        message(rules)
         
         null_placeholder <- as.numeric(rules[[1]])
         
@@ -175,7 +175,7 @@ apply_null_transformations <- function(df, elements) {
         
         # Add debugging before conversion
         cat(sprintf("\nUnique values before conversion in %s:\n", field_name))
-        print(unique(df[[field_name]]))
+        message(unique(df[[field_name]]))
         
         message("applying type conversions")
         
@@ -191,7 +191,7 @@ apply_null_transformations <- function(df, elements) {
           non_numeric <- df[[field_name]][!grepl("^-?\\d*\\.?\\d+$", df[[field_name]])]
           if (length(non_numeric) > 0) {
             cat(sprintf("Warning: Non-numeric values found in %s:\n", field_name))
-            print(unique(non_numeric))
+            message(unique(non_numeric))
           }
           
           if (type == "Integer") {
@@ -205,7 +205,7 @@ apply_null_transformations <- function(df, elements) {
           if (any(new_nas)) {
             cat(sprintf("\nWarning: %d NAs introduced in %s\n", sum(new_nas), field_name))
             cat("Sample of values that became NA:\n")
-            print(head(df[[field_name]][new_nas]))
+            message(head(df[[field_name]][new_nas]))
           }
         }
         
@@ -1047,7 +1047,7 @@ debug_print <- function(msg, df = NULL, sample_size = 5, debug = FALSE) {
       cat("- Dimensions:", paste(dim(df), collapse=" x "), "\n")
       cat("- Column names:", paste(names(df), collapse=", "), "\n")
       cat("- First", sample_size, "rows of data:\n")
-      print(head(df, sample_size))
+      message(head(df, sample_size))
     }
   }
 }
@@ -1304,8 +1304,6 @@ ndaValidator <- function(measure_name,
     }
     # Get the dataframe from the global environment
     df <- base::get(measure_name, envir = .wizaRdry_env)
-    
-    debug_print("Initial dataframe loaded", df, debug = debug)
     
     # Get structure name
     structure_name <- measure_name

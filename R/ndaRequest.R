@@ -19,7 +19,6 @@
 #' }
 #' 
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-#' 
 ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE) {
   
   start_time <- Sys.time()
@@ -27,24 +26,6 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
 #   base::source("api/getRedcap.R")
 #   base::source("api/getSurvey.R")
 #   base::source("api/getTask.R")
-  
-  # Set up cleanup for any MongoDB connections that might persist
-  on.exit({
-    # Find and cleanup any mongo connections in the global environment
-    mongo_objects <- ls(envir = .GlobalEnv, pattern = "^Mongo|_mongo$|^mongo", all.names = TRUE)
-    for (obj in mongo_objects) {
-      if (exists(obj, envir = .GlobalEnv)) {
-        conn <- base::get(obj, envir = .GlobalEnv)
-        if (is.environment(conn) && exists("disconnect", envir = conn)) {
-          tryCatch({
-            conn$disconnect()
-          }, error = function(e) NULL)
-        }
-      }
-    }
-    gc()  # Force garbage collection
-  })
-  
 #   base::source("api/ndaValidator.R")
   
   # Required Libraries Setup
@@ -116,7 +97,7 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   
   # Clean up and record processing time
   # performCleanup()
-  # print(Sys.time() - start_time)  # Print time taken for processing
+  # message(Sys.time() - start_time)  # Print time taken for processing
 }
 
 processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE) {
@@ -162,12 +143,11 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     }
     
     # Get the data frame from global environment
-    df <- base::get0(measure, envir = .GlobalEnv)
+    df <- base::get0(measure)
     
     # Only process if df exists and is a data frame
     if (!is.null(df) && is.data.frame(df)) {
       # Reassign the processed data frame to both environments
-      base::assign(measure, df, envir = .GlobalEnv)
       base::assign(measure, df, envir = .wizaRdry_env)
     }
     
@@ -178,8 +158,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
                           "UserLanguage", "candidateId", "studyId", "measure", "ATTN", "ATTN_1", "SC0")
       df <- df[!names(df) %in% cols_to_remove]
       
-      # Reassign the filtered dataframe to the global environment
-      base::assign(measure, df, envir = .GlobalEnv)
+      # Reassign the filtered dataframe
+      base::assign(measure, df)
       
 #       source("api/test/ndaCheckQualtricsDuplicates.R")
       ndaCheckQualtricsDuplicates(measure,"qualtrics")
@@ -197,11 +177,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     validation_results <- ndaValidator(measure, api, limited_dataset)
     
     # Now apply date format preservation AFTER validation
-    df <- base::get0(measure, envir = .GlobalEnv)
-    # if (!is.null(df) && is.data.frame(df)) {
-    #   df <- preserveDateFormat(df, limited_dataset)
-    #   base::assign(measure, df, envir = .GlobalEnv)
-    # }
+    df <- base::get0(measure)
     
     # Add limited de-identification summary
     if (limited_dataset == FALSE) {

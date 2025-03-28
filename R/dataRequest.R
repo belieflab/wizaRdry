@@ -21,23 +21,6 @@
 #' 
 dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   
-  # Set up cleanup for any MongoDB connections that might persist
-  on.exit({
-    # Find and cleanup any mongo connections in the global environment
-    mongo_objects <- ls(envir = .GlobalEnv, pattern = "^Mongo|_mongo$|^mongo", all.names = TRUE)
-    for (obj in mongo_objects) {
-      if (exists(obj, envir = .GlobalEnv)) {
-        conn <- base::get(obj, envir = .GlobalEnv)
-        if (is.environment(conn) && exists("disconnect", envir = conn)) {
-          tryCatch({
-            conn$disconnect()
-          }, error = function(e) NULL)
-        }
-      }
-    }
-    gc()  # Force garbage collection
-  })
-  
 #   base::source("api/testSuite.R")
   
   # Required Libraries Setup

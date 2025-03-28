@@ -25,7 +25,13 @@ but can be customized if desired.
 }
 \examples{
 \dontrun{
-createSpss(rgpts)
+# Create a sample dataframe
+sample_df <- data.frame(
+  id = 1:3,
+  score = c(85, 92, 78),
+  group = c("A", "B", "A")
+)
+createSpss(sample_df)
 }
 }
 \author{

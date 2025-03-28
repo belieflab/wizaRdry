@@ -33,3 +33,9 @@ A data frame containing the requested REDCap data
 Retrieves data from a REDCap instrument and ensures subject identifiers
 are propagated across all events
 }
+\examples{
+\dontrun{
+# Get data from a specific instrument
+data <- getRedcap("demographics")
+}
+}
