@@ -33,3 +33,5 @@ process_file("../api/scry.R", "R/scry.R")
 
 process_file("../api/src/createExtract.R", "R/createExtract.R")
 
+process_file("../api/src/checkKeys.R", "R/checkKeys.R")
+
