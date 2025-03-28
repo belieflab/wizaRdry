@@ -141,7 +141,8 @@ prl01 <- getMongo("prl01")
 dataRequest("demo", "rgpts", "overfitting", csv = TRUE)
 ```
 
-### Data Processing
+### Data Cleaning
+Cleaning scripts are written inside the `clean/` directory and called by their script name (e.g., "demo" for demographics) in `dataRequest()`
 
 ```r
 # Filter data
@@ -150,7 +151,7 @@ filtered_data <- dataFilter(df,
                            columns_of_interest = c("src_subject_id", "phenotype"))
 
 # Merge datasets
-merged_data <- dataMerge(demo_clean, rgpts_clean)
+merged_data <- dataMerge(demo_clean, rgpts_clean) 
 
 # Parse multi-survey datasets
 dataParse("overfitting")
