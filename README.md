@@ -76,8 +76,8 @@ uri   <- "https://your-redcap-instance.edu/api/"
 token <- "YOUR_TOKEN"
 
 # Qualtrics
-apiKeys <- c("YOUR_API_KEY")
-baseUrls <- c("YOUR_BASE_URL")
+apiKeys <- c("API_KEY_1", "API_KEY_2")
+baseUrls <- c("BASE_URL_1", "BASE_URL_2")
 
 # MongoDB
 connectionString <- "mongodb://your-connection-string"
