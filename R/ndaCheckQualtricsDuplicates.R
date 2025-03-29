@@ -22,8 +22,6 @@
 ndaCheckQualtricsDuplicates <- function(measure_alias, measure_type) {
   
   # Ensure required packages are loaded
-#   if (!require(dplyr)) { install.packages("dplyr") }; library(dplyr)
-#   if (!require(testthat)) { install.packages("testthat") }; library(testthat)
   
   identifier <- "src_subject_id"
   

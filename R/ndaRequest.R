@@ -23,16 +23,8 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   
   start_time <- Sys.time()
   
-#   base::source("api/getRedcap.R")
-#   base::source("api/getSurvey.R")
-#   base::source("api/getTask.R")
-#   base::source("api/ndaValidator.R")
   
   # Required Libraries Setup
-#   if (!require("tidyverse")) {install.packages("tidyverse")}; library(tidyverse)
-#   if (!require("dplyr")) {install.packages("dplyr")}; library(dplyr)
-#   if (!require("config")) {install.packages("config")}; library(config)
-#   if (!require("beepr")) {install.packages("beepr")}; library(beepr)
   
   # Prepare lists for REDCap, Qualtrics, and tasks
   redcap_list <- tools::file_path_sans_ext(list.files("./nda/redcap"))
@@ -40,7 +32,7 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   task_list <- tools::file_path_sans_ext(list.files("./nda/mongo"))
   
   # Get identifier from config
-  config <- config::get()
+  config <- validate_config()
   identifier <- config$identifier
   if (is.null(identifier) || identifier == "") {
     stop("No identifier specified in the config file.")
@@ -52,8 +44,6 @@ ndaRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_da
   }
   
   # Source necessary R scripts from the 'api' directory
-#   lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
-#   lapply(list.files("api/fn", pattern = "\\.R$", full.names = TRUE), base::source)
   
   # Validate Measures Function
   validateMeasures <- function(data_list) {
@@ -161,7 +151,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # Reassign the filtered dataframe
       base::assign(measure, df)
       
-#       source("api/test/ndaCheckQualtricsDuplicates.R")
       ndaCheckQualtricsDuplicates(measure,"qualtrics")
       
       # show missing data that needs filled
@@ -173,7 +162,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     }
     
     # Run validation
-#     base::source("api/ndaValidator.R")
     validation_results <- ndaValidator(measure, api, limited_dataset)
     
     # Now apply date format preservation AFTER validation
@@ -187,7 +175,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     # audio alert of validation
     ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
     
-#     base::source("api/src/createNda.R")
     # Create data upload template regardless of if test passes
     createNda(measure)
     formatElapsedTime(start_time)
@@ -203,7 +190,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   })
   
   # Flush environment
-#   base::source("api/env/cleanup.R")
   
   return(result)  # Return the result of the processing
 }
@@ -227,7 +213,6 @@ disconnectMongo <- function(mongo) {
 # Cleanup Function
 performCleanup <- function() {
   # Placeholder for cleanup operations, like disconnecting from databases
-#   suppressWarnings(source("api/env/cleanup.R"))
 }
 
 # Helper function to preserve MM/DD/YYYY format
@@ -261,3 +246,17 @@ formatElapsedTime <- function(start_time) {
   
   message("Formatted for NDA in ", formatted_time, ".")
 }
+
+#' Alias for 'ndaRequest'
+#'
+#' This is a legacy alias for the 'ndaRequest' function to maintain compatibility with older code.
+#'
+#' @inheritParams ndaRequest
+#' @inherit ndaRequest return
+#' @export
+#' @examples
+#' \dontrun{
+#' prl01 <- clean.nda("prl01")
+#' }
+nda <- ndaRequest
+

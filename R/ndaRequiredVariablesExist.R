@@ -20,7 +20,6 @@
 #' @noRd
 ndaRequiredVariablesExist <- function(measure_alias, measure_type, nda_required_variables) {
   
-#   if (!require(testthat)) {install.packages("testthat")}; library(testthat)
   
   # append _clean to the measure in question
   output_df_name <- paste0(measure_alias, "_clean")

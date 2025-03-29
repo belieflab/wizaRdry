@@ -237,7 +237,6 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
       "# Main analysis script for this wizaRdry project",
       "",
       "# Load necessary libraries",
-#       "# if(!require(wizaRdry)) {install.packages('wizaRdry')};library(wizaRdry)",
       "",
       "# Example data request",
       "# create cleaning script in clean/",

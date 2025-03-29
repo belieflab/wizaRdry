@@ -4,14 +4,16 @@
 \alias{getQualtricsDictionary}
 \title{Extract Column Mapping from Qualtrics Data Frame}
 \usage{
-getQualtricsDictionary(qualtrics_df)
+getQualtricsDictionary(qualtrics_data)
 }
 \arguments{
-\item{qualtrics_df}{Data frame obtained from Qualtrics.}
+\item{qualtrics_data}{Can either be an existing dataframe, variable name as string, or survey alias string}
 }
 \value{
 A list containing the mappings of column names to survey questions.
 }
 \description{
 This function extracts column mappings from the metadata of a Qualtrics survey data frame.
+It can accept either a data frame containing Qualtrics data, a variable name as string,
+or a survey alias string.
 }

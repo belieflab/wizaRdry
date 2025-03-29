@@ -2,6 +2,10 @@
 NULL
 
 .onLoad <- function(libname, pkgname) {
+  options(mongolite.quiet = TRUE)
+}
+
+.onLoad <- function(libname, pkgname) {
   options(wizaRdry.nda_base_url = "https://nda.nih.gov/api/datadictionary/v2")
 }
 

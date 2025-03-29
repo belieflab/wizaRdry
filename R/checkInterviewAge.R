@@ -20,7 +20,6 @@
 #' @noRd
 checkInterviewAge <- function(measure_alias) {
   
-#   if (!require(testthat)) {install.packages("testthat")}; library(testthat)
   
   months_in_a_year <- 12
   # define age range

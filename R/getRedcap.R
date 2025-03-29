@@ -5,7 +5,6 @@
 
 # Get full file paths of all R files in the api directory
 # base::source all files using lapply()
-# lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
 
 # Initialize functions needed for the progress bar
 #' @noRd
@@ -92,15 +91,10 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   
   start_time <- Sys.time()
   
-#   if (!require(config)) install.packages("config"); library(config)
-#   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
-#   if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
   
   # Validate secrets and config
-#   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
   
-#   base::source("api/ConfigEnv.R")
   config <- validate_config("redcap")
   
   # Input validation
@@ -160,7 +154,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   message("")
   
   # Try the one-call approach
-  df <- REDCapR::redcap_read(
+  response <- REDCapR::redcap_read(
     redcap_uri = uri,
     token = token,
     forms = c(config$redcap$superkey, instrument_name),
@@ -170,7 +164,9 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
     raw_or_label = raw_or_label,
     raw_or_label_headers = "raw",
     verbose = FALSE
-  )$data
+  )
+  
+  df <- response$data
   
   # Still propagate super key values across events
   if ("record_id" %in% names(df) && "redcap_event_name" %in% names(df)) {
@@ -254,9 +250,11 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   }
   
   if (config$study_alias == "capr") {
-#     base::source("api/redcap/capr-logic.R")
     df <- processCaprData(df, instrument_name)
   }
+  
+  # Attach the instrument name as an attribute without an extra parameter
+  attr(df, "redcap_instrument") <- instrument_name
   
   # Show duration
   end_time <- Sys.time()
@@ -264,6 +262,7 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
   message(sprintf("\nData frame '%s' retrieved in %s.", instrument_name, formatDuration(duration)))
   
   return(df)
+  
 }
 
 
@@ -276,11 +275,8 @@ getRedcap <- function(instrument_name = NULL, raw_or_label = "raw",
 #' @importFrom knitr kable
 #' @export
 getRedcapForms <- function() {
-#   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
-#   if (!require(knitr)) install.packages("knitr"); library(knitr)
 
   # Validate secrets
-#   base::source("api/SecretsEnv.R")
   validate_secrets("redcap")
   
   forms <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
@@ -289,24 +285,95 @@ getRedcapForms <- function() {
   return(knitr::kable(forms, format = "simple"))
 }
 
-#' Get REDCap Data Dictionary for an Instrument
-#' 
-#' Retrieves the data dictionary (metadata) for a specific REDCap instrument
-#' 
-#' @param instrument_name Name of the REDCap instrument to retrieve dictionary for
+#' Extract Dictionary from REDCap Data
+#'
+#' This function extracts metadata/dictionary information from REDCap. It can accept
+#' either an instrument name to fetch new data, an existing data frame with instrument
+#' attributes, or a variable name as string.
+#'
+#' @param redcap_data Can either be an instrument name to fetch new data, a data frame 
+#'   returned by getRedcap(), or a variable name as string
 #' @return A data frame containing the data dictionary/metadata for the specified instrument
 #' @importFrom REDCapR redcap_metadata_read
 #' @export
-getRedcapDictionary <- function(instrument_name) {
-#   if (!require(REDCapR)) install.packages("REDCapR"); library(REDCapR)
-  # Validate secrets
-#   base::source("api/SecretsEnv.R")
-  validate_secrets("redcap")
+getRedcapDictionary <- function(redcap_data) {
+  # Check if input is a data frame with redcap_instrument attribute
+  if (is.data.frame(redcap_data) && !is.null(attr(redcap_data, "redcap_instrument"))) {
+    instrument_name <- attr(redcap_data, "redcap_instrument")
+    message(sprintf("Retrieving metadata for instrument '%s' from data frame attributes.", instrument_name))
+    
+    # Fetch metadata using the instrument name
+    # Validate secrets
+    validate_secrets("redcap")
+    
+    metadata <- REDCapR::redcap_metadata_read(
+      redcap_uri = uri, 
+      token = token,
+      forms = instrument_name,
+      verbose = FALSE
+    )$data
+    
+    return(metadata)
+  }
   
-  metadata <- REDCapR::redcap_metadata_read(redcap_uri = uri, token = token, verbose = TRUE, config_options = NULL)$data
-  dictionary <- metadata[metadata$form_name == instrument_name, ]
-  # View(dictionary)
-  return(dictionary)
+  # Check if input is a regular data frame
+  if (is.data.frame(redcap_data)) {
+    message("Using provided REDCap metadata data frame.")
+    return(redcap_data)
+  }
+  
+  # Input is a string
+  if (is.character(redcap_data)) {
+    # Check if it's a variable name in the global environment
+    if (exists(redcap_data)) {
+      var_data <- base::get(redcap_data)
+      
+      # Check if the variable is a data frame with instrument attribute
+      if (is.data.frame(var_data) && !is.null(attr(var_data, "redcap_instrument"))) {
+        instrument_name <- attr(var_data, "redcap_instrument")
+        message(sprintf("Retrieving metadata for instrument '%s' from variable '%s'.", 
+                        instrument_name, redcap_data))
+        
+        # Fetch metadata using the instrument name
+        # Validate secrets
+        validate_secrets("redcap")
+        
+        metadata <- REDCapR::redcap_metadata_read(
+          redcap_uri = uri, 
+          token = token,
+          forms = instrument_name,
+          verbose = FALSE
+        )$data
+        
+        return(metadata)
+      }
+      
+      # Check if the variable is just a data frame
+      if (is.data.frame(var_data)) {
+        message(sprintf("Using existing metadata data frame '%s' from environment.", redcap_data))
+        return(var_data)
+      }
+    }
+    
+    # Not a variable or not a data frame, treat as instrument name
+    # Validate secrets
+    validate_secrets("redcap")
+    
+    # Fetch metadata from REDCap
+    metadata <- REDCapR::redcap_metadata_read(
+      redcap_uri = uri, 
+      token = token,
+      verbose = FALSE
+    )$data
+    
+    dictionary <- metadata[metadata$form_name == redcap_data, ]
+    
+    message(sprintf("Retrieved metadata for instrument '%s' from REDCap.", redcap_data))
+    return(dictionary)
+  }
+  
+  # Invalid input type
+  stop("Input must be either a data frame, a string variable name, or an instrument name string.")
 }
 
 
@@ -322,3 +389,28 @@ getRedcapDictionary <- function(instrument_name) {
 #' survey_data <- redcap("demographics")
 #' }
 redcap <- getRedcap
+
+#' Alias for 'getRedcapForms'
+#'
+#' This is a legacy alias for the 'getRedcapForms' function to maintain compatibility with older code.
+#'
+#' @inherit getRedcapForms return
+#' @export
+#' @examples
+#' \dontrun{
+#' redcap.index()
+#' }
+redcap.index <- getRedcapForms
+
+#' Alias for 'getRedcapDictionary'
+#'
+#' This is a legacy alias for the 'getRedcapDictionary' function to maintain compatibility with older code.
+#'
+#' @inheritParams getRedcapDictionary
+#' @inherit getRedcapDictionary return
+#' @export
+#' @examples
+#' \dontrun{
+#' instrument_dict <- redcap.codex()
+#' }
+redcap.codex <- getRedcapDictionary

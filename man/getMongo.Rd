@@ -4,7 +4,13 @@
 \alias{getMongo}
 \title{Retrieve data from MongoDB}
 \usage{
-getMongo(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL)
+getMongo(
+  collection_name,
+  db_name = NULL,
+  identifier = NULL,
+  chunk_size = NULL,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{collection_name}{The name of the MongoDB collection}
@@ -14,6 +20,8 @@ getMongo(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL)
 \item{identifier}{Field to use as identifier (optional)}
 
 \item{chunk_size}{Number of records per chunk (optional)}
+
+\item{verbose}{Logical; if TRUE, displays detailed progress messages. Default is FALSE.}
 }
 \value{
 A data frame containing the MongoDB data

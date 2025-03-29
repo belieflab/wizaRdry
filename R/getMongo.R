@@ -1,8 +1,3 @@
-# if (!require(mongolite)) { install.packages("mongolite") }; library(mongolite)
-# if (!require(future)) { install.packages("future") }; library(future)
-# if (!require(future.apply)) { install.packages("future.apply") }; library(future.apply)
-# if (!require(config)) { install.packages("config") }; library(config)
-# if (!require(dplyr)) { install.packages("dplyr") }; library(dplyr)
 
 #' Cross-platform memory check function
 #' @return List containing total and available memory in GB
@@ -225,7 +220,7 @@ formatDuration <- function(duration) {
 #' @param db_name The database name (optional)
 #' @param identifier Field to use as identifier (optional)
 #' @param chunk_size Number of records per chunk (optional)
-#'
+#' @param verbose Logical; if TRUE, displays detailed progress messages. Default is FALSE.
 #' @importFrom mongolite mongo ssl_options
 #' @importFrom parallel detectCores
 #' @importFrom future plan multisession
@@ -242,7 +237,7 @@ formatDuration <- function(duration) {
 #' # Get data from MongoDB collection
 #' data <- getMongo("collection_name")
 #' }
-getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL) {
+getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
   
@@ -255,7 +250,6 @@ getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_s
   options(mongolite.quiet = TRUE)
   
   # Get configuration
-#   base::source("api/ConfigEnv.R")
   cfg <- validate_config("mongo")
   
   if (is.null(db_name)) {
@@ -373,7 +367,7 @@ message(sprintf("Processing: %d chunks x %d records in parallel (%d workers)",
         chunk_mongo <- ConnectMongo(collection_name, db_name)
         batch_info <- chunks[[i]]
         if (!is.null(batch_info) && !is.null(batch_info$start) && !is.null(batch_info$size)) {
-          data_chunk <- getMongoData(chunk_mongo, identifier, batch_info)
+          data_chunk <- getMongoData(chunk_mongo, identifier, batch_info, verbose)
         } else {
           warning("Invalid batch info, skipping chunk")
           return(NULL)
@@ -443,10 +437,8 @@ createChunks <- function(total_records, chunk_size) {
 #' @noRd
 ConnectMongo <- function(collection_name, db_name) {
   # Validate secrets
-#   base::source("api/SecretsEnv.R")
   validate_secrets("mongo")
   
-#   base::source("api/ConfigEnv.R")
   config <- validate_config("mongo")
   
   if (is.null(db_name)) {
@@ -460,7 +452,7 @@ ConnectMongo <- function(collection_name, db_name) {
   
   # Create connection without specifying collection first
   base_connection <- mongolite::mongo(
-    collection = "system.namespaces", # This is a system collection that always exists
+    collection = collection_name, # This is a system collection that always exists
     db = db_name,
     url = connectionString,
     verbose = FALSE,
@@ -502,12 +494,26 @@ ConnectMongo <- function(collection_name, db_name) {
 #' Safely close MongoDB connection
 #' @param mongo A mongolite::mongo connection object
 #' @noRd
-disconnectMongo <- function(mongo) {
-  if (!is.null(mongo)) {
+# Update the disconnectMongo function to use stronger warning suppression
+disconnectMongo <- function(mongo_conn) {
+  if (!is.null(mongo_conn)) {
+    # Create a temporary sink to capture all output during disconnect
+    temp <- tempfile()
+    sink(file = temp, type = "output")
+    sink(file = temp, type = "message")
+    
+    # Try disconnect with warning suppression
     tryCatch({
-      mongo$disconnect()
+      suppressWarnings({
+        mongo_conn$disconnect()
+      })
     }, error = function(e) {
-      warning(sprintf("Error disconnecting from MongoDB: %s", e$message))
+      # Do nothing, we'll handle errors after restoring output
+    }, finally = {
+      # Restore output streams
+      sink(type = "message")
+      sink(type = "output")
+      unlink(temp)
     })
   }
 }
@@ -520,36 +526,41 @@ disconnectMongo <- function(mongo) {
 #' @param Mongo The MongoDB connection object.
 #' @param identifier The document field to check for existence and non-emptiness.
 #' @param batch_info List containing 'start' and 'size' defining the batch to fetch.
+#' @param verbose Logical; if TRUE, displays detailed progress messages. Default is FALSE.
 #' @return A data.frame with the filtered data or NULL if no valid data is found or in case of error.
 #' @examples
 #' # This example assumes 'Mongo' is a MongoDB connection
 #' # batch_info <- list(start = 0, size = 100)
 #' # df <- getMongoData(Mongo, "src_subject_id", batch_info)
 #' @noRd
-getMongoData <- function(Mongo, identifier, batch_info) {
+getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
   # Check for both exists AND non-empty
   query_json <- sprintf('{"%s": {"$exists": true, "$ne": ""}}', identifier)
-  message(paste("Using query:", query_json))
+  if(verbose) message(paste("Using query:", query_json))
   
   # Get initial data
   df <- Mongo$find(query = query_json, skip = batch_info$start, limit = batch_info$size)
-  message(paste("Initial rows:", nrow(df)))
+  if(verbose) message(paste("Initial rows:", nrow(df)))
   
   # Only proceed with filtering if we have data
   if (!is.null(df) && nrow(df) > 0) {
     # Print sample of data before filtering
-    message("Sample before filtering:")
-    message(head(df[[identifier]]))
+    if(verbose) {
+      message("Sample before filtering:")
+      message(head(df[[identifier]]))
+    }
     
     # Apply both NA and empty string filtering
     df <- df[!is.na(df[[identifier]]) & df[[identifier]] != "", ]
-    message(paste("Rows after complete filtering:", nrow(df)))
+    if(verbose) message(paste("Rows after complete filtering:", nrow(df)))
     
     # Print sample after filtering
-    message("Sample after filtering:")
-    message(head(df[[identifier]]))
+    if(verbose) {
+      message("Sample after filtering:")
+      message(head(df[[identifier]]))
+    }
   } else {
-    message("No data found in initial query")
+    if(verbose) message("No data found in initial query")
   }
   
   return(df)
@@ -618,19 +629,93 @@ getCollectionsFromConnection <- function(mongo_connection) {
   return(collections$cursor$firstBatch$name)
 }
 
-# Maintain original getCollections function for backward compatibility
-getCollections <- function() {
-  Mongo <- NULL
-  on.exit({
-    disconnectMongo(Mongo)
-  })
+#' Get Available MongoDB Collections
+#'
+#' Retrieves a list of all available collections in the configured MongoDB database.
+#'
+#' @param db_name Optional; the name of the database to connect to. If NULL, uses the database 
+#'   specified in the configuration file.
+#'
+#' @return A character vector containing the names of all available collections
+#'   in the configured MongoDB database.
+#'   
+#' @export
+getMongoCollections <- function(db_name = NULL) {
+  # Temporarily suppress warnings
+  old_warn <- options("warn")
+  options(warn = -1)
   
-  # Connect to any default collection just to get connection
-  # Mongo <- ConnectMongo("system.namespaces", silent_validation = TRUE)
-  Mongo <- ConnectMongo("system.namespaces")
-  collections <- getCollectionsFromConnection(Mongo)
-  return(collections)
+  # Function to suppress specific warnings by pattern
+  suppressSpecificWarning <- function(expr, pattern) {
+    withCallingHandlers(
+      expr,
+      warning = function(w) {
+        if (grepl(pattern, w$message, fixed = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
+      }
+    )
+  }
+  
+  validate_secrets("mongo")
+  
+  config <- validate_config("mongo")
+  
+  if (is.null(db_name)) {
+    db_name = config$mongo$collection
+  }
+  
+  options <- ssl_options(weak_cert_validation = TRUE, key = "rds-combined-ca-bundle.pem")
+  
+  # Create a temporary sink to capture MongoDB connection messages
+  temp <- tempfile()
+  sink(temp)
+  
+  result <- NULL
+  
+  # Create a direct connection to the database without specifying a collection
+  tryCatch({
+    # Use suppressSpecificWarning to handle the endSessions warning
+    suppressSpecificWarning({
+      # Connect directly to the database, not a specific collection
+      base_connection <- mongolite::mongo(
+        collection = "system.namespaces", # This is a system collection that always exists
+        db = db_name,
+        url = connectionString,
+        verbose = FALSE,
+        options = options
+      )
+      
+      # Get the list of collections
+      collections <- base_connection$run('{"listCollections":1,"nameOnly":true}')
+      result <- collections$cursor$firstBatch$name
+      
+      # Try to disconnect with warning suppression
+      suppressWarnings(base_connection$disconnect())
+      
+      # Force garbage collection to clean up any lingering connections
+      rm(base_connection)
+      invisible(gc(verbose = FALSE))
+    }, "endSessions")
+    
+    sink()
+    unlink(temp)
+    
+    # Restore previous warning setting
+    options(old_warn)
+    
+    return(result)
+  }, error = function(e) {
+    sink()
+    unlink(temp)
+    
+    # Restore previous warning setting before stopping
+    options(old_warn)
+    
+    stop(paste("Error connecting to MongoDB:", e$message))
+  })
 }
+
 
 
 #' Alias for 'getMongo'
@@ -658,3 +743,16 @@ getTask <- getMongo
 #' survey_data <- getTask("task_alias")
 #' }
 mongo <- getMongo
+
+#' Alias for 'getMongoCollections'
+#'
+#' This is a legacy alias for the 'getMongoCollections' function to maintain compatibility with older code.
+#'
+#' @inheritParams getMongoCollections
+#' @inherit getMongoCollections return
+#' @export
+#' @examples
+#' \dontrun{
+#' mongo.index()
+#' }
+mongo.index <- getMongoCollections

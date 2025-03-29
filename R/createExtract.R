@@ -18,9 +18,6 @@
 
 createExtract <- function(df, df_name, csv=NULL, rdata=NULL, spss=NULL) {
   
-#   source("api/src/createCsv.R")
-#   source("api/src/createRda.R")
-#   source("api/src/createSpss.R")
   
   if (!is.null(csv) && csv) {
     createCsv(df, df_name)

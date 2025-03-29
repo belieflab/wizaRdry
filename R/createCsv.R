@@ -41,3 +41,17 @@ createCsv <- function(df, df_name = NULL) {
   # Notify user of file creation
   message(paste0("Extract created at ", path, "\n"))
 }
+
+#' Alias for 'createCsv'
+#'
+#' This is a legacy alias for the 'createCsv' function to maintain compatibility with older code.
+#'
+#' @inheritParams createCsv
+#' @inherit createCsv return
+#' @export
+#' @examples
+#' \dontrun{
+#' to.csv(prl01)
+#' }
+to.csv <- createCsv
+

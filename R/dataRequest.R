@@ -21,12 +21,8 @@
 #' 
 dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   
-#   base::source("api/testSuite.R")
   
   # Required Libraries Setup
-#   if (!require("tidyverse")) {install.packages("tidyverse")}; library(tidyverse)
-#   if (!require("dplyr")) {install.packages("dplyr")}; library(dplyr)
-#   if (!require("config")) {install.packages("config")}; library(config)
   
   # Prepare lists for REDCap, Qualtrics, and MongoDB
   redcap_list <- tools::file_path_sans_ext(list.files("./clean/redcap"))
@@ -34,7 +30,7 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   mongo_list <- tools::file_path_sans_ext(list.files("./clean/mongo"))
   
   # Get identifier from config
-  config <- config::get()
+  config <- validate_config()
   identifier <- config$identifier
   if (is.null(identifier) || identifier == "") {
     stop("No identifier specified in the config file.")
@@ -48,8 +44,6 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   start_time <- Sys.time()
   
   # Source necessary R scripts from the 'api' directory
-#   lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
-#   lapply(list.files("api/fn", pattern = "\\.R$", full.names = TRUE), base::source)
   
   # Validate Measures Function
   validateMeasures <- function(data_list) {
@@ -88,7 +82,6 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   # Process each measure using processData function
   for (measure in data_list) {
     sourceCategory <- ifelse(measure %in% redcap_list, "redcap", ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
-#     base::source("api/dataRequest.R")
     processData(measure, sourceCategory, csv, rdata, spss, identifier)
   }
   
@@ -96,7 +89,6 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   print(Sys.time() - start_time)  # Print time taken for processing
   
   # Flush environment
-#   base::source("api/env/cleanup.R")
   
   return(invisible(NULL))
   
@@ -136,7 +128,6 @@ processData <- function(measure, source, csv, rdata, spss, identifier) {
   result <- tryCatch({
     base::source(file_path)  # Execute the cleaning script for the measure
     # Ensure testSuite is sourced and then called
-#     base::source("api/testSuite.R")
     # Call testSuite with identifier
     testSuite(measure, source, file_path, identifier)
     
@@ -172,3 +163,17 @@ disconnectMongo <- function(mongo) {
   }
   
 }
+
+#' Alias for 'dataRequest'
+#'
+#' This is a legacy alias for the 'dataRequest' function to maintain compatibility with older code.
+#'
+#' @inheritParams dataRequest
+#' @inherit dataRequest return
+#' @export
+#' @examples
+#' \dontrun{
+#' instrument_dict <- redcap_dict()
+#' }
+clean <- dataRequest
+

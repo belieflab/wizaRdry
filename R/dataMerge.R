@@ -44,7 +44,7 @@ dataMerge <- function(..., by = NULL, all = TRUE, no.dups = FALSE, csv = FALSE, 
   # Inform about the type of join being performed
   message(ifelse(all, "Performing an OUTER JOIN.", "Performing an INNER JOIN."))
   
-  config <- config::get()
+  config <- validate_config()
   
   if (config$study_alias == "capr") {
     # NDA variables suitable for merging fromr capr
@@ -54,8 +54,6 @@ dataMerge <- function(..., by = NULL, all = TRUE, no.dups = FALSE, csv = FALSE, 
   }
   
   # Load custom scripts if any
-#   lapply(list.files("api/src", pattern = "\\.R$", full.names = TRUE), base::source)
-#   lapply(list.files("api/fn", pattern = "\\.R$", full.names = TRUE), base::source)
   
   data_list <- list(...)
   
@@ -100,3 +98,17 @@ dataMerge <- function(..., by = NULL, all = TRUE, no.dups = FALSE, csv = FALSE, 
   
   return(dfs)
 }
+
+
+#' Alias for 'dataMerge'
+#'
+#' This is a legacy alias for the 'dataMerge' function to maintain compatibility with older code.
+#'
+#' @inheritParams dataMerge
+#' @inherit dataMerge return
+#' @export
+#' @examples
+#' \dontrun{
+#' merged <- meld(df1_clean, df2_clean)
+#' }
+meld <- dataMerge

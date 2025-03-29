@@ -41,3 +41,17 @@ createRda <- function(df, df_name = NULL) {
   
   message(paste0("Extract created at ", path, "\n"))
 }
+
+#' Alias for 'createRda'
+#'
+#' This is a legacy alias for the 'createRda' function to maintain compatibility with older code.
+#'
+#' @inheritParams createRda
+#' @inherit createRda return
+#' @export
+#' @examples
+#' \dontrun{
+#' to.rda(prl01)
+#' }
+to.rda <- createRda
+

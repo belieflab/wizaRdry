@@ -34,3 +34,6 @@ process_file("../api/src/createExtract.R", "R/createExtract.R")
 
 process_file("../api/src/checkKeys.R", "R/checkKeys.R")
 
+process_file("../api/src/addColumnPrefix.R", "R/addColumnPrefix.R")
+
+

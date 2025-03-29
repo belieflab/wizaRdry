@@ -26,7 +26,6 @@
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
 createSpss <- function(df, df_name = NULL) {
   
-#   if(!require(haven)) {install.packages("haven")}; library(haven);
   
   # Use df_name if provided, otherwise derive from df variable name
   filename <- if (!is.null(df_name)) {
@@ -46,3 +45,18 @@ createSpss <- function(df, df_name = NULL) {
   # Notify user of file creation
   message(paste0("Extract created at ", path, "\n"))
 }
+
+#' Alias for 'createSpss'
+#'
+#' This is a legacy alias for the 'createSpss' function to maintain compatibility with older code.
+#'
+#' @inheritParams createSpss
+#' @inherit createSpss return
+#' @export
+#' @examples
+#' \dontrun{
+#' to.sav(prl01)
+#' }
+to.sav <- createSpss
+
+

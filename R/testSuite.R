@@ -29,8 +29,6 @@
 #' @importFrom utils head
 #' @noRd
 testSuite <- function(measure_alias, measure_type, script_path, super_key) {
-#   # Source all scripts in ./api/test
-#   lapply(list.files("api/test", pattern = "\\.R$", full.names = TRUE), base::source)
   
   # List of NDA required variables
   nda_required_variables <- c("src_subject_id", "phenotype", "site", "arm", "visit", "week", 

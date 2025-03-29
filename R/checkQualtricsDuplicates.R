@@ -22,8 +22,6 @@
 checkQualtricsDuplicates <- function(measure_alias, measure_type) {
   
   # Ensure required packages are loaded
-#   if (!require(dplyr)) { install.packages("dplyr") }; library(dplyr)
-#   if (!require(testthat)) { install.packages("testthat") }; library(testthat)
   
   # Generate the name of the dataframe and get it
   output_df_name <- paste0(measure_alias, "_clean")

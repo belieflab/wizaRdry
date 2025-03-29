@@ -76,3 +76,16 @@ createNda <- function(df) {
   
   message(sprintf("\nSubmission Template created at: %s \n", path))
 }
+
+#' Alias for 'createNda'
+#'
+#' This is a legacy alias for the 'createNda' function to maintain compatibility with older code.
+#'
+#' @inheritParams createNda
+#' @inherit createNda return
+#' @export
+#' @examples
+#' \dontrun{
+#' to.nda(prl01)
+#' }
+to.nda <- createNda
