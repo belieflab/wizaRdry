@@ -26,7 +26,7 @@ Once accepted on CRAN, you will be able to install the released version with:
 install.packages("wizaRdry")
 ```
 
-## Getting Started
+## ting Started
 
 After installation, follow these steps to set up your project:
 
@@ -124,60 +124,60 @@ scry()
 ### Data Access
 
 ```r
-# Get data from REDCap
-demoses01 <- getRedcap("demoses01")
+#  data from REDCap
+demoses01 <- redcap("demoses01")
 
 # Get data from Qualtrics
-lshrs01 <- getQualtrics("lshrs01")
+lshrs01 <- qualtrics("lshrs01")
 
 # Get data from MongoDB
-prl01 <- getMongo("prl01")
+prl01 <- mongo("prl01")
 ```
 
 ### Data Cleaning
 
 ```r
 # Data Cleaning Workflow - run cleaning scripts and validation
-dataRequest("demo", "rgpts", "overfitting", csv = TRUE)
+clean("demo", "rgpts", "overfitting", csv = TRUE)
 ```
 
 ### Data Cleaning
-Cleaning scripts are written inside the `clean/` directory and called by their script name (e.g., "demo" for demographics) in `dataRequest()`
+Cleaning scripts are written inside the `clean/` directory and called by their script name (e.g., "demo" for demographics) in `clean()`
 
 ```r
 # Filter data
-filtered_data <- dataFilter(df, 
+filtered_data <- sift(df, 
                            rows_of_interest = c("sub001","sub002"),
                            columns_of_interest = c("src_subject_id", "phenotype"))
 
 # Merge datasets
-merged_data <- dataMerge(demo_clean, rgpts_clean) 
+merged_data <- meld(demo_clean, rgpts_clean) 
 
 # Parse multi-survey datasets
-dataParse("overfitting")
+rune("overfitting")
 ```
 
 ### NDA Submission
 
 ```r
 # NDA Submission Workflow - prepare NDA templates
-ndaRequest("demoses01", "lshrs01", "prl01")
+nda("demoses01", "lshrs01", "prl01")
 ```
 
 ### Data Export
 
 ```r
 # Create CSV output
-createCsv(df, "data_export")
+to.csv(df, "data_export")
 
 # Create R data file
-createRda(df, "data_export")
+to.rda(df, "data_export")
 
 # Create SPSS file
-createSpss(df, "data_export")
+to.sps(df, "data_export")
 
 # Create NDA submission template
-createNda(eefrt01)
+to.nda(eefrt01)
 ```
 
 ## Workflows
@@ -211,7 +211,7 @@ This workflow prepares data for NIH Data Archive submission:
 
 ```r
 # Prepare NDA submission templates
-ndaRequest("rgpts01", "wtar01", "prl01", csv = TRUE)
+nda("rgpts01", "wtar01", "prl01", csv = TRUE)
 ```
 
 This creates properly formatted NDA submission templates in the `.nda/tmp` directory.
@@ -222,7 +222,7 @@ This creates properly formatted NDA submission templates in the `.nda/tmp` direc
 
 ```r
 # Get raw data from Qualtrics
-rgpts <- getQualtrics("rgpts")
+rgpts <- qualtrics("rgpts")
 
 # Cleaning process
 rgpts$interview_date <- as.Date(rgpts$interview_date, "%m/%d/%Y")
@@ -239,7 +239,7 @@ rgpts_clean <- rgpts
 
 ```r
 # Get data for NDA submission
-rgpts01 <- getQualtrics("rgpts")
+rgpts01 <- qualtrics("rgpts")
 
 # Apply NDA standards
 rgpts01$src_subject_id <- as.character(rgpts01$src_subject_id)
