@@ -195,7 +195,7 @@ This workflow focuses on accessing and cleaning raw data for analysis:
 
 ```r
 # Process data from multiple sources in one command
-dataRequest("rgpts", "wtar", "prl", csv = TRUE)
+clean("rgpts", "wtar", "prl", csv = TRUE)
 ```
 
 This runs your cleaning scripts, performs validation tests, and exports cleaned data.
