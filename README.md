@@ -50,8 +50,7 @@ This will create a standard directory structure that looks like this:
 ├── nda
 │   ├── mongo
 │   ├── qualtrics
-│   ├── redcap
-│   └── tmp
+│   └── redcap
 ├── tmp
 ├── .gitignore
 ├── config.yml
