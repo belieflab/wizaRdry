@@ -16,7 +16,7 @@ The wizaRdry package provides a comprehensive data analysis framework specifical
 You can install the development version from GitHub:
 
 ```r
-# install.packages("devtools")
+install.packages("devtools")
 devtools::install_github("belieflab/wizaRdry")
 ```
 
