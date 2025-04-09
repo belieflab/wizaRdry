@@ -26,7 +26,7 @@ Once accepted on CRAN, you will be able to install the released version with:
 install.packages("wizaRdry")
 ```
 
-## ting Started
+## Getting Started
 
 After installation, follow these steps to set up your project:
 
