@@ -2,7 +2,7 @@
 % Please edit documentation in R/dataRequest.R
 \name{clean}
 \alias{clean}
-\title{Alias for 'dataRequest'}
+\title{Data Request}
 \usage{
 clean(..., csv = FALSE, rdata = FALSE, spss = FALSE)
 }
@@ -19,10 +19,18 @@ clean(..., csv = FALSE, rdata = FALSE, spss = FALSE)
 Prints the time taken for the data request process.
 }
 \description{
-This is a legacy alias for the 'dataRequest' function to maintain compatibility with older code.
+This function processes requests for clean data sequentially for specified measures.
+It makes a request to the appropriate API for the named measure or measures
+and runs the associated data cleaning routines. It then runs a series of
+unit tests to verify that the data quality standards are met.
 }
 \examples{
 \dontrun{
-instrument_dict <- redcap_dict()
+  clean("prl", csv=TRUE)
+  clean("rgpts", "kamin", rdata=TRUE)
 }
+
+}
+\author{
+Joshua Kenney \href{mailto:joshua.kenney@yale.edu}{joshua.kenney@yale.edu}
 }

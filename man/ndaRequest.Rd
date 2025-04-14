@@ -2,7 +2,7 @@
 % Please edit documentation in R/ndaRequest.R
 \name{ndaRequest}
 \alias{ndaRequest}
-\title{NDA Request}
+\title{Alias for 'nda'}
 \usage{
 ndaRequest(
   ...,
@@ -27,18 +27,10 @@ ndaRequest(
 Prints the time taken for the data request process.
 }
 \description{
-This function processes requests for clean data sequentially for specified measures.
-It makes a request to the NIH NDA API for the named data structures
-and runs the associated data remediation routines. It then runs a series of
-unit tests to verify that the data quality standards are met.
+This is a legacy alias for the 'nda' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
-  ndaRequest("prl", csv=TRUE)
-  ndaRequest("rgpts", "kamin", rdata=TRUE)
+prl01 <- ndaRequest("prl01")
 }
-
-}
-\author{
-Joshua Kenney \href{mailto:joshua.kenney@yale.edu}{joshua.kenney@yale.edu}
 }

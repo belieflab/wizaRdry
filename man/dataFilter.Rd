@@ -2,7 +2,7 @@
 % Please edit documentation in R/dataFilter.R
 \name{dataFilter}
 \alias{dataFilter}
-\title{Data Filter}
+\title{Alias for 'sift'}
 \usage{
 dataFilter(
   df,
@@ -53,30 +53,10 @@ and containing only the columns specified in 'columns_of_interest'. If no column
 are specified, returns the entire dataframe with applied row filters.
 }
 \description{
-Filters a dataframe based on specified 'visit', 'week', and 'state' parameters and
-selects columns based on 'columns_of_interest'. If 'columns_of_interest' is not provided,
-retains all columns by default. Filters by 'visit' and 'week' if these columns exist
-and values for them are provided.
+This is a legacy alias for the 'sift' function to maintain compatibility with older code.
 }
 \examples{
-\donttest{
-# Create a sample dataframe
-sample_df <- data.frame(
-  src_subject_id = c("SUB001", "SUB002", "SUB003"),
-  phenotype = c("A", "B", "A"),
-  visit = c(1, 2, 2),
-  state = c("complete", "completed baseline", "in progress"),
-  stringsAsFactors = FALSE
-)
-
-# Set row names for demonstration
-rownames(sample_df) <- c("foo", "bar", "baz")
-
-# Filter the dataframe
-filtered <- dataFilter(sample_df, 
-                        rows_of_interest = c("foo","bar"),
-                        columns_of_interest = c("src_subject_id", "phenotype"), 
-                        visit = 2, 
-                        states = c("complete", "completed baseline"))
+\dontrun{
+filtered <- dataFilter(df, sex="F")
 }
 }

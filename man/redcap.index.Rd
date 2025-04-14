@@ -2,7 +2,7 @@
 % Please edit documentation in R/getRedcap.R
 \name{redcap.index}
 \alias{redcap.index}
-\title{Alias for 'getRedcapForms'}
+\title{Get Available REDCap Forms}
 \usage{
 redcap.index()
 }
@@ -10,10 +10,5 @@ redcap.index()
 A formatted table (kable) of available REDCap instruments/forms
 }
 \description{
-This is a legacy alias for the 'getRedcapForms' function to maintain compatibility with older code.
-}
-\examples{
-\dontrun{
-redcap.index()
-}
+Retrieves a list of all available REDCap forms as a formatted table
 }

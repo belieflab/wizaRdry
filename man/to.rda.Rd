@@ -2,7 +2,7 @@
 % Please edit documentation in R/createRda.R
 \name{to.rda}
 \alias{to.rda}
-\title{Alias for 'createRda'}
+\title{Create RDS File from a DataFrame}
 \usage{
 to.rda(df, df_name = NULL)
 }
@@ -18,10 +18,21 @@ The function writes an RDS file to the specified path and prints a message
 indicating the file's location. This function does not return a value.
 }
 \description{
-This is a legacy alias for the 'createRda' function to maintain compatibility with older code.
+This function exports a given R DataFrame to an RDS file format.
+The resulting file is saved in the "./tmp/" directory. If a filename
+is not specified, the function uses the name of the DataFrame variable.
+The ".Rda" extension is appended automatically to the filename.
 }
 \examples{
 \dontrun{
-to.rda(prl01)
+# Create a sample dataframe
+sample_df <- data.frame(
+  id = 1:3,
+  name = c("Alice", "Bob", "Charlie")
+)
+to.rda(sample_df)
 }
+}
+\author{
+Joshua Kenney \href{mailto:joshua.kenney@yale.edu}{joshua.kenney@yale.edu}
 }

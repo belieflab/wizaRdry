@@ -2,7 +2,7 @@
 % Please edit documentation in R/getMongo.R
 \name{mongo}
 \alias{mongo}
-\title{Alias for 'getMongo'}
+\title{Retrieve data from MongoDB}
 \usage{
 mongo(
   collection_name,
@@ -27,10 +27,11 @@ mongo(
 A data frame containing the MongoDB data
 }
 \description{
-This is a legacy alias for the 'getMongo' function to maintain compatibility with older code.
+Retrieve data from MongoDB
 }
 \examples{
 \dontrun{
-survey_data <- getTask("task_alias")
+# Get data from MongoDB collection
+data <- mongo("collection_name")
 }
 }

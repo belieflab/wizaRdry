@@ -2,7 +2,7 @@
 % Please edit documentation in R/createNda.R
 \name{to.nda}
 \alias{to.nda}
-\title{Alias for 'createNda'}
+\title{Create NDA Submission Template}
 \usage{
 to.nda(df)
 }
@@ -15,10 +15,36 @@ No return value, called for side effects. Creates a CSV file at the specified pa
 and prints a message with the file location.
 }
 \description{
-This is a legacy alias for the 'createNda' function to maintain compatibility with older code.
+This function creates a CSV template file for National Data Archive (NDA) submissions.
+It extracts the data from a specified dataframe and formats it according to NDA requirements,
+with the structure name split into base name and suffix in the first line.
+}
+\details{
+The function will:
+\enumerate{
+\item Create an 'nda/tmp' directory structure if it doesn't exist
+\item Parse the structure name into base and suffix components (e.g., "eefrt01" → "eefrt" and "01")
+\item Write the structure name components as the first line
+\item Write column headers as the second line
+\item Write the data rows below
+}
+}
+\note{
+This function expects the dataframe to already exist in the global environment.
+It will not perform any data validation or transformation before creating the template.
 }
 \examples{
 \dontrun{
-to.nda(prl01)
+  # First create some sample data
+  eefrt01 <- data.frame(
+    src_subject_id = c("SUB001", "SUB002"),
+    interview_age = c(240, 360),
+    interview_date = c("01/01/2023", "02/15/2023"),
+    response_time = c(450, 520)
+  )
+  
+  # Create the NDA template
+  to.nda("eefrt01")
 }
+
 }

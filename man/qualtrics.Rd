@@ -2,7 +2,7 @@
 % Please edit documentation in R/getQualtrics.R
 \name{qualtrics}
 \alias{qualtrics}
-\title{Alias for 'getQualtrics'}
+\title{Retrieve Survey Data from Qualtrics}
 \usage{
 qualtrics(qualtrics_alias, institution = NULL, label = FALSE)
 }
@@ -17,10 +17,11 @@ qualtrics(qualtrics_alias, institution = NULL, label = FALSE)
 A cleaned and harmonized data frame containing the survey data.
 }
 \description{
-This is a legacy alias for the 'getQualtrics' function to maintain compatibility with older code.
+Retrieve Survey Data from Qualtrics
 }
 \examples{
 \dontrun{
-survey_data <- qualtrics("your_survey_alias")
+# Get survey by alias (will search all institutions)
+survey_data <- qualtrics("rgpts")
 }
 }

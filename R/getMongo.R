@@ -235,9 +235,9 @@ formatDuration <- function(duration) {
 #' @examples
 #' \dontrun{
 #' # Get data from MongoDB collection
-#' data <- getMongo("collection_name")
+#' data <- mongo("collection_name")
 #' }
-getMongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE) {
+mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
   
@@ -441,6 +441,9 @@ ConnectMongo <- function(collection_name, db_name) {
   
   config <- validate_config("mongo")
   
+  # Get secrets using get_secret() to keep it secret, keep it safe
+  connectionString <- get_secret("connectionString")
+  
   if (is.null(db_name)) {
     db_name = config$mongo$collection
   }
@@ -640,7 +643,7 @@ getCollectionsFromConnection <- function(mongo_connection) {
 #'   in the configured MongoDB database.
 #'   
 #' @export
-getMongoCollections <- function(db_name = NULL) {
+mongo.index <- function(db_name = NULL) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
   options(warn = -1)
@@ -660,6 +663,9 @@ getMongoCollections <- function(db_name = NULL) {
   validate_secrets("mongo")
   
   config <- validate_config("mongo")
+  
+  # Get secrets using get_secret() to keep it secret, keep it safe
+  connectionString <- get_secret("connectionString")
   
   if (is.null(db_name)) {
     db_name = config$mongo$collection
@@ -718,41 +724,15 @@ getMongoCollections <- function(db_name = NULL) {
 
 
 
-#' Alias for 'getMongo'
+#' Alias for 'mongo'
 #'
-#' This is a legacy alias for the 'getMongo' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'mongo' function to maintain compatibility with older code.
 #'
-#' @inheritParams getMongo
-#' @inherit getMongo return
+#' @inheritParams mongo
+#' @inherit mongo return
 #' @export
 #' @examples
 #' \dontrun{
 #' survey_data <- getTask("task_alias")
 #' }
-getTask <- getMongo
-
-#' Alias for 'getMongo'
-#'
-#' This is a legacy alias for the 'getMongo' function to maintain compatibility with older code.
-#'
-#' @inheritParams getMongo
-#' @inherit getMongo return
-#' @export
-#' @examples
-#' \dontrun{
-#' survey_data <- getTask("task_alias")
-#' }
-mongo <- getMongo
-
-#' Alias for 'getMongoCollections'
-#'
-#' This is a legacy alias for the 'getMongoCollections' function to maintain compatibility with older code.
-#'
-#' @inheritParams getMongoCollections
-#' @inherit getMongoCollections return
-#' @export
-#' @examples
-#' \dontrun{
-#' mongo.index()
-#' }
-mongo.index <- getMongoCollections
+getTask <- mongo

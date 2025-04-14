@@ -2,7 +2,7 @@
 % Please edit documentation in R/getQualtrics.R
 \name{getSurvey}
 \alias{getSurvey}
-\title{Alias for 'getQualtrics'}
+\title{Alias for 'qualtrics'}
 \usage{
 getSurvey(qualtrics_alias, institution = NULL, label = FALSE)
 }
@@ -17,7 +17,7 @@ getSurvey(qualtrics_alias, institution = NULL, label = FALSE)
 A cleaned and harmonized data frame containing the survey data.
 }
 \description{
-This is a legacy alias for the 'getQualtrics' function to maintain compatibility with older code.
+This is a legacy alias for the 'qualtrics' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{

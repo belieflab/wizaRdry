@@ -42,7 +42,7 @@
 #' rownames(sample_df) <- c("foo", "bar", "baz")
 #' 
 #' # Filter the dataframe
-#' filtered <- dataFilter(sample_df, 
+#' filtered <- sift(sample_df, 
 #'                         rows_of_interest = c("foo","bar"),
 #'                         columns_of_interest = c("src_subject_id", "phenotype"), 
 #'                         visit = 2, 
@@ -50,7 +50,7 @@
 #' }
 #' @import dplyr
 #' @export
-dataFilter <- function(df, rows_of_interest = NULL, columns_of_interest = NULL,
+sift <- function(df, rows_of_interest = NULL, columns_of_interest = NULL,
                        visit = NULL, week = NULL, states = NULL, arm = NULL, site = NULL,
                        sex = NULL, phenotype = NULL,
                        interview_date = NULL) {
@@ -119,16 +119,16 @@ dataFilter <- function(df, rows_of_interest = NULL, columns_of_interest = NULL,
   return(df)
 }
 
-#' Alias for 'dataFilter'
+#' Alias for 'sift'
 #'
-#' This is a legacy alias for the 'dataFilter' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'sift' function to maintain compatibility with older code.
 #'
-#' @inheritParams dataFilter
-#' @inherit dataFilter return
+#' @inheritParams sift
+#' @inherit sift return
 #' @export
 #' @examples
 #' \dontrun{
-#' filtered <- sift(df, sex="F")
+#' filtered <- dataFilter(df, sex="F")
 #' }
-sift <- dataFilter
+dataFilter <- sift
 

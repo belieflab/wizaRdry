@@ -2,7 +2,7 @@
 % Please edit documentation in R/getRedcap.R
 \name{getRedcap}
 \alias{getRedcap}
-\title{Get Data from REDCap}
+\title{Alias for 'redcap'}
 \usage{
 getRedcap(
   instrument_name = NULL,
@@ -30,12 +30,10 @@ getRedcap(
 A data frame containing the requested REDCap data
 }
 \description{
-Retrieves data from a REDCap instrument and ensures subject identifiers
-are propagated across all events
+This is a legacy alias for the 'redcap' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
-# Get data from a specific instrument
-data <- getRedcap("demographics")
+survey_data <- getRedcap("demographics")
 }
 }

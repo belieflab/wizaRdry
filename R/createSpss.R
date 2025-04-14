@@ -19,12 +19,12 @@
 #'   score = c(85, 92, 78),
 #'   group = c("A", "B", "A")
 #' )
-#' createSpss(sample_df)
+#' to.sav(sample_df)
 #' }
 #' @import haven
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-createSpss <- function(df, df_name = NULL) {
+to.sav <- function(df, df_name = NULL) {
   
   
   # Use df_name if provided, otherwise derive from df variable name
@@ -46,17 +46,17 @@ createSpss <- function(df, df_name = NULL) {
   message(paste0("Extract created at ", path, "\n"))
 }
 
-#' Alias for 'createSpss'
+#' Alias for 'to.sav'
 #'
-#' This is a legacy alias for the 'createSpss' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'to.sav' function to maintain compatibility with older code.
 #'
-#' @inheritParams createSpss
-#' @inherit createSpss return
+#' @inheritParams to.sav
+#' @inherit to.sav return
 #' @export
 #' @examples
 #' \dontrun{
-#' to.sav(prl01)
+#' createSpss(prl01)
 #' }
-to.sav <- createSpss
+createSpss <- to.sav
 
 

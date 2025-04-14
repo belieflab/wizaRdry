@@ -2,7 +2,7 @@
 % Please edit documentation in R/createSpss.R
 \name{createSpss}
 \alias{createSpss}
-\title{Create SPSS file from a DataFrame}
+\title{Alias for 'to.sav'}
 \usage{
 createSpss(df, df_name = NULL)
 }
@@ -18,22 +18,10 @@ Writes an SPSS file to the designated path and prints a message indicating
 the file's location. This function does not return any value.
 }
 \description{
-This function takes a R DataFrame and writes it to an SPSS file
-using the Haven package. The resulting file will be stored in the
-"./tmp/" directory with a default name derived from the DataFrame variable name,
-but can be customized if desired.
+This is a legacy alias for the 'to.sav' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
-# Create a sample dataframe
-sample_df <- data.frame(
-  id = 1:3,
-  score = c(85, 92, 78),
-  group = c("A", "B", "A")
-)
-createSpss(sample_df)
+createSpss(prl01)
 }
-}
-\author{
-Joshua Kenney \href{mailto:joshua.kenney@yale.edu}{joshua.kenney@yale.edu}
 }

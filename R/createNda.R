@@ -32,11 +32,11 @@
 #'   )
 #'   
 #'   # Create the NDA template
-#'   createNda("eefrt01")
+#'   to.nda("eefrt01")
 #' }
 #'
 #' @export
-createNda <- function(df) {
+to.nda <- function(df) {
   # Create directory structure if it doesn't exist
   if (!dir.exists("nda")) {
     dir.create("nda")
@@ -49,7 +49,7 @@ createNda <- function(df) {
   structure_name <- df  # Assuming '01' is static
   
   # Create the file path
-  path <- file.path('./nda/tmp', paste0(df, '_template.csv'))
+  path <- file.path('./tmp', paste0(df, '_template.csv'))
   
   # Get the dataframe
   template <- base::get(df)
@@ -77,15 +77,15 @@ createNda <- function(df) {
   message(sprintf("\nSubmission Template created at: %s \n", path))
 }
 
-#' Alias for 'createNda'
+#' Alias for 'to.nda'
 #'
-#' This is a legacy alias for the 'createNda' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'to.nda' function to maintain compatibility with older code.
 #'
-#' @inheritParams createNda
-#' @inherit createNda return
+#' @inheritParams to.nda
+#' @inherit to.nda return
 #' @export
 #' @examples
 #' \dontrun{
-#' to.nda(prl01)
+#' createNda(prl01)
 #' }
-to.nda <- createNda
+createNda <- to.nda

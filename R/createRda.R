@@ -18,11 +18,11 @@
 #'   id = 1:3,
 #'   name = c("Alice", "Bob", "Charlie")
 #' )
-#' createRda(sample_df)
+#' to.rda(sample_df)
 #' }
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-createRda <- function(df, df_name = NULL) {
+to.rda <- function(df, df_name = NULL) {
   if(is.null(df) || nrow(df) == 0) {
     stop("DataFrame is empty or NULL. Cannot save to RDS.")
   }
@@ -42,16 +42,16 @@ createRda <- function(df, df_name = NULL) {
   message(paste0("Extract created at ", path, "\n"))
 }
 
-#' Alias for 'createRda'
+#' Alias for 'to.rda'
 #'
-#' This is a legacy alias for the 'createRda' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'to.rda' function to maintain compatibility with older code.
 #'
-#' @inheritParams createRda
-#' @inherit createRda return
+#' @inheritParams to.rda
+#' @inherit to.rda return
 #' @export
 #' @examples
 #' \dontrun{
-#' to.rda(prl01)
+#' createRda(prl01)
 #' }
-to.rda <- createRda
+createRda <- to.rda
 

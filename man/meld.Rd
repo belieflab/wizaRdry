@@ -2,7 +2,7 @@
 % Please edit documentation in R/dataMerge.R
 \name{meld}
 \alias{meld}
-\title{Alias for 'dataMerge'}
+\title{Data Merge}
 \usage{
 meld(
   ...,
@@ -34,10 +34,34 @@ the function automatically determines common keys from the provided data frames.
 A merged data frame based on the specified or common candidate keys.
 }
 \description{
-This is a legacy alias for the 'dataMerge' function to maintain compatibility with older code.
+This function simplifies the process of merging multiple cleaned data frames by automatically determining
+common merge keys or utilizing user-specified keys. Supports both inner and outer join methods,
+and offers options for exporting the merged data.
 }
 \examples{
 \dontrun{
-merged <- meld(df1_clean, df2_clean)
+# Create sample dataframes for demonstration
+df1 <- data.frame(
+  src_subject_id = c("S001", "S002", "S003"),
+  visit = c(1, 2, 1),
+  measure1 = c(10, 15, 12),
+  stringsAsFactors = FALSE
+)
+
+df2 <- data.frame(
+  src_subject_id = c("S001", "S002", "S004"),
+  visit = c(1, 2, 2),
+  measure2 = c(85, 92, 78),
+  stringsAsFactors = FALSE
+)
+
+# Perform an OUTER JOIN using default keys:
+merged1 <- meld(df1, df2, all = TRUE)
+
+# Perform an INNER JOIN using specified keys:
+merged2 <- meld(df1, df2, by = "src_subject_id", all = FALSE)
 }
+}
+\author{
+Joshua Kenney \href{mailto:joshua.kenney@yale.edu}{joshua.kenney@yale.edu}
 }

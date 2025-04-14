@@ -18,11 +18,11 @@
 #'   id = 1:3,
 #'   name = c("Alice", "Bob", "Charlie")
 #' )
-#' createCsv(sample_df)
+#' to.csv(sample_df)
 #' }
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-createCsv <- function(df, df_name = NULL) {
+to.csv <- function(df, df_name = NULL) {
   # Use df_name if provided, otherwise derive from df variable name
   filename <- if (!is.null(df_name)) {
     df_name
@@ -42,16 +42,16 @@ createCsv <- function(df, df_name = NULL) {
   message(paste0("Extract created at ", path, "\n"))
 }
 
-#' Alias for 'createCsv'
+#' Alias for 'to.csv'
 #'
-#' This is a legacy alias for the 'createCsv' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'to.csv' function to maintain compatibility with older code.
 #'
-#' @inheritParams createCsv
-#' @inherit createCsv return
+#' @inheritParams to.csv
+#' @inherit to.csv return
 #' @export
 #' @examples
 #' \dontrun{
-#' to.csv(prl01)
+#' createCsv(prl01)
 #' }
-to.csv <- createCsv
+createCsv <- to.csv
 

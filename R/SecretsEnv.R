@@ -37,8 +37,15 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                               # Store the secrets file path
                               self$secrets_file <- secrets_file
                               
-                              # Source the secrets file
-                              base::source(secrets_file)
+                              # Load secrets if not already loaded
+                              load_secrets(secrets_file)
+                              
+                              # Validate configuration
+                              self$validate_config("mongo")
+                              self$validate_config("qualtrics")
+                              self$validate_config("redcap")
+                              
+                              # Add additional validations as needed
                             },
                             
                             validate_config = function(api_type) {
@@ -50,15 +57,30 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                               specs <- self$config_specs[[api_type]]
                               all_errors <- c()
                               
-                              # Check that required variables exist
-                              missing_vars <- specs$required[!base::sapply(specs$required, exists)]
+                              # Check that required variables exist in secrets environment
+                              missing_vars <- specs$required[!base::sapply(specs$required, function(var) {
+                                tryCatch({ 
+                                  get_secret(var)
+                                  return(TRUE)
+                                }, error = function(e) {
+                                  return(FALSE)
+                                })
+                              })]
+                              
                               if (length(missing_vars) > 0) {
                                 all_errors <- c(all_errors, paste("Missing variables:",
                                                                   base::paste(missing_vars, collapse=", ")))
                               }
                               
                               # Only check existing variables for type and emptiness
-                              existing_vars <- specs$required[base::sapply(specs$required, exists)]
+                              existing_vars <- specs$required[base::sapply(specs$required, function(var) {
+                                tryCatch({ 
+                                  get_secret(var)
+                                  return(TRUE)
+                                }, error = function(e) {
+                                  return(FALSE)
+                                })
+                              })]
                               
                               # Check variable types and emptiness for variables that exist
                               for (type_name in unique(specs$types)) {
@@ -69,7 +91,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                 if (length(vars_of_type) > 0) {
                                   # Check which ones fail the type check
                                   failing_vars <- vars_of_type[base::sapply(vars_of_type, function(var) {
-                                    var_value <- base::get(var)
+                                    var_value <- get_secret(var)
                                     
                                     # Check the appropriate type
                                     !switch(type_name,
@@ -98,7 +120,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                   # For character variables, check for empty strings
                                   if (type_name == "character" && length(correct_type_vars) > 0) {
                                     empty_vars <- correct_type_vars[base::sapply(correct_type_vars, function(var) {
-                                      var_value <- base::get(var)
+                                      var_value <- get_secret(var)
                                       nchar(var_value) == 0 || all(trimws(var_value) == "")
                                     })]
                                     
@@ -112,7 +134,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                   # For vector variables, check if they're empty
                                   if (type_name == "vector" && length(correct_type_vars) > 0) {
                                     empty_vars <- correct_type_vars[base::sapply(correct_type_vars, function(var) {
-                                      var_value <- base::get(var)
+                                      var_value <- get_secret(var)
                                       length(var_value) == 0
                                     })]
                                     
@@ -125,7 +147,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                   
                                   # For REDCap URI, check trailing slash and 'api' endpoint
                                   if (api_type == "redcap" && "uri" %in% correct_type_vars) {
-                                    uri_value <- base::get("uri")
+                                    uri_value <- get_secret("uri")
                                     
                                     if (grepl("api/$", uri_value)) {
                                       # Format is correct, do nothing
@@ -135,8 +157,8 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                       # Add trailing slash
                                       fixed_uri <- paste0(uri_value, "/")
                                       
-                                      # Update the variable in memory
-                                      assign("uri", fixed_uri, envir = .wizaRdry_env)
+                                      # Update the variable in the secrets environment
+                                      assign_secret("uri", fixed_uri)
                                       
                                       # Update the secrets.R file
                                       if (file.exists(self$secrets_file)) {
@@ -151,13 +173,13 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                                                                file_content[uri_line_index])
                                           writeLines(file_content, self$secrets_file)
                                           message("Note: Added trailing slash to uri in ", self$secrets_file,
-                                            " (", uri_value, " -> ", fixed_uri, ")")
+                                                  " (", uri_value, " -> ", fixed_uri, ")")
                                         } else {
                                           message("Note: Added trailing slash to uri in memory, but couldn't update ",
                                                   self$secrets_file, " automatically.")
                                         }
                                       }
-                                    } 
+                                    }
                                     # Not ending with "api" at all
                                     else {
                                       # Don't add a slash, add an error instead
@@ -168,7 +190,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                   
                                   # Check REDCap token length
                                   if (api_type == "redcap" && "token" %in% correct_type_vars) {
-                                    token_value <- base::get("token")
+                                    token_value <- get_secret("token")
                                     if (nchar(token_value) < 32) {
                                       all_errors <- c(all_errors, paste("Token length error:",
                                                                         "token must be at least 32 characters long for REDCap API."))

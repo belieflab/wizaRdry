@@ -1,4 +1,4 @@
-#' Scry: Prepare a Magical wizaRdry Workspace
+#' Initialize the wizaRdry directory structure
 #'
 #' Creates the standard directory structure required for the wizaRdry package to function properly.
 #' This includes folders for data cleaning scripts, NDA submission templates, and temporary outputs.
@@ -14,6 +14,8 @@
 #'        Set to FALSE to suppress the tree view.
 #' @param create_project Logical. If TRUE, will create an R project file if one doesn't exist.
 #'        If FALSE (default), will not create an R project.
+#' @param examples Logical. If TRUE (default when not repairing), will create example script templates.
+#'        If FALSE (default when repairing), will skip creating example scripts.
 #'
 #' @return Invisible TRUE if successful.
 #'
@@ -41,10 +43,14 @@
 #' 
 #' # Skip the tree display
 #' scry(repair = TRUE, show_tree = FALSE)
+#' 
+#' # Explicitly create example scripts when repairing
+#' scry(repair = TRUE, examples = TRUE)
 #' }
 #'
 #' @export
-scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL, create_project = FALSE) {
+scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL,
+                 create_project = FALSE, examples = FALSE) {
   # Define directory structure
   expected_dirs <- c(
     file.path(path, "clean"),
@@ -62,7 +68,7 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
   expected_files <- c(
     file.path(path, "config.yml"),
     file.path(path, "secrets.R"),
-    file.path(path, "main.R")  
+    file.path(path, "main.R")
   )
   
   # Check if this looks like a wizaRdry project structure
@@ -140,6 +146,7 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
   gitignore_file <- file.path(path, ".gitignore")
   tmp_pattern <- "tmp/*"
   secrets_pattern <- "secrets.R"
+  pem_patern <- "*.pem"
   
   if (file.exists(gitignore_file)) {
     gitignore_content <- readLines(gitignore_file)
@@ -159,13 +166,20 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
       message("Added tmp/* to .gitignore")
     }
     
+    # Check for *.pem pattern
+    if (!any(grepl(pem_patern, gitignore_content, fixed = TRUE))) {
+      gitignore_content <- c(gitignore_content, pem_patern)
+      need_to_update <- TRUE
+      message("Added *.pem to .gitignore")
+    }
+    
     if (need_to_update) {
       writeLines(gitignore_content, gitignore_file)
     }
   } else {
     # Create new .gitignore with both patterns
     writeLines(c(secrets_pattern, tmp_pattern), gitignore_file)
-    message("Created .gitignore with secrets.R and tmp/* patterns")
+    message("Created .gitignore with secrets.R, *.pem, and tmp/* patterns")
   }
   
   # Ensure .gitkeep exists in tmp directory but is tracked
@@ -187,9 +201,9 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
     "  qualtrics:",
     "    survey_ids:",
     "      Institution1:",
-    "        bdi: \"SV_9ae8FdL1uNLIM5Y\"",
+    "        foo: \"SV_\"",
     "      Institution2:",
-    "        lshsr: \"SV_BVw7mJJIp90Pur0\"",
+    "        bar: \"SV_\"",
     "  redcap:",
     "    superkey: ndar_subject01",
     sep = "\n"
@@ -236,15 +250,14 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
     writeLines(c(
       "# Main analysis script for this wizaRdry project",
       "",
-      "# Load necessary libraries",
+      "# Load wizaRdry library:",
       "",
-      "# Example data request",
-      "# create cleaning script in clean/",
-      "# dataRequest(\"prl\", csv = TRUE)",
+      "# Check available REDCap forms:",
+      "# redcap.index()",
       "",
-      "# Example NDA request",
-      "# create remediation script in nda/",
-      "# ndaRequest(\"prl01\", csv = TRUE)",
+      "# Example NDA request:",
+      "# Create remediation script in nda/",
+      "# nda(\"cde_dsmcrossad01\")",
       "",
       "# Your analysis code here",
       ""
@@ -256,119 +269,108 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
   
   # Define template files with their content
   clean_templates <- list(
-    bdi = list(
-      path = file.path(path, "clean", "qualtrics", "bdi.R"),
+    collection = list(
+      path = file.path(path, "clean", "mongo", "collection.R"),
       content = paste(
-        "bdi <- wizaRdry::getQualtrics(\"bdi\")",
+        "#",
+        "# clean/mongo/collection.R",
+        "#",
+        '# config:  database name is defined in config.yml',
+        '# secrets: connectionString is defined in secrets.R',
+        '# encrypt: the *.pem file must be placed in the root of this repository',
+        "#",
+        "# return a list of the instrument_name(s) from MongoDB",
+        "mongo.index()",
+        "#",
+        "# get collection from MongoDB",
+        "# IMPORTANT: both variable name and script filename must match",
+        "collection <- mongo(\"collection\")",
         "",
         "# cleaning script code...",
         "",
         "# final df must be named like the R script and appended with _clean",
-        "bdi_clean <- bdi",
+        "collection_clean <- collection",
         sep = "\n"
       )
     ),
-    lshsr = list(
-      path = file.path(path, "clean", "qualtrics", "lshsr.R"),
+    survey = list(
+      path = file.path(path, "clean", "qualtrics", "survey.R"),
       content = paste(
-        "lshsr <- wizaRdry::getQualtrics(\"lshsr\")",
+        "#",
+        "# clean/qualtrics/survey.R",
+        "#",
+        "# get survey from Qualtrics database",
+        "# config:  surveys are defined in config.yml as key-value pairs",
+        "# secrets: baseUrls and apiKeys are defined in secrets.R",
+        "#",
+        "# return a list of the instrument_name(s) from MongoDB",
+        "qualtrics.index()",
+        "#",
+        "# get collection from Qualtrics",
+        "# IMPORTANT: both variable name and script filename must match",
+        "survey <- qualtrics(\"survey\")",
         "",
         "# cleaning script code...",
         "",
-        "# final df must be named like the R script and appended with _clean",
-        "lshsr_clean <- lshsr",
-        sep = "\n"
-      )
-    ),
-    dsm5 = list(
-      path = file.path(path, "clean", "redcap", "dsm5.R"),
-      content = paste(
-        "dsm5 <- wizaRdry::getRedcap(\"dsm_5\", raw_or_label = \"label\")",
-        "",
-        "# cleaning script code...",
-        "",
-        "# final df must be named like the R script and appended with _clean",
-        "dsm5_clean <- dsm5",
-        sep = "\n"
-      )
-    ),
-    prl = list(
-      path = file.path(path, "clean", "mongo", "prl.R"),
-      content = paste(
-        "prl <- wizaRdry::getMongo(\"prl\")",
-        "",
-        "# cleaning script code...",
-        "",
-        "# final df must be named like the R script and appended with _clean",
-        "prl_clean <- prl",
+        "# IMPORTANT: final df must be appended with _clean",
+        "survey_clean <- survey",
         sep = "\n"
       )
     )
   )
   
   nda_templates <- list(
-    bdi01 = list(
-      path = file.path(path, "nda", "qualtrics", "bdi01.R"),
-      content = paste(
-        "bdi01 <- wizaRdry::getQualtrics(\"bdi\")",
-        "",
-        "# nda remediation code...",
-        "",
-        sep = "\n"
-      )
-    ),
-    lshsr01 = list(
-      path = file.path(path, "nda", "qualtrics", "lshsr01.R"),
-      content = paste(
-        "lshsr01 <- wizaRdry::getQualtrics(\"lshsr\")",
-        "",
-        "# nda remediation code...",
-        "",
-        sep = "\n"
-      )
-    ),
     cde_dsm5crossad01 = list(
       path = file.path(path, "nda", "redcap", "cde_dsm5crossad01.R"),
       content = paste(
-        "cde_dsm5crossad01 <- wizaRdry::getRedcap(\"dsm_5\")",
+        "#",
+        "# nda/redcap/cde_dsm5crossad01.R",
+        "#",
+        "# config:  superkey instrument is defined in config.yml",
+        "# secrets: uri and token are defined in secrets.R",
+        "#",
+        "# return a list of the instrument_name(s) from REDCap",
+        "redcap.index()",
+        "#",
+        "# get the instrument_name dsm_5 from REDCap",
+        "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
+        "cde_dsm5crossad01 <- redcap(\"dsm_5\")",
         "",
         "# nda remediation code...",
         "",
-        sep = "\n"
-      )
-    ),
-    prl01 = list(
-      path = file.path(path, "nda", "mongo", "prl01.R"),
-      content = paste(
-        "prl01 <- wizaRdry::getMongo(collection_name = \"prl\", db_name = \"test\")",
-        "",
-        "# nda remediation code...",
+        "# IMPORTANT: final df name must still match the NDA data structure alias",
         "",
         sep = "\n"
       )
     )
   )
   
-  # Create clean templates
-  for (template_name in names(clean_templates)) {
-    template <- clean_templates[[template_name]]
-    if (!file.exists(template$path)) {
-      writeLines(template$content, template$path)
-      created <- c(created, template$path)
-    } else {
-      created <- c(created, paste0(template$path, " (skipped, already exists)"))
+  # Create example template files only if examples=TRUE
+  if (examples) {
+    # Create clean templates
+    for (template_name in names(clean_templates)) {
+      template <- clean_templates[[template_name]]
+      if (!file.exists(template$path)) {
+        writeLines(template$content, template$path)
+        created <- c(created, template$path)
+      } else {
+        created <- c(created, paste0(template$path, " (skipped, already exists)"))
+      }
     }
-  }
-  
-  # Create NDA templates
-  for (template_name in names(nda_templates)) {
-    template <- nda_templates[[template_name]]
-    if (!file.exists(template$path)) {
-      writeLines(template$content, template$path)
-      created <- c(created, template$path)
-    } else {
-      created <- c(created, paste0(template$path, " (skipped, already exists)"))
+    
+    # Create NDA templates
+    for (template_name in names(nda_templates)) {
+      template <- nda_templates[[template_name]]
+      if (!file.exists(template$path)) {
+        writeLines(template$content, template$path)
+        created <- c(created, template$path)
+      } else {
+        created <- c(created, paste0(template$path, " (skipped, already exists)"))
+      }
     }
+  } else {
+    # Skip creating example templates
+    message("Skipping creation of example scripts (examples=FALSE)")
   }
   
   # Create R project file if requested
@@ -554,3 +556,4 @@ display_tree <- function(path) {
   
   return(invisible(NULL))
 }
+

@@ -13,14 +13,13 @@
 #' @export
 #' @examples
 #' \dontrun{
-#'   dataRequest("prl", csv=TRUE)
-#'   dataRequest("rgpts", "kamin", rdata=TRUE)
+#'   clean("prl", csv=TRUE)
+#'   clean("rgpts", "kamin", rdata=TRUE)
 #' }
 #' 
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
 #' 
-dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
-  
+clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   
   # Required Libraries Setup
   
@@ -45,6 +44,9 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   
   # Source necessary R scripts from the 'api' directory
   
+  # Create a mapping to store the source type for newly created scripts
+  new_script_sources <- list()
+  
   # Validate Measures Function
   validateMeasures <- function(data_list) {
     # Check if input is a dataframe
@@ -59,29 +61,184 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
     }
     
     # Validate measures against predefined lists
-    invalid_list <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
+    invalid_scripts <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
     
-    if (length(invalid_list) > 0) {
-      stop(paste(invalid_list, collapse = ", "), " does not have a cleaning script, please create one in clean/.\n")
+    if (length(invalid_scripts) > 0) {
+      message(paste(invalid_scripts, collapse = ", "), " does not have a cleaning script, please create one in clean/.\n")
+      
+      response <- readline(prompt = sprintf("Would you like to create cleaning scripts for %s now? y/n ",
+                                            paste(invalid_scripts, collapse = ", ")))
+      
+      while (!tolower(response) %in% c("y", "n")) {
+        response <- readline(prompt = "Please enter either y or n: ")
+      }
+      
+      if (tolower(response) == "n") {
+        # Instead of stopping with an error, return invisibly
+        return(invisible(NULL))
+      }
+      
+      # If response is "y", allow user to select api:
+      api_selection <- function() {
+        options <- c("mongo", "qualtrics", "redcap")
+        
+        cat("Select script type (choose only one):\n")
+        
+        for (i in 1:length(options)) {
+          cat(i, ":", options[i], "\n")
+        }
+        
+        # Get user choice
+        choice <- as.numeric(readline("Enter number to select option: "))
+        
+        while(is.na(choice) || choice < 1 || choice > length(options)) {
+          cat("Please enter a valid number between 1 and", length(options), "\n")
+          choice <- as.numeric(readline("Enter number to select option: "))
+        }
+        
+        # Return the selected API
+        return(options[choice])
+      }
+      
+      # Use the function - select API once for all scripts
+      selected_api <- api_selection()
+      
+      # Define base path
+      path <- "." # Or whatever directory you're working from
+      
+      # Process each invalid script
+      for (script_name in invalid_scripts) {
+        message(sprintf("\nProcessing script: %s", script_name))
+        
+        # Store the selected API for this script in our mapping
+        new_script_sources[[script_name]] <<- selected_api
+        
+        clean_templates <- list(
+          mongo = list(
+            path = sprintf(file.path(path, "clean", "mongo", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# clean/mongo/%s.R", script_name),
+              "#",
+              '# config:  database name is defined in config.yml',
+              '# secrets: connectionString is defined in secrets.R',
+              '# encrypt: the *.pem file must be placed in the root of this repository',
+              "#",
+              "# return a list of the instrument_name(s) from MongoDB",
+              "mongo.index()",
+              "#",
+              "# get collection from MongoDB",
+              "# IMPORTANT: both variable name and script filename must match",
+              sprintf("%s <- mongo(\"%s\")", script_name, script_name),
+              "",
+              "# cleaning script code...",
+              "",
+              "# final df must be named like the R script and appended with _clean",
+              sprintf("%s_clean <- %s", script_name, script_name),
+              sep = "\n"
+            )
+          ),
+          qualtrics = list(
+            path = sprintf(file.path(path, "clean", "qualtrics", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# clean/qualtrics/%s.R", script_name),
+              "#",
+              "# get survey from Qualtrics database",
+              "# config:  surveys are defined in config.yml as key-value pairs",
+              "# secrets: baseUrls and apiKeys are defined in secrets.R",
+              "#",
+              "# return a list of the instrument_name(s) from MongoDB",
+              "qualtrics.index()",
+              "#",
+              "# get collection from Qualtrics",
+              "# IMPORTANT: both variable name and script filename must match",
+              sprintf("%s <- qualtrics(\"%s\")", script_name, script_name),
+              "",
+              "# cleaning script code...",
+              "",
+              "# IMPORTANT: final df must be appended with _clean",
+              sprintf("%s_clean <- %s", script_name, script_name),
+              sep = "\n"
+            )
+          ),
+          redcap = list(
+            path = sprintf(file.path(path, "clean", "redcap", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# clean/redcap/%s.R", script_name),
+              "#",
+              "# config:  superkey instrument is defined in config.yml",
+              "# secrets: uri and token are defined in secrets.R",
+              "#",
+              "# return a list of the instrument_name(s) from REDCap",
+              "redcap.index()",
+              "#",
+              "# get the instrument_name from REDCap",
+              "# IMPORTANT: both variable name and script filename must match",
+              sprintf("%s <- redcap(\"%s\")", script_name, script_name),
+              "",
+              "# cleaning script code...",
+              "",
+              "# IMPORTANT: final df must be appended with _clean",
+              sprintf("%s_clean <- %s", script_name, script_name),
+              sep = "\n"
+            )
+          )
+        )
+        
+        template <- clean_templates[[selected_api]]
+        
+        # Create directory if it doesn't exist
+        dir_path <- dirname(template$path)
+        if (!dir.exists(dir_path)) {
+          dir.create(dir_path, recursive = TRUE)
+        }
+        
+        if (!file.exists(template$path)) {
+          writeLines(template$content, template$path)
+          message(sprintf("Created file: %s", template$path))
+        } else {
+          message(sprintf("File already exists: %s (skipped)", template$path))
+        }
+      }
     }
+    
+    # After creating new scripts in validateMeasures, update the lists
+    redcap_list <<- tools::file_path_sans_ext(list.files("./clean/redcap"))
+    qualtrics_list <<- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
+    mongo_list <<- tools::file_path_sans_ext(list.files("./clean/mongo"))
+    
+    # Return the data_list invisibly instead of stopping execution
+    return(invisible(data_list))
   }
   
   # Compile data list and validate measures
   data_list <- list(...)
   
-  #this is so the function doesn't break if user enters a variable storing a character vector 
-  #or a list of strings 
-  #in other words it let's you do this:
-  #vars_i_want <- c('demo','sps','sips_p')
-  #dataRequest(vars_i_want)
-  if (length(data_list) == 1){
+  # This is so the function doesn't break if user enters a variable storing a character vector
+  # or a list of strings
+  # in other words it let's you do this:
+  # vars_i_want <- c('demo','sps','sips_p')
+  # clean(vars_i_want)
+  if (length(data_list) == 1) {
     data_list = data_list[[1]]
   }
+  
+  # Validate measures and potentially create new scripts
   validateMeasures(data_list)
   
   # Process each measure using processData function
   for (measure in data_list) {
-    sourceCategory <- ifelse(measure %in% redcap_list, "redcap", ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
+    # Check if this is a newly created script with a known source
+    if (measure %in% names(new_script_sources)) {
+      sourceCategory <- new_script_sources[[measure]]
+    } else {
+      # Otherwise determine the source from updated lists
+      sourceCategory <- ifelse(measure %in% redcap_list, "redcap",
+                               ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
+    }
+    
     processData(measure, sourceCategory, csv, rdata, spss, identifier)
   }
   
@@ -91,7 +248,6 @@ dataRequest <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
   # Flush environment
   
   return(invisible(NULL))
-  
 }
 
 processData <- function(measure, source, csv, rdata, spss, identifier) {
@@ -148,9 +304,6 @@ processData <- function(measure, source, csv, rdata, spss, identifier) {
   return(result)  # Return the result of the processing
 }
 
-
-
-
 # Add helper function for MongoDB cleanup
 disconnectMongo <- function(mongo) {
   if (!is.null(mongo)) {
@@ -161,19 +314,17 @@ disconnectMongo <- function(mongo) {
       warning(sprintf("Error disconnecting from MongoDB: %s", e$message))
     })
   }
-  
 }
 
-#' Alias for 'dataRequest'
+#' Alias for 'clean'
 #'
-#' This is a legacy alias for the 'dataRequest' function to maintain compatibility with older code.
+#' This is a legacy alias for the 'clean' function to maintain compatibility with older code.
 #'
-#' @inheritParams dataRequest
-#' @inherit dataRequest return
+#' @inheritParams clean
+#' @inherit clean return
 #' @export
 #' @examples
 #' \dontrun{
-#' instrument_dict <- redcap_dict()
+#' prl <- clean("prl")
 #' }
-clean <- dataRequest
-
+dataRequest <- clean

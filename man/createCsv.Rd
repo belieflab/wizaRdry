@@ -2,7 +2,7 @@
 % Please edit documentation in R/createCsv.R
 \name{createCsv}
 \alias{createCsv}
-\title{Create CSV File from a DataFrame}
+\title{Alias for 'to.csv'}
 \usage{
 createCsv(df, df_name = NULL)
 }
@@ -18,21 +18,10 @@ The function writes a CSV file to the specified path and prints a message
 indicating the file's location. This function does not return a value.
 }
 \description{
-This function exports a given R DataFrame to a CSV file format.
-The resulting file is saved in the "./tmp/" directory. If a filename
-is not specified, the function uses the name of the DataFrame variable.
-The ".csv" extension is appended automatically to the filename.
+This is a legacy alias for the 'to.csv' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
-# Create a sample dataframe
-sample_df <- data.frame(
-  id = 1:3,
-  name = c("Alice", "Bob", "Charlie")
-)
-createCsv(sample_df)
+createCsv(prl01)
 }
-}
-\author{
-Joshua Kenney \href{mailto:joshua.kenney@yale.edu}{joshua.kenney@yale.edu}
 }

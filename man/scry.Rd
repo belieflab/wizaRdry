@@ -2,14 +2,15 @@
 % Please edit documentation in R/scry.R
 \name{scry}
 \alias{scry}
-\title{Scry: Prepare a Magical wizaRdry Workspace}
+\title{Initialize the wizaRdry directory structure}
 \usage{
 scry(
   path = ".",
   overwrite = FALSE,
   repair = FALSE,
   show_tree = NULL,
-  create_project = FALSE
+  create_project = FALSE,
+  examples = FALSE
 )
 }
 \arguments{
@@ -27,6 +28,9 @@ Set to FALSE to suppress the tree view.}
 
 \item{create_project}{Logical. If TRUE, will create an R project file if one doesn't exist.
 If FALSE (default), will not create an R project.}
+
+\item{examples}{Logical. If TRUE (default when not repairing), will create example script templates.
+If FALSE (default when repairing), will skip creating example scripts.}
 }
 \value{
 Invisible TRUE if successful.
@@ -66,6 +70,9 @@ scry("path/to/project", create_project = TRUE, repair = TRUE)
 
 # Skip the tree display
 scry(repair = TRUE, show_tree = FALSE)
+
+# Explicitly create example scripts when repairing
+scry(repair = TRUE, examples = TRUE)
 }
 
 }

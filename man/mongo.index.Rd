@@ -2,7 +2,7 @@
 % Please edit documentation in R/getMongo.R
 \name{mongo.index}
 \alias{mongo.index}
-\title{Alias for 'getMongoCollections'}
+\title{Get Available MongoDB Collections}
 \usage{
 mongo.index(db_name = NULL)
 }
@@ -15,10 +15,5 @@ A character vector containing the names of all available collections
 in the configured MongoDB database.
 }
 \description{
-This is a legacy alias for the 'getMongoCollections' function to maintain compatibility with older code.
-}
-\examples{
-\dontrun{
-mongo.index()
-}
+Retrieves a list of all available collections in the configured MongoDB database.
 }
