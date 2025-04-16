@@ -14,7 +14,7 @@ getSurvey(qualtrics_alias, institution = NULL, label = FALSE)
 \item{label}{Logical indicating whether to return coded values or their associated labels (default is FALSE).}
 }
 \value{
-A cleaned and harmonized data frame containing the survey data.
+A cleaned and harmonized data frame containing the survey data with superkeys first.
 }
 \description{
 This is a legacy alias for the 'qualtrics' function to maintain compatibility with older code.

@@ -2,81 +2,151 @@
 % Please edit documentation in R/dataFilter.R
 \name{sift}
 \alias{sift}
-\title{Data Filter}
+\title{Filters a data frame based on specified superkey parameters and well as row and column}
 \usage{
 sift(
   df,
-  rows_of_interest = NULL,
-  columns_of_interest = NULL,
+  rows = NULL,
+  columns = NULL,
+  record_id = NULL,
+  src_subject_id = NULL,
+  subjectkey = NULL,
+  site = NULL,
+  subsiteid = NULL,
+  sex = NULL,
+  race = NULL,
+  ethnic_group = NULL,
+  phenotype = NULL,
+  phenotype_description = NULL,
+  status = NULL,
+  lost_to_followup = NULL,
+  twins_study = NULL,
+  sibling_study = NULL,
+  family_study = NULL,
+  sample_taken = NULL,
   visit = NULL,
   week = NULL,
-  states = NULL,
   arm = NULL,
-  site = NULL,
-  sex = NULL,
-  phenotype = NULL,
   interview_date = NULL
 )
 }
 \arguments{
 \item{df}{Dataframe to be filtered and trimmed based on the provided parameters.}
 
-\item{rows_of_interest}{Optional; a vector of row names to be retained in the final output.
+\item{rows}{Optional; either a single row name or a vector of row names to be retained in the final output.
 If NULL or empty, all rows in the dataframe are retained.}
 
-\item{columns_of_interest}{Optional; a vector of column names to be retained in the final output.
-If NULL or empty, all columns in the dataframe are retained.}
+\item{columns}{Optional; either a single column name or a vector of column names to be retained in the final output.
+If NULL or empty, all columns in the dataframe are retained.#' Data Filter}
 
-\item{visit}{Optional; a specific visit value to filter the dataframe by. Only used if
-'visit' column exists in the dataframe.}
+\item{record_id}{Optional; either a single record_id or a vector of record_ids to filter the dataframe by}
 
-\item{week}{Optional; a specific week value to filter the dataframe by. Only used if
-'week' column exists in the dataframe.}
+\item{src_subject_id}{Optional; either a single subject ID or a vector of subject IDs to filter the dataframe by}
 
-\item{states}{Optional; a vector of state conditions to filter the dataframe by. Only used
-if 'state' column exists in the dataframe. Can include values like 'complete',
+\item{subjectkey}{Optional; either a single subjectkey or a vector of subjectkeys to filter the dataframe by}
+
+\item{site}{Optional; either a single site value or a vector of site values to filter the dataframe by (e.g., Yale, NU)}
+
+\item{subsiteid}{Optional; either a single subsiteid or a vector of subsiteids to filter the dataframe by}
+
+\item{sex}{Optional; either a single sex value or a vector of sex values at birth to filter the dataframe by (e.g., 'M', 'F')}
+
+\item{race}{Optional; either a single race value or a vector of race values to filter the dataframe by}
+
+\item{ethnic_group}{Optional; either a single ethnic_group value or a vector of ethnic_group values to filter the dataframe by}
+
+\item{phenotype}{Optional; either a single phenotype value or a vector of phenotype values to filter the dataframe by}
+
+\item{phenotype_description}{Optional; either a single phenotype_description or a vector of phenotype_descriptions to filter the dataframe by}
+
+\item{status}{Optional; either a single status string or a vector of status conditions to filter the dataframe by. Used
+if either 'state' or 'status' column exists in the dataframe. Can include values like 'complete',
 'completed baseline', 'completed 12m', 'completed 24m', etc.}
 
-\item{arm}{Optional; a condition specified as part of a trial e.g. drug, placebo}
+\item{lost_to_followup}{Optional; either a single value or a vector of values to filter the dataframe by (checks both 'lost_to_followup' and 'lost_to_follow-up' columns)}
 
-\item{site}{Optional; a site like Yale, NU}
+\item{twins_study}{Optional; either a single twins_study value or a vector of twins_study values to filter the dataframe by}
 
-\item{sex}{Optional; a string of sex at birth 'M', 'F'}
+\item{sibling_study}{Optional; either a single sibling_study value or a vector of sibling_study values to filter the dataframe by}
 
-\item{phenotype}{Optional; a string of phenotype to drill down}
+\item{family_study}{Optional; either a single family_study value or a vector of family_study values to filter the dataframe by}
 
-\item{interview_date}{Optional; a string in MM/DD/YYYY format to lock data}
+\item{sample_taken}{Optional; either a single sample_taken value or a vector of sample_taken values to filter the dataframe by}
+
+\item{visit}{Optional; either a single visit value or a vector of visit values to filter the dataframe by.
+Only used if 'visit' column exists in the dataframe.}
+
+\item{week}{Optional; either a single week value or a vector of week values to filter the dataframe by.
+Only used if 'week' column exists in the dataframe.}
+
+\item{arm}{Optional; either a single arm value or a vector of arm values to filter the dataframe by (e.g., drug, placebo)}
+
+\item{interview_date}{Optional; can be either:
+- A date string in various formats (ISO, US, etc.) to filter data up to that date
+- A boolean TRUE to return only rows with non-NA interview_date values}
 }
 \value{
-A filtered dataframe based on the provided 'visit', 'week', and 'state' parameters,
+A filtered dataframe based on the provided parameters,
 and containing only the columns specified in 'columns_of_interest'. If no columns
 are specified, returns the entire dataframe with applied row filters.
 }
 \description{
-Filters a dataframe based on specified 'visit', 'week', and 'state' parameters and
-selects columns based on 'columns_of_interest'. If 'columns_of_interest' is not provided,
-retains all columns by default. Filters by 'visit' and 'week' if these columns exist
-and values for them are provided.
+Filters a data frame based on specified superkey parameters and well as row and column
 }
 \examples{
 \donttest{
 # Create a sample dataframe
 sample_df <- data.frame(
-  src_subject_id = c("SUB001", "SUB002", "SUB003"),
-  phenotype = c("A", "B", "A"),
-  visit = c(1, 2, 2),
-  state = c("complete", "completed baseline", "in progress"),
+  record_id = c("REC001", "REC002", "REC003", "REC004"),
+  src_subject_id = c("SUB001", "SUB002", "SUB003", "SUB004"),
+  subjectkey = c("KEY001", "KEY002", "KEY003", "KEY004"),
+  site = c("Yale", "NU", "Yale", "NU"),
+  phenotype = c("A", "B", "A", "C"),
+  visit = c(1, 2, 2, 1),
+  state = c("complete", "completed baseline", "in progress", NA),
+  status = c(NA, NA, NA, "complete"),
+  lost_to_followup = c(FALSE, FALSE, TRUE, NA),
+  interview_date = c("2023-01-15", "2023/02/20", NA, "2023-03-10"),
   stringsAsFactors = FALSE
 )
 
 # Set row names for demonstration
-rownames(sample_df) <- c("foo", "bar", "baz")
+rownames(sample_df) <- c("foo", "bar", "baz", "qux")
 
-# Filter the dataframe
-filtered <- sift(sample_df, 
-                        rows_of_interest = c("foo","bar"),
-                        columns_of_interest = c("src_subject_id", "phenotype"), 
-                        visit = 2, 
-                        states = c("complete", "completed baseline"))
+# Filter by specific date
+filtered1 <- sift(sample_df, 
+                 columns = c("src_subject_id", "phenotype"), 
+                 visit = 2, 
+                 interview_date = "01/31/2023")
+                 
+# Filter to include only rows with non-NA interview dates
+filtered2 <- sift(sample_df, 
+                 interview_date = TRUE)
+                 
+# Filter by status (works with either state or status column)
+filtered3 <- sift(sample_df,
+                 status = c("complete", "completed baseline"))
+                 
+# Filter with specific row names
+filtered4 <- sift(sample_df,
+                 rows = c("foo", "qux"))
+                 
+# Filter with vector of visit values
+filtered6 <- sift(sample_df,
+                 visit = c(1, 2))
+                 
+# Filter by lost_to_followup
+filtered10 <- sift(sample_df,
+                 lost_to_followup = FALSE)
+                 
+# Filter by src_subject_id
+filtered11 <- sift(sample_df,
+                 src_subject_id = c("SUB001", "SUB004"))
+                 
+# Multiple filters combined
+filtered12 <- sift(sample_df,
+                 site = "Yale",
+                 visit = 1,
+                 columns = c("record_id", "src_subject_id", "site"))
 }
 }

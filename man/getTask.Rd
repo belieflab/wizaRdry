@@ -24,7 +24,7 @@ getTask(
 \item{verbose}{Logical; if TRUE, displays detailed progress messages. Default is FALSE.}
 }
 \value{
-A data frame containing the MongoDB data
+A data frame containing the MongoDB data with superkeys first
 }
 \description{
 This is a legacy alias for the 'mongo' function to maintain compatibility with older code.

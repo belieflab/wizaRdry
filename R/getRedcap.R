@@ -77,6 +77,8 @@ formatDuration <- function(duration) {
 #' @param batch_size Number of records to retrieve per batch
 #' @param records Optional vector of specific record IDs
 #' @param fields Optional vector of specific fields
+#' @param exclude_pii Default TRUE remove all fields marked as identifiable
+#' @param date_format Default ymd define date format for interview_date
 #'
 #' @return A data frame containing the requested REDCap data
 #' @export
@@ -87,8 +89,38 @@ formatDuration <- function(duration) {
 #' }
 redcap <- function(instrument_name = NULL, raw_or_label = "raw",
                    redcap_event_name = NULL, batch_size = 1000,
-                   records = NULL, fields = NULL) {
+                   records = NULL, fields = NULL, exclude_pii = TRUE,
+                   date_format = "ymd") {
   start_time <- Sys.time()
+  
+  # Define the allowed superkey columns explicitly
+  allowed_superkey_cols <- c(
+    "record_id",
+    "src_subject_id",
+    "subjectkey",
+    "site",
+    "subsiteid",
+    "sex",
+    "race",
+    "ethnic_group",
+    "phenotype",
+    "phenotype_description",
+    "state",
+    "status",
+    "lost_to_followup",
+    "lost_to_follow-up",
+    "twins_study",
+    "sibling_study",
+    "family_study",
+    "sample_taken",
+    "visit",
+    "week"
+  )
+  
+  # Validate date_format parameter
+  if (!date_format %in% c("mdy", "dmy", "ymd")) {
+    stop("date_format must be one of 'mdy', 'dmy', or 'ymd'")
+  }
   
   # Validate secrets and config
   validate_secrets("redcap")
@@ -141,21 +173,85 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
     }
   })
   
+  # First get metadata to identify PII fields
+  metadata <- NULL
+  pii_fields <- c()
+  
+  # Get the full metadata to identify date fields
+  metadata <- tryCatch({
+    REDCapR::redcap_metadata_read(
+      redcap_uri = uri, 
+      token = token,
+      verbose = FALSE
+    )$data
+  }, error = function(e) {
+    message("Warning: Could not retrieve metadata.")
+    return(NULL)
+  })
+  
+  # Find date fields in the metadata
+  date_fields <- c()
+  if (!is.null(metadata) && "field_name" %in% names(metadata) && "text_validation_type_or_show_slider_number" %in% names(metadata)) {
+    # Identify all date fields
+    date_validation_types <- c("date_mdy", "date_dmy", "date_ymd", "datetime_mdy", "datetime_dmy", "datetime_ymd", "datetime_seconds_mdy", "datetime_seconds_dmy", "datetime_seconds_ymd")
+    date_fields <- metadata$field_name[metadata$text_validation_type_or_show_slider_number %in% date_validation_types]
+    date_fields <- c(date_fields, "interview_date") # Add interview_date explicitly
+    date_fields <- date_fields[!is.na(date_fields)]
+    
+    if (length(date_fields) > 0) {
+      message(sprintf("Found %d date fields that will be properly formatted: %s", 
+                      length(date_fields), 
+                      paste(date_fields, collapse = ", ")))
+    }
+  }
+  
+  if (exclude_pii && !is.null(metadata) && "field_name" %in% names(metadata) && "identifier" %in% names(metadata)) {
+    pii_fields <- metadata$field_name[metadata$identifier == "y"]
+    
+    # Filter out NA values and print only the non-NA field names
+    pii_fields <- pii_fields[!is.na(pii_fields)]
+    
+    if (length(pii_fields) > 0) {
+      message(sprintf("Found %d PII fields that will be excluded: %s", 
+                      length(pii_fields), 
+                      paste(pii_fields, collapse = ", ")))
+    }
+  }
+  
+  # Now decide which fields to request based on the PII exclusion
+  selected_fields <- NULL
+  
+  if (exclude_pii && length(pii_fields) > 0) {
+    # If fields parameter is provided, exclude PII fields from it
+    if (!is.null(fields)) {
+      selected_fields <- setdiff(fields, pii_fields)
+      if (length(selected_fields) == 0) {
+        message("Warning: All requested fields are marked as PII. Results may be empty.")
+      }
+    } else {
+      # If no fields specified, we'll exclude PII fields after retrieving data
+      # This is because we can't know all fields in advance
+      selected_fields <- NULL
+    }
+  } else {
+    # Use the fields parameter as-is if not excluding PII
+    selected_fields <- fields
+  }
+  
   # Progress bar
   pb <- initializeLoadingAnimation(20)
-  message(sprintf("\nImporting records from REDCap form: %s%s",
+  message(sprintf("\nImporting records from REDCap form: %s%s%s",
                   instrument_name,
                   ifelse(!is.null(redcap_event_name),
                          sprintf(" %s", redcap_event_name),
-                         "")))
+                         ""),
+                  ifelse(exclude_pii && length(pii_fields) > 0, " (excluding PII)", "")))
   for (i in 1:20) {
     updateLoadingAnimation(pb, i)
     Sys.sleep(0.1)
   }
   completeLoadingAnimation(pb)
   message("")
-  
-  # MODIFIED APPROACH: Make separate calls for superkey and instrument
   
   # 1. First, get the superkey data (always using "label")
   superkey_response <- REDCapR::redcap_read(
@@ -176,31 +272,14 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
     forms = instrument_name,
     batch_size = batch_size,
     records = records,
-    fields = fields,
+    fields = selected_fields,
     raw_or_label = raw_or_label,  # Use user's preference
     raw_or_label_headers = "raw",
     verbose = FALSE
   )
   
-  # Get the superkey metadata to identify which fields to keep
-  super_key_dict <- tryCatch({
-    REDCapR::redcap_metadata_read(
-      redcap_uri = uri, 
-      token = token,
-      forms = config$redcap$superkey,
-      verbose = FALSE
-    )$data
-  }, error = function(e) {
-    return(NULL)
-  })
-  
-  # Extract field names from dictionary
-  if (!is.null(super_key_dict)) {
-    super_key_cols <- super_key_dict$field_name
-  } else {
-    # Fallback if metadata retrieval failed
-    super_key_cols <- c("record_id") # Add known superkey columns here
-  }
+  # Filter superkey columns to only allowed columns
+  super_key_cols <- intersect(names(superkey_response$data), allowed_superkey_cols)
   
   # Add redcap_event_name to super_key_cols if it exists in either dataset
   if ("redcap_event_name" %in% names(superkey_response$data) || 
@@ -208,8 +287,10 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
     super_key_cols <- c(super_key_cols, "redcap_event_name")
   }
   
-  # Keep only superkey fields that exist in our dataset
-  super_key_cols <- super_key_cols[super_key_cols %in% names(superkey_response$data)]
+  # If excluding PII, remove PII fields from superkey columns
+  if (exclude_pii && length(pii_fields) > 0) {
+    super_key_cols <- setdiff(super_key_cols, pii_fields)
+  }
   
   # 3. Process superkey data to ensure it's available for all subjects regardless of event
   # First, create a consolidated superkey dataset with one row per subject
@@ -234,17 +315,42 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
       }
     }
   } else {
-    # If no redcap_event_name, just use the superkey data as is
-    consolidated_superkey <- superkey_response$data[, super_key_cols, drop = FALSE]
+    # If no redcap_event_name, just use the superkey data as is, but only the allowed columns
+    consolidated_superkey <- superkey_response$data[, intersect(names(superkey_response$data), super_key_cols), drop = FALSE]
   }
   
-  # Now merge the consolidated superkey with the instrument data
-  df <- merge(
-    consolidated_superkey,
-    instrument_response$data,
-    by = "record_id",
-    all.y = TRUE
-  )
+  # FIXED: Merge the consolidated superkey with the instrument data
+  # We will use a different approach to ensure event names are preserved
+  if ("redcap_event_name" %in% names(instrument_response$data)) {
+    # Keep the original event names from the instrument data
+    df <- instrument_response$data
+    
+    # Merge in the consolidated superkey data (excluding event_name)
+    for (subject_id in unique(df$record_id)) {
+      # Get the superkey data for this subject
+      superkey_data <- consolidated_superkey[consolidated_superkey$record_id == subject_id, 
+                                             !(names(consolidated_superkey) %in% c("redcap_event_name")), drop = FALSE]
+      
+      # Apply the superkey data to all rows for this subject
+      for (col in names(superkey_data)) {
+        if (col != "record_id" && col %in% names(df)) {
+          df[df$record_id == subject_id, col] <- superkey_data[[col]][1]
+        } else if (col != "record_id" && !(col %in% names(df))) {
+          # Add the column if it doesn't exist in the instrument data
+          df[[col]] <- NA
+          df[df$record_id == subject_id, col] <- superkey_data[[col]][1]
+        }
+      }
+    }
+  } else {
+    # Standard merge if there's no event name in the instrument data
+    df <- merge(
+      consolidated_superkey,
+      instrument_response$data,
+      by = "record_id",
+      all.y = TRUE
+    )
+  }
   
   # Continue with the existing propagation logic
   if ("record_id" %in% names(df) && "redcap_event_name" %in% names(df)) {
@@ -252,7 +358,7 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
     super_key_cols <- super_key_cols[super_key_cols %in% names(df)]
     
     if (length(super_key_cols) > 0) {
-      message("Propagating superkey across all events for each subject...")
+      message("\nPropagating superkey across all events for each subject...")
       
       # For each subject
       for (subject_id in unique(df$record_id)) {
@@ -261,12 +367,98 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
         
         # For each super key field, find a non-NA value across all events
         for (key_field in super_key_cols) {
+          # Skip redcap_event_name to preserve the original values
+          if (key_field == "redcap_event_name") {
+            next
+          }
+          
           key_values <- df[subject_rows, key_field]
           non_na_values <- key_values[!is.na(key_values)]
           
           if (length(non_na_values) > 0) {
             # Propagate the first non-NA value to all events for this subject
             df[subject_rows, key_field] <- non_na_values[1]
+          }
+        }
+      }
+    }
+  }
+  
+  # Fix the date fields - Convert numeric dates to proper date format
+  # Process date fields - this includes interview_date
+  if (length(date_fields) > 0) {
+    message("\nConverting date fields to proper date format...")
+    
+    for (date_field in date_fields) {
+      if (date_field %in% names(df)) {
+        # Only process if the column exists and has some non-NA values
+        if (any(!is.na(df[[date_field]]))) {
+          # Convert to character first to handle both numeric and character inputs
+          dates_char <- as.character(df[[date_field]])
+          
+          # Check if dates are numeric (SPSS/SAS format) - typically represented as days since 1960-01-01
+          if (all(grepl("^\\d+(\\.\\d+)?$", dates_char[!is.na(dates_char)]))) {
+            # Convert from numeric to date
+            # For SPSS/SAS dates (days since 1960-01-01)
+            numeric_dates <- as.numeric(dates_char)
+            date_values <- as.Date(numeric_dates, origin = "1960-01-01")
+            
+            # Now format the date according to the requested format
+            if (date_format == "mdy") {
+              df[[date_field]] <- format(date_values, "%m/%d/%Y")
+            } else if (date_format == "dmy") {
+              df[[date_field]] <- format(date_values, "%d/%m/%Y")
+            } else if (date_format == "ymd") {
+              df[[date_field]] <- format(date_values, "%Y-%m-%d")
+            }
+            
+            message(sprintf("  Converted %s from numeric to %s format", date_field, date_format))
+          } 
+          # Check if they are already in a date-like format
+          else if (any(grepl("-|/", dates_char[!is.na(dates_char)]))) {
+            # Try to parse existing dates and reformat them
+            parsed_dates <- tryCatch({
+              # Try different parsing approaches
+              if (all(grepl("/", dates_char[!is.na(dates_char)]))) {
+                # Likely MM/DD/YYYY or DD/MM/YYYY
+                parts <- strsplit(dates_char[!is.na(dates_char)][1], "/")[[1]]
+                if (length(parts) == 3) {
+                  if (as.numeric(parts[1]) > 12) { # DD/MM/YYYY
+                    as.Date(dates_char, format = "%d/%m/%Y")
+                  } else { # Default to MM/DD/YYYY
+                    as.Date(dates_char, format = "%m/%d/%Y")
+                  }
+                }
+              } else if (all(grepl("-", dates_char[!is.na(dates_char)]))) {
+                # Likely YYYY-MM-DD
+                as.Date(dates_char)
+              } else {
+                # Try generic parsing with lubridate
+                if (date_format == "mdy") {
+                  lubridate::mdy(dates_char)
+                } else if (date_format == "dmy") {
+                  lubridate::dmy(dates_char)
+                } else {
+                  lubridate::ymd(dates_char)
+                }
+              }
+            }, error = function(e) {
+              # If parsing fails, return NA
+              message(sprintf("  Warning: Could not parse dates in %s, leaving as is", date_field))
+              return(NULL)
+            })
+            
+            if (!is.null(parsed_dates)) {
+              # Format according to preference
+              if (date_format == "mdy") {
+                df[[date_field]] <- format(parsed_dates, "%m/%d/%Y")
+              } else if (date_format == "dmy") {
+                df[[date_field]] <- format(parsed_dates, "%d/%m/%Y")
+              } else if (date_format == "ymd") {
+                df[[date_field]] <- format(parsed_dates, "%Y-%m-%d")
+              }
+              message(sprintf("  Reformatted %s to %s format", date_field, date_format))
+            }
           }
         }
       }
@@ -303,15 +495,40 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
     df <- df[df$redcap_event_name == redcap_event_name, ]
   }
   
-  # Study-specific processing
-  if (config$study_alias == "impact-mh") {
-    if ("dob" %in% colnames(df)) {
-      df <- subset(df, select = -dob)
+  # Study-specific processing (legacy - errors should be fixed in redcap...)
+  if (config$study_alias == "capr") {
+    df <- processCaprData(df, instrument_name)
+  }
+  
+  # Make a final pass to remove any PII fields that might have been included
+  if (exclude_pii && length(pii_fields) > 0) {
+    pii_cols_present <- intersect(names(df), pii_fields)
+    pii_cols_present <- pii_cols_present[!is.na(pii_cols_present)]
+    
+    if (length(pii_cols_present) > 0) {
+      message(sprintf("\nRemoving %d PII fields from final dataset: %s",
+                      length(pii_cols_present),
+                      paste(pii_cols_present, collapse = ", ")))
+      df <- df[, !names(df) %in% pii_fields, drop = FALSE]
     }
   }
   
-  if (config$study_alias == "capr") {
-    df <- processCaprData(df, instrument_name)
+  # Reorder columns to put superkey columns first
+  if (ncol(df) > 0) {
+    # Get names of all superkey columns that are in the dataset
+    superkey_cols_in_data <- intersect(
+      c("record_id", "redcap_event_name", super_key_cols), 
+      names(df)
+    )
+    
+    # Get names of all instrument columns
+    instrument_cols <- setdiff(names(df), superkey_cols_in_data)
+    
+    # Create the new column order
+    new_col_order <- c(superkey_cols_in_data, instrument_cols)
+    
+    # Reorder the dataframe
+    df <- df[, new_col_order, drop = FALSE]
   }
   
   # Attach the instrument name as an attribute without an extra parameter

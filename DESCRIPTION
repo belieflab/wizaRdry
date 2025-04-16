@@ -1,6 +1,6 @@
 Package: wizaRdry
-Title: A Framework for Collaborative & Reproducible Data Analysis
-Version: 0.1.6
+Title: A Magical Framework for Collaborative & Reproducible Data Analysis
+Version: 0.1.7
 Authors@R: c(
     person("Joshua G.", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
     person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
@@ -12,7 +12,7 @@ Authors@R: c(
     person("Praveen", "Suthaharan", email = "praveen.suthaharan@yale.edu", role = "ctb"),
     person("Christian R.", "Horgan", email = "christian.horgan@yale.edu", role = "ctb")
   )
-Description: A comprehensive data analysis framework specifically designed for NIH-funded research with built-in NIH Data Archive ('NDA') integration. The package implements an analytical workflow where dataRequest() first provides unified access to data across multiple modalities ('REDCap', 'MongoDB', 'Qualtrics'), followed by dataFilter() to refine analytical samples and dataMerge() to combine data frames for comprehensive analysis. For NIH Data Archive submissions, ndaRequest() prepares and validates analysis outputs in submission-ready templates. The data access layer includes specialized getter functions (getRedcap(), getMongo(), getQualtrics()) while analytical export utilities (createCsv(), createRda(), createSpss(), createNda()) offer flexible output formats for further analysis and data sharing. Additional analytical tools include dataParse() for decomposing multi-survey data and supporting reproducible research workflows. The framework features memory-aware parallel processing, automatic validation, and consistent field harmonization across research teams, significantly enhancing reproducibility and collaborative analysis of multi-modal research data. These methods support multi-site collaborative research projects such as those described in Mittal et al. (2021) <doi:10.20900/jpbs.20210011>.
+Description: A comprehensive data analysis framework for NIH-funded research that streamlines workflows for both data cleaning and preparing NIH Data Archive ('NDA') submission templates. Provides unified access to multiple data sources ('REDCap', 'MongoDB', 'Qualtrics') through interfaces to their APIs, with specialized functions for data cleaning, filtering, merging, and parsing. Features automatic validation, field harmonization, and memory-aware processing to enhance reproducibility in multi-site collaborative research as described in Mittal et al. (2021) <doi:10.20900/jpbs.20210011>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -35,7 +35,9 @@ Imports:
     REDCapR,
     rlang,
     stringdist,
-    testthat
+    testthat,
+    rstudioapi,
+    lubridate
 Depends: R (>= 4.1.0)
 URL: https://github.com/belieflab/wizaRdry
 BugReports: https://github.com/belieflab/wizaRdry/issues

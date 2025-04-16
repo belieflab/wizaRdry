@@ -24,7 +24,7 @@ mongo(
 \item{verbose}{Logical; if TRUE, displays detailed progress messages. Default is FALSE.}
 }
 \value{
-A data frame containing the MongoDB data
+A data frame containing the MongoDB data with superkeys first
 }
 \description{
 Retrieve data from MongoDB

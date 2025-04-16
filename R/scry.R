@@ -4,6 +4,7 @@
 #' This includes folders for data cleaning scripts, NDA submission templates, and temporary outputs.
 #' It can detect and repair incomplete directory structures, and optionally create an R project.
 #'
+#' @param study_alias Character string specifying the short name for the study e.g. impact, capr, sing
 #' @param path Character string specifying the directory path where the structure should be created.
 #'        Defaults to the current working directory.
 #' @param overwrite Logical. If TRUE, will overwrite existing files. If FALSE (default),
@@ -49,8 +50,25 @@
 #' }
 #'
 #' @export
-scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL,
+scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL,
                  create_project = FALSE, examples = FALSE) {
+  
+  # If study_alias is NULL (not provided), try to detect from .Rproj file
+  if (is.null(study_alias)) {
+    # Look for .Rproj files in the specified path
+    rproj_files <- list.files(path, pattern = "\\.Rproj$", full.names = FALSE)
+    
+    if (length(rproj_files) > 0) {
+      # Extract project name from the first .Rproj file found
+      project_name <- sub("\\.Rproj$", "", rproj_files[1])
+      study_alias <- project_name
+      message(paste0("Using project name as study alias: ", study_alias))
+    } else {
+      # Default to FALSE if no .Rproj file found
+      study_alias <- FALSE
+    }
+  }
+  
   # Define directory structure
   expected_dirs <- c(
     file.path(path, "clean"),
@@ -146,7 +164,7 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
   gitignore_file <- file.path(path, ".gitignore")
   tmp_pattern <- "tmp/*"
   secrets_pattern <- "secrets.R"
-  pem_patern <- "*.pem"
+  pem_pattern <- "*.pem"
   
   if (file.exists(gitignore_file)) {
     gitignore_content <- readLines(gitignore_file)
@@ -167,8 +185,8 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
     }
     
     # Check for *.pem pattern
-    if (!any(grepl(pem_patern, gitignore_content, fixed = TRUE))) {
-      gitignore_content <- c(gitignore_content, pem_patern)
+    if (!any(grepl(pem_pattern, gitignore_content, fixed = TRUE))) {
+      gitignore_content <- c(gitignore_content, pem_pattern)
       need_to_update <- TRUE
       message("Added *.pem to .gitignore")
     }
@@ -177,8 +195,8 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
       writeLines(gitignore_content, gitignore_file)
     }
   } else {
-    # Create new .gitignore with both patterns
-    writeLines(c(secrets_pattern, tmp_pattern), gitignore_file)
+    # Create new .gitignore with all patterns
+    writeLines(c(secrets_pattern, tmp_pattern, pem_pattern), gitignore_file)
     message("Created .gitignore with secrets.R, *.pem, and tmp/* patterns")
   }
   
@@ -194,7 +212,7 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
   config_file <- file.path(path, "config.yml")
   config_template <- paste(
     "default:",
-    "  study_alias: test",
+    paste0("  study_alias: ", ifelse(isFALSE(study_alias), "test", tolower(study_alias))),
     "  identifier: src_subject_id",
     "  mongo:",
     "    collection: ${study_alias}",
@@ -440,14 +458,13 @@ scry <- function(path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL
   }
   
   message("\nYour next enchantments:")
-  message("1.  Fill in config.yml with your study-specific configuration")
-  message("2.  Add your API credentials to secrets.R (DO NOT COMMIT this file)")
-  message("3a. Create data cleaning scripts in clean/ (e.g. clean/qualtrics/bdi.R)")
-  message("3b. Create NDA remediation scripts in nda/ (e.g. nda/mongo/prl01.R)")
-  message("4.  Call these scripts from main.R using dataRequest() and ndaRequest()")
+  message("1. Update config.yml with your study-specific configuration")
+  message("2. Add your API credentials to secrets.R (DO NOT COMMIT this file)")
+  message("3. Create data cleaning scripts with clean()")
+  message("4. Create NDA remediation scripts with nda()")
   
   if (create_project && length(rproj_files) == 0) {
-    message("5.  Open the newly created .Rproj file to work in this project environment")
+    message("5. Open the newly created .Rproj file to work in this project environment")
   }
   
   return(invisible(TRUE))

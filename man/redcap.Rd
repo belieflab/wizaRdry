@@ -10,7 +10,9 @@ redcap(
   redcap_event_name = NULL,
   batch_size = 1000,
   records = NULL,
-  fields = NULL
+  fields = NULL,
+  exclude_pii = TRUE,
+  date_format = "ymd"
 )
 }
 \arguments{
@@ -25,6 +27,10 @@ redcap(
 \item{records}{Optional vector of specific record IDs}
 
 \item{fields}{Optional vector of specific fields}
+
+\item{exclude_pii}{Default TRUE remove all fields marked as identifiable}
+
+\item{date_format}{Default ymd define date format for interview_date}
 }
 \value{
 A data frame containing the requested REDCap data

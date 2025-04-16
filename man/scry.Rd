@@ -5,6 +5,7 @@
 \title{Initialize the wizaRdry directory structure}
 \usage{
 scry(
+  study_alias = NULL,
   path = ".",
   overwrite = FALSE,
   repair = FALSE,
@@ -14,6 +15,8 @@ scry(
 )
 }
 \arguments{
+\item{study_alias}{Character string specifying the short name for the study e.g. impact, capr, sing}
+
 \item{path}{Character string specifying the directory path where the structure should be created.
 Defaults to the current working directory.}
 

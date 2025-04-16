@@ -3,7 +3,9 @@ remove.packages("wizaRdry")
 
 
 # SHUTDOWN AND RESTART R
+rstudioapi::restartSession()
 
+# load dependencies
 usethis::use_package("config")
 usethis::use_package("qualtRics")
 usethis::use_package("dplyr")

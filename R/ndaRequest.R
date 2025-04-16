@@ -355,6 +355,8 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
         if (!file.exists(template$path)) {
           writeLines(template$content, template$path)
           message(sprintf("Created file: %s", template$path))
+          # open script for editing
+          rstudioapi::navigateToFile(sprintf("%s",template$path))
         } else {
           message(sprintf("File already exists: %s (skipped)", template$path))
         }
