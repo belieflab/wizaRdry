@@ -7,7 +7,7 @@
 [![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 <!-- badges: end -->
 
-## A Framework for Collaborative & Reproducible Data Analysis
+## A Magical Framework for Collaborative & Reproducible Data Analysis
 
 The wizaRdry package provides a comprehensive data analysis framework specifically designed for NIH-funded computational psychiatry, neuroscience, and psychology research with built-in NIH Data Archive (NDA) integration.
 
