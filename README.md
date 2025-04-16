@@ -148,8 +148,8 @@ Cleaning scripts are written inside the `clean/` directory and called by their s
 ```r
 # Filter data
 filtered_data <- sift(df, 
-                           rows_of_interest = c("sub001","sub002"),
-                           columns_of_interest = c("src_subject_id", "phenotype"))
+                           rows = c("sub001","sub002"),
+                           columns = c("src_subject_id", "phenotype"))
 
 # Merge datasets
 merged_data <- meld(demo_clean, rgpts_clean) 
