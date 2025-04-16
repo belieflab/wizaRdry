@@ -3,7 +3,7 @@
 #' @param df Dataframe to be filtered and trimmed based on the provided parameters.
 #' @param rows Optional; either a single row name or a vector of row names to be retained in the final output. 
 #'        If NULL or empty, all rows in the dataframe are retained.
-#' @param columns Optional; either a single column name or a vector of column names to be retained in the final output. 
+#' @param cols Optional; either a single column name or a vector of column names to be retained in the final output. 
 #'        If NULL or empty, all columns in the dataframe are retained.#' Data Filter
 #' @param record_id Optional; either a single record_id or a vector of record_ids to filter the dataframe by
 #' @param src_subject_id Optional; either a single subject ID or a vector of subject IDs to filter the dataframe by
@@ -33,7 +33,7 @@
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
 #'
 #' @return A filtered dataframe based on the provided parameters, 
-#'         and containing only the columns specified in 'columns_of_interest'. If no columns 
+#'         and containing only the columns specified in 'cols'. If no columns 
 #'         are specified, returns the entire dataframe with applied row filters.
 #'
 #' @examples
@@ -58,7 +58,7 @@
 #' 
 #' # Filter by specific date
 #' filtered1 <- sift(sample_df, 
-#'                  columns = c("src_subject_id", "phenotype"), 
+#'                  cols = c("src_subject_id", "phenotype"), 
 #'                  visit = 2, 
 #'                  interview_date = "01/31/2023")
 #'                  
@@ -90,12 +90,12 @@
 #' filtered12 <- sift(sample_df,
 #'                  site = "Yale",
 #'                  visit = 1,
-#'                  columns = c("record_id", "src_subject_id", "site"))
+#'                  cols = c("record_id", "src_subject_id", "site"))
 #' }
 #' @import dplyr
 #' @import lubridate
 #' @export
-sift <- function(df, rows = NULL, columns = NULL,
+sift <- function(df, rows = NULL, cols = NULL,
                  record_id = NULL, src_subject_id = NULL, subjectkey = NULL, 
                  site = NULL, subsiteid = NULL, sex = NULL, race = NULL, 
                  ethnic_group = NULL, phenotype = NULL, phenotype_description = NULL, 
@@ -295,12 +295,12 @@ sift <- function(df, rows = NULL, columns = NULL,
   # Apply row and column filters to the original_df which has original values
   result_df <- original_df
   
-  if (!is.null(columns)) {
+  if (!is.null(cols)) {
     # Convert single column name to vector if needed
-    col_values <- if(is.character(columns) && length(columns) == 1) {
-      c(columns)
+    col_values <- if(is.character(cols) && length(cols) == 1) {
+      c(cols)
     } else {
-      columns
+      cols
     }
     result_df <- result_df[, col_values, drop = FALSE]
   } else {

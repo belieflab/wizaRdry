@@ -84,6 +84,19 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              !is.null(self$get_value(path))
                            },
                            
+                           # Check which APIs are configured
+                           get_configured_apis = function() {
+                             configured_apis <- character(0)
+                             
+                             for (api_type in names(self$api_specs)) {
+                               if (self$has_value(api_type)) {
+                                 configured_apis <- c(configured_apis, api_type)
+                               }
+                             }
+                             
+                             return(configured_apis)
+                           },
+                           
                            # Validate specific API configuration
                            validate_config = function(api_type = NULL) {
                              # If no API type specified, validate core config
@@ -97,13 +110,14 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                     paste(names(self$api_specs), collapse=", "))
                              }
                              
-                             all_errors <- c()
-                             
-                             # Check if API section exists
+                             # Check if this API is actually configured
                              if (!self$has_value(api_type)) {
-                               stop("The '", api_type, "' section is missing in ", self$config_file,
-                                    ". Please add a ", api_type, " section with the necessary configuration.")
+                               # If the API section doesn't exist, skip validation but return TRUE
+                               # message("The '", api_type, "' section is not defined in config.yml, skipping validation.")
+                               return(TRUE)
                              }
+                             
+                             all_errors <- c()
                              
                              # Get API specs
                              specs <- self$api_specs[[api_type]]
@@ -183,8 +197,13 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
 validate_config <- function(api_type = NULL, config_file = "config.yml") {
   config_env <- ConfigEnv$new(config_file)
   
-  # Validate the configuration
-  validation_result <- config_env$validate_config(api_type)
+  # If no specific API type is provided, just validate core config
+  if (is.null(api_type)) {
+    validation_result <- config_env$validate_core_config()
+  } else {
+    # If a specific API type is requested, validate just that one
+    validation_result <- config_env$validate_config(api_type)
+  }
   
   # If validation passes, return the config
   if (validation_result) {

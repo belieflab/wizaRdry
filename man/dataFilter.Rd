@@ -7,7 +7,7 @@
 dataFilter(
   df,
   rows = NULL,
-  columns = NULL,
+  cols = NULL,
   record_id = NULL,
   src_subject_id = NULL,
   subjectkey = NULL,
@@ -36,7 +36,7 @@ dataFilter(
 \item{rows}{Optional; either a single row name or a vector of row names to be retained in the final output.
 If NULL or empty, all rows in the dataframe are retained.}
 
-\item{columns}{Optional; either a single column name or a vector of column names to be retained in the final output.
+\item{cols}{Optional; either a single column name or a vector of column names to be retained in the final output.
 If NULL or empty, all columns in the dataframe are retained.#' Data Filter}
 
 \item{record_id}{Optional; either a single record_id or a vector of record_ids to filter the dataframe by}
@@ -87,7 +87,7 @@ Only used if 'week' column exists in the dataframe.}
 }
 \value{
 A filtered dataframe based on the provided parameters,
-and containing only the columns specified in 'columns_of_interest'. If no columns
+and containing only the columns specified in 'cols'. If no columns
 are specified, returns the entire dataframe with applied row filters.
 }
 \description{

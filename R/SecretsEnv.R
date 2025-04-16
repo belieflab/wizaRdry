@@ -28,7 +28,10 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                             # Store the secrets file path
                             secrets_file = NULL,
                             
-                            initialize = function(secrets_file = "secrets.R") {
+                            # Store the config to check which APIs are used
+                            config = NULL,
+                            
+                            initialize = function(secrets_file = "secrets.R", config_file = "config.yml") {
                               # Check if secrets file exists
                               if (!file.exists(secrets_file)) {
                                 stop(secrets_file, " file not found. Please create this file and define the required API variables.")
@@ -40,12 +43,49 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                               # Load secrets if not already loaded
                               load_secrets(secrets_file)
                               
-                              # Validate configuration
-                              self$validate_config("mongo")
-                              self$validate_config("qualtrics")
-                              self$validate_config("redcap")
+                              # Try to load config to determine which APIs are configured
+                              tryCatch({
+                                self$config <- config::get(file = config_file)
+                              }, error = function(e) {
+                                warning("Could not load config.yml: ", e$message, 
+                                        ". Will validate all API types.")
+                              })
                               
-                              # Add additional validations as needed
+                              # Only validate APIs that are configured
+                              apis_to_validate <- self$get_configured_apis()
+                              
+                              for (api_type in apis_to_validate) {
+                                self$validate_config(api_type)
+                              }
+                            },
+                            
+                            # Method to determine which APIs are configured
+                            get_configured_apis = function() {
+                              if (is.null(self$config)) {
+                                # If config couldn't be loaded, return an empty list
+                                return(character(0))
+                              }
+                              
+                              # Check which API sections exist in the config
+                              configured_apis <- character(0)
+                              
+                              if (!is.null(self$config$mongo)) {
+                                configured_apis <- c(configured_apis, "mongo")
+                              }
+                              
+                              if (!is.null(self$config$qualtrics)) {
+                                configured_apis <- c(configured_apis, "qualtrics")
+                              }
+                              
+                              if (!is.null(self$config$redcap)) {
+                                configured_apis <- c(configured_apis, "redcap")
+                              }
+                              
+                              if (!is.null(self$config$sql)) {
+                                configured_apis <- c(configured_apis, "sql")
+                              }
+                              
+                              return(configured_apis)
                             },
                             
                             validate_config = function(api_type) {
@@ -213,7 +253,23 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
 )
 
 # Create a wrapper function to make validation easier
-validate_secrets <- function(api_type, secrets_file = "secrets.R") {
+validate_secrets <- function(api_type = NULL, secrets_file = "secrets.R") {
   secrets <- SecretsEnv$new(secrets_file)
-  return(secrets$validate_config(api_type))
+  
+  # If api_type is provided, validate just that API
+  if (!is.null(api_type)) {
+    # Check if the API is configured before validating
+    configured_apis <- secrets$get_configured_apis()
+    
+    if (api_type %in% configured_apis) {
+      return(secrets$validate_config(api_type))
+    } else {
+      # If this API isn't configured, return TRUE without validating
+      message("API type '", api_type, "' is not configured in config.yml, skipping validation.")
+      return(TRUE)
+    }
+  }
+  
+  # Otherwise, validation was already done during initialization
+  return(TRUE)
 }

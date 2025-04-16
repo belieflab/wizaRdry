@@ -215,15 +215,15 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     paste0("  study_alias: ", ifelse(isFALSE(study_alias), "test", tolower(study_alias))),
     "  identifier: src_subject_id",
     "  mongo:",
-    "    collection: ${study_alias}",
+    "    #collection: ${study_alias}",
     "  qualtrics:",
-    "    survey_ids:",
+    "    #survey_ids:",
     "      Institution1:",
     "        foo: \"SV_\"",
     "      Institution2:",
     "        bar: \"SV_\"",
     "  redcap:",
-    "    superkey: ndar_subject01",
+    "    #superkey: ndar_subject01",
     sep = "\n"
   )
   
