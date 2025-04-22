@@ -4,18 +4,24 @@
 \alias{createSpss}
 \title{Alias for 'to.sav'}
 \usage{
-createSpss(df, df_name = NULL)
+createSpss(df, df_name = NULL, path = ".", skip_prompt = FALSE)
 }
 \arguments{
-\item{df}{DataFrame to be exported to SPSS format.}
+\item{df}{Data frame to be exported to SPSS format.}
 
 \item{df_name}{Optional; custom file name for the saved SPSS file. If not provided,
-the name of the DataFrame variable will be used. The ".sav" extension will
+the name of the data frame variable will be used. The ".sav" extension will
 be appended automatically.}
+
+\item{path}{Character string specifying the directory path where the "tmp" folder
+and SPSS file should be created. Defaults to the current working directory.}
+
+\item{skip_prompt}{Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+will prompt for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
-Writes an SPSS file to the designated path and prints a message indicating
-the file's location. This function does not return any value.
+Invisible TRUE if successful. Writes an SPSS file to the designated path and prints a message indicating
+the file's location.
 }
 \description{
 This is a legacy alias for the 'to.sav' function to maintain compatibility with older code.

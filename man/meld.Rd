@@ -2,7 +2,7 @@
 % Please edit documentation in R/dataMerge.R
 \name{meld}
 \alias{meld}
-\title{Data Merge}
+\title{Merge two or more data frames magically according to their candidate key}
 \usage{
 meld(
   ...,

@@ -230,7 +230,7 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
   suppressWarnings(return(df))
 }
 
-#' Get Available Qualtrics Surveys
+#' Display table of available Qualtrics surveys 
 #'
 #' Retrieves a list of all available surveys in the configured Qualtrics account.
 #'
@@ -374,7 +374,7 @@ qualtrics.index <- function(institution = NULL) {
   })
 }
 
-#' Extract Column Mapping from Qualtrics Data Frame
+#' Fetch Qualtrics survey metadata to be stored in data frame
 #'
 #' This function extracts column mappings from the metadata of a Qualtrics survey data frame.
 #' It can accept either a data frame containing Qualtrics data, a variable name as string,

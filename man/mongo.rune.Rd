@@ -2,7 +2,7 @@
 % Please edit documentation in R/dataParse.R
 \name{mongo.rune}
 \alias{mongo.rune}
-\title{Parse Qualtrics Data into Separate Survey Dataframes}
+\title{Parse composite MongoDB collection into component data frames by variable prefix}
 \usage{
 mongo.rune(collection, db_name = NULL, lower = TRUE)
 }
@@ -18,8 +18,8 @@ Creates multiple dataframes in the global environment, one for each survey
 detected in the data. Each dataframe is named after its survey prefix.
 }
 \description{
-This function takes a raw Qualtrics dataframe containing multiple surveys and
-separates it into individual dataframes for each survey detected in the data.
+This function fetches a MongoDB collection containing multiple collections and
+separates it into individual data frames for each collection detected in the data.
 It identifies the appropriate identifier column (e.g., participantId, workerId)
 and splits the data based on column name prefixes.
 }

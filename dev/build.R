@@ -5,6 +5,9 @@ remove.packages("wizaRdry")
 # SHUTDOWN AND RESTART R
 rstudioapi::restartSession()
 
+# install devtools to usethis
+install.packages("devtools")
+
 # load dependencies
 usethis::use_package("config")
 usethis::use_package("qualtRics")

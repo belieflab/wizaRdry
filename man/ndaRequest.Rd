@@ -9,7 +9,8 @@ ndaRequest(
   csv = FALSE,
   rdata = FALSE,
   spss = FALSE,
-  limited_dataset = FALSE
+  limited_dataset = FALSE,
+  skip_prompt = FALSE
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ ndaRequest(
 \item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp.}
 
 \item{limited_dataset}{Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age}
+
+\item{skip_prompt}{Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+prompts for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
 Prints the time taken for the data request process.

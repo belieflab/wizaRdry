@@ -214,7 +214,7 @@ formatDuration <- function(duration) {
   }
 }
 
-#' Retrieve data from MongoDB
+#' Fetch data from MongoDB to be stored in a data frame
 #'
 #' @param collection_name The name of the MongoDB collection
 #' @param db_name The database name (optional)
@@ -560,7 +560,7 @@ disconnectMongo <- function(mongo_conn) {
   }
 }
 
-#' Retrieve Task Data
+#' Retrieve Mongo Data
 #'
 #' Retrieves data from MongoDB based on the specified batch information and query criteria. 
 #' It filters out entries where the specified identifier doesn't exist or is empty.
@@ -669,7 +669,8 @@ getCollectionsFromConnection <- function(mongo_connection) {
   return(collections$cursor$firstBatch$name)
 }
 
-#' Get Available MongoDB Collections
+#' Display table of available MongoDB collections 
+#' 
 #'
 #' Retrieves a list of all available collections in the configured MongoDB database.
 #'

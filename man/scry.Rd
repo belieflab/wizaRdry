@@ -2,7 +2,7 @@
 % Please edit documentation in R/scry.R
 \name{scry}
 \alias{scry}
-\title{Initialize the wizaRdry directory structure}
+\title{Initialize the wizaRdry directory structure inside an R project}
 \usage{
 scry(
   study_alias = NULL,
@@ -11,7 +11,8 @@ scry(
   repair = FALSE,
   show_tree = NULL,
   create_project = FALSE,
-  examples = FALSE
+  examples = FALSE,
+  skip_prompt = FALSE
 )
 }
 \arguments{
@@ -34,6 +35,8 @@ If FALSE (default), will not create an R project.}
 
 \item{examples}{Logical. If TRUE (default when not repairing), will create example script templates.
 If FALSE (default when repairing), will skip creating example scripts.}
+
+\item{skip_prompt}{Logical. If TRUE, will skip the initial confirmation prompt. Defaults to FALSE.}
 }
 \value{
 Invisible TRUE if successful.
@@ -76,6 +79,9 @@ scry(repair = TRUE, show_tree = FALSE)
 
 # Explicitly create example scripts when repairing
 scry(repair = TRUE, examples = TRUE)
+
+# Skip the confirmation prompt
+scry(skip_prompt = TRUE)
 }
 
 }

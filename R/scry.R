@@ -1,4 +1,4 @@
-#' Initialize the wizaRdry directory structure
+#' Initialize the wizaRdry directory structure inside an R project
 #'
 #' Creates the standard directory structure required for the wizaRdry package to function properly.
 #' This includes folders for data cleaning scripts, NDA submission templates, and temporary outputs.
@@ -17,6 +17,7 @@
 #'        If FALSE (default), will not create an R project.
 #' @param examples Logical. If TRUE (default when not repairing), will create example script templates.
 #'        If FALSE (default when repairing), will skip creating example scripts.
+#' @param skip_prompt Logical. If TRUE, will skip the initial confirmation prompt. Defaults to FALSE.
 #'
 #' @return Invisible TRUE if successful.
 #'
@@ -47,11 +48,56 @@
 #' 
 #' # Explicitly create example scripts when repairing
 #' scry(repair = TRUE, examples = TRUE)
+#' 
+#' # Skip the confirmation prompt
+#' scry(skip_prompt = TRUE)
 #' }
 #'
 #' @export
 scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL,
-                 create_project = FALSE, examples = FALSE) {
+                 create_project = FALSE, examples = FALSE, skip_prompt = FALSE) {
+  
+  # Check for user preferences file
+  user_prefs_file <- file.path(path, ".wizaRdry_prefs")
+  user_prefs <- list(shown_tree = FALSE, auto_create = FALSE)
+  
+  if (file.exists(user_prefs_file)) {
+    tryCatch({
+      user_prefs <- readRDS(user_prefs_file)
+    }, error = function(e) {
+      # If file exists but can't be read, create a new one
+      user_prefs <- list(shown_tree = FALSE, auto_create = FALSE)
+    })
+  }
+  
+  # If skip_prompt is TRUE or user has previously set auto_create to TRUE, bypass the prompt
+  if (!skip_prompt && !user_prefs$auto_create) {
+    response <- readline(prompt = "Would you like to create the wizaRdry project structure? y/n ")
+    
+    while (!tolower(response) %in% c("y", "n")) {
+      response <- readline(prompt = "Please enter either y or n: ")
+    }
+    
+    # Ask if they want to remember this choice
+    if (tolower(response) == "y") {
+      remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
+      
+      while (!tolower(remember) %in% c("y", "n")) {
+        remember <- readline(prompt = "Please enter either y or n: ")
+      }
+      
+      if (tolower(remember) == "y") {
+        user_prefs$auto_create <- TRUE
+        saveRDS(user_prefs, user_prefs_file)
+        message("Your preference has been saved. Use scry(skip_prompt = FALSE) to show this prompt again.")
+      }
+    }
+    
+    if (tolower(response) == "n") {
+      # Instead of stopping with an error, return invisibly
+      return(invisible(NULL))
+    }
+  }
   
   # If study_alias is NULL (not provided), try to detect from .Rproj file
   if (is.null(study_alias)) {
@@ -100,19 +146,6 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
   structure_exists <- has_clean || has_nda || has_config || has_secrets || has_main
   structure_complete <- all(sapply(expected_dirs, dir.exists)) && 
     all(sapply(expected_files, file.exists))
-  
-  # Check for user preferences file
-  user_prefs_file <- file.path(path, ".wizardry_prefs")
-  user_prefs <- list(shown_tree = FALSE)
-  
-  if (file.exists(user_prefs_file)) {
-    tryCatch({
-      user_prefs <- readRDS(user_prefs_file)
-    }, error = function(e) {
-      # If file exists but can't be read, create a new one
-      user_prefs <- list(shown_tree = FALSE)
-    })
-  }
   
   # Determine if we should show the tree
   if (is.null(show_tree)) {
@@ -165,6 +198,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
   tmp_pattern <- "tmp/*"
   secrets_pattern <- "secrets.R"
   pem_pattern <- "*.pem"
+  prefs_pattern <- ".wizaRdry_prefs"
   
   if (file.exists(gitignore_file)) {
     gitignore_content <- readLines(gitignore_file)
@@ -191,12 +225,19 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
       message("Added *.pem to .gitignore")
     }
     
+    # Check for .wizaRdry_prefs pattern
+    if (!any(grepl(prefs_pattern, gitignore_content, fixed = TRUE))) {
+      gitignore_content <- c(gitignore_content, prefs_pattern)
+      need_to_update <- TRUE
+      message("Added .wizaRdry_prefs to .gitignore")
+    }
+    
     if (need_to_update) {
       writeLines(gitignore_content, gitignore_file)
     }
   } else {
     # Create new .gitignore with all patterns
-    writeLines(c(secrets_pattern, tmp_pattern, pem_pattern), gitignore_file)
+    writeLines(c(secrets_pattern, tmp_pattern, pem_pattern, prefs_pattern), gitignore_file)
     message("Created .gitignore with secrets.R, *.pem, and tmp/* patterns")
   }
   
@@ -298,7 +339,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
         '# encrypt: the *.pem file must be placed in the root of this repository',
         "#",
         "# return a list of the instrument_name(s) from MongoDB",
-        "mongo.index()",
+        "# mongo.index()",
         "#",
         "# get collection from MongoDB",
         "# IMPORTANT: both variable name and script filename must match",
@@ -322,7 +363,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
         "# secrets: baseUrls and apiKeys are defined in secrets.R",
         "#",
         "# return a list of the instrument_name(s) from MongoDB",
-        "qualtrics.index()",
+        "# qualtrics.index()",
         "#",
         "# get collection from Qualtrics",
         "# IMPORTANT: both variable name and script filename must match",
@@ -348,7 +389,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
         "# secrets: uri and token are defined in secrets.R",
         "#",
         "# return a list of the instrument_name(s) from REDCap",
-        "redcap.index()",
+        "# redcap.index()",
         "#",
         "# get the instrument_name dsm_5 from REDCap",
         "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",

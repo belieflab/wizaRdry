@@ -2,9 +2,9 @@
 % Please edit documentation in R/dataRequest.R
 \name{clean}
 \alias{clean}
-\title{Data Request}
+\title{Generate clean data frames from cleaning scripts created in the ./clean directory}
 \usage{
-clean(..., csv = FALSE, rdata = FALSE, spss = FALSE)
+clean(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = FALSE)
 }
 \arguments{
 \item{...}{Strings, specifying the measures to process, which can be a Mongo collection, REDCap instrument, or Qualtrics survey.}
@@ -14,6 +14,9 @@ clean(..., csv = FALSE, rdata = FALSE, spss = FALSE)
 \item{rdata}{Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.}
 
 \item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp.}
+
+\item{skip_prompt}{Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+prompts for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
 Prints the time taken for the data request process.
@@ -28,6 +31,9 @@ unit tests to verify that the data quality standards are met.
 \dontrun{
   clean("prl", csv=TRUE)
   clean("rgpts", "kamin", rdata=TRUE)
+  
+  # Skip confirmation prompts
+  clean("prl", csv=TRUE, skip_prompt=TRUE)
 }
 
 }

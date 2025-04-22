@@ -2,7 +2,7 @@
 % Please edit documentation in R/getRedcap.R
 \name{redcap.dict}
 \alias{redcap.dict}
-\title{Extract Dictionary from REDCap Data}
+\title{Fetch REDCap data dictionary to be stored in data frame}
 \usage{
 redcap.dict(instrument_name)
 }

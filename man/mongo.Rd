@@ -2,7 +2,7 @@
 % Please edit documentation in R/getMongo.R
 \name{mongo}
 \alias{mongo}
-\title{Retrieve data from MongoDB}
+\title{Fetch data from MongoDB to be stored in a data frame}
 \usage{
 mongo(
   collection_name,
@@ -27,7 +27,7 @@ mongo(
 A data frame containing the MongoDB data with superkeys first
 }
 \description{
-Retrieve data from MongoDB
+Fetch data from MongoDB to be stored in a data frame
 }
 \examples{
 \dontrun{

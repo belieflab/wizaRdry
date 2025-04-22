@@ -4,34 +4,38 @@
 \alias{to.nda}
 \title{Create NDA Submission Template}
 \usage{
-to.nda(df)
+to.nda(df, path = ".", skip_prompt = FALSE)
 }
 \arguments{
-\item{df}{Character string specifying the name of the dataframe to be used as template.
-This dataframe should exist in the global environment.}
+\item{df}{Data frame to be used as template or character string naming a data frame
+in the global environment.}
+
+\item{path}{Character string specifying the directory path where the "tmp" folder
+and template file should be created. Defaults to the current working directory.}
+
+\item{skip_prompt}{Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+will prompt for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
-No return value, called for side effects. Creates a CSV file at the specified path
+Invisible TRUE if successful. Creates a CSV file at the specified path
 and prints a message with the file location.
 }
 \description{
 This function creates a CSV template file for National Data Archive (NDA) submissions.
-It extracts the data from a specified dataframe and formats it according to NDA requirements,
+It extracts the data from a specified data frame and formats it according to NDA requirements,
 with the structure name split into base name and suffix in the first line.
+The function will prompt for confirmation before creating the file,
+with an option to remember the user's preference for future calls.
 }
 \details{
 The function will:
 \enumerate{
-\item Create an 'nda/tmp' directory structure if it doesn't exist
+\item Create a 'tmp' directory if it doesn't exist
 \item Parse the structure name into base and suffix components (e.g., "eefrt01" → "eefrt" and "01")
 \item Write the structure name components as the first line
 \item Write column headers as the second line
 \item Write the data rows below
 }
-}
-\note{
-This function expects the dataframe to already exist in the global environment.
-It will not perform any data validation or transformation before creating the template.
 }
 \examples{
 \dontrun{
@@ -43,8 +47,14 @@ It will not perform any data validation or transformation before creating the te
     response_time = c(450, 520)
   )
   
-  # Create the NDA template
+  # Create the NDA template using the data frame directly
+  to.nda(eefrt01)
+  
+  # Or using the name as a string
   to.nda("eefrt01")
+  
+  # Skip the confirmation prompt
+  to.nda(eefrt01, skip_prompt = TRUE)
 }
 
 }

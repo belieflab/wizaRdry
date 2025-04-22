@@ -2,7 +2,7 @@
 % Please edit documentation in R/dataFilter.R
 \name{sift}
 \alias{sift}
-\title{Filters a data frame based on specified superkey parameters and well as row and column}
+\title{Filter data frame by superkey parameters, rows, and columns}
 \usage{
 sift(
   df,
@@ -91,7 +91,7 @@ and containing only the columns specified in 'cols'. If no columns
 are specified, returns the entire dataframe with applied row filters.
 }
 \description{
-Filters a data frame based on specified superkey parameters and well as row and column
+Filter data frame by superkey parameters, rows, and columns
 }
 \examples{
 \donttest{
@@ -106,8 +106,7 @@ sample_df <- data.frame(
   state = c("complete", "completed baseline", "in progress", NA),
   status = c(NA, NA, NA, "complete"),
   lost_to_followup = c(FALSE, FALSE, TRUE, NA),
-  interview_date = c("2023-01-15", "2023/02/20", NA, "2023-03-10"),
-  stringsAsFactors = FALSE
+  interview_date = c("2023-01-15", "2023/02/20", NA, "2023-03-10")
 )
 
 # Set row names for demonstration

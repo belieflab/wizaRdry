@@ -2,7 +2,7 @@
 % Please edit documentation in R/getQualtrics.R
 \name{qualtrics.dict}
 \alias{qualtrics.dict}
-\title{Extract Column Mapping from Qualtrics Data Frame}
+\title{Fetch Qualtrics survey metadata to be stored in data frame}
 \usage{
 qualtrics.dict(survey_alias, exclude_embedded = TRUE)
 }

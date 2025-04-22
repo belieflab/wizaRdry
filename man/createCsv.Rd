@@ -4,18 +4,24 @@
 \alias{createCsv}
 \title{Alias for 'to.csv'}
 \usage{
-createCsv(df, df_name = NULL)
+createCsv(df, df_name = NULL, path = ".", skip_prompt = FALSE)
 }
 \arguments{
-\item{df}{DataFrame to be exported to CSV format.}
+\item{df}{Data frame to be exported to CSV format.}
 
 \item{df_name}{Optional; a custom file name for the saved CSV file.
-If not provided, the name of the DataFrame variable is used.
+If not provided, the name of the data frame variable is used.
 The function adds the ".csv" extension automatically.}
+
+\item{path}{Character string specifying the directory path where the "tmp" folder
+and CSV file should be created. Defaults to the current working directory.}
+
+\item{skip_prompt}{Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+will prompt for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
-The function writes a CSV file to the specified path and prints a message
-indicating the file's location. This function does not return a value.
+Invisible TRUE if successful. The function writes a CSV file to the specified path
+and prints a message indicating the file's location.
 }
 \description{
 This is a legacy alias for the 'to.csv' function to maintain compatibility with older code.

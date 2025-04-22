@@ -2,7 +2,7 @@
 % Please edit documentation in R/getRedcap.R
 \name{redcap.index}
 \alias{redcap.index}
-\title{Get Available REDCap Forms}
+\title{Display table of available REDCap instruments and their labels}
 \usage{
 redcap.index()
 }

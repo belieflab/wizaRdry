@@ -1,4 +1,4 @@
-#' NDA Request
+#' Generate validated NDA submission templates created in the ./nda directory
 #'
 #' This function processes requests for clean data sequentially for specified measures.
 #' It makes a request to the NIH NDA API for the named data structures
@@ -10,17 +10,25 @@
 #' @param rdata Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.
 #' @param spss Optional; Boolean, if TRUE creates a .sav extract in ./tmp.
 #' @param limited_dataset Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age
+#' @param skip_prompt Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+#'   prompts for confirmation unless the user has previously chosen to remember their preference.
 #' @return Prints the time taken for the data request process.
 #' @export
 #' @examples
 #' \dontrun{
 #'   nda("prl", csv=TRUE)
 #'   nda("rgpts", "kamin", rdata=TRUE)
+#'   
+#'   # Skip confirmation prompts
+#'   nda("prl", csv=TRUE, skip_prompt=TRUE)
 #' }
 #' 
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE) {
+nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = FALSE) {
   start_time <- Sys.time()
+  
+  # Define base path
+  path <- "."
   
   
   # Required Libraries Setup
@@ -60,26 +68,60 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
       data_list <- as.character(data_list)
     }
     
-    # Validate measures against predefined lists
-    invalid_scripts <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
+    user_prefs_file <- file.path(path, "..wizaRdry_prefs")
+    user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE)
     
-    if (length(invalid_scripts) > 0) {
-      message(paste(invalid_scripts, collapse = ", "), " does not have a cleaning script, please create one in nda/.\n")
-      
-      response <- readline(prompt = sprintf("Would you like to create cleaning scripts for %s now? y/n ",
-                                            paste(invalid_scripts, collapse = ", ")))
-      
-      while (!tolower(response) %in% c("y", "n")) {
-        response <- readline(prompt = "Please enter either y or n: ")
-      }
-      
-      if (tolower(response) == "n") {
-        # Instead of stopping with an error, return invisibly
-        return(invisible(NULL))
+    if (file.exists(user_prefs_file)) {
+      tryCatch({
+        user_prefs <- readRDS(user_prefs_file)
+        # Add the auto_nda field if it doesn't exist
+        if (is.null(user_prefs$auto_nda)) {
+          user_prefs$auto_nda <- FALSE
+        }
+      }, error = function(e) {
+        # If file exists but can't be read, create a new one
+        user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE)
+      })
+    }
+    
+    # Your existing code to determine structures to create
+    # For example:
+    invalid_structures <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
+    
+    # If we have structures to create and need to prompt
+    if (length(invalid_structures) > 0) {
+      # If skip_prompt is TRUE or user has previously set auto_nda to TRUE, bypass the prompt
+      if (!skip_prompt && !user_prefs$auto_nda) {
+        response <- readline(prompt = sprintf("Would you like to create NDA templates for %s now? y/n ",
+                                              paste(invalid_structures, collapse = ", ")))
+        
+        while (!tolower(response) %in% c("y", "n")) {
+          response <- readline(prompt = "Please enter either y or n: ")
+        }
+        
+        # Ask if they want to remember this choice
+        if (tolower(response) == "y") {
+          remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
+          
+          while (!tolower(remember) %in% c("y", "n")) {
+            remember <- readline(prompt = "Please enter either y or n: ")
+          }
+          
+          if (tolower(remember) == "y") {
+            user_prefs$auto_nda <- TRUE
+            saveRDS(user_prefs, user_prefs_file)
+            message("Your preference has been saved. Use nda(skip_prompt = FALSE) to show this prompt again.")
+          }
+        }
+        
+        if (tolower(response) == "n") {
+          # Instead of stopping with an error, return invisibly
+          return(invisible(NULL))
+        }
       }
       
       # Process each invalid script
-      for (script_name in invalid_scripts) {
+      for (script_name in invalid_structures) {
         message(sprintf("\nProcessing script: %s", script_name))
         
         # Improved validation function for NDA data structure names
@@ -266,9 +308,6 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
         
         # Store the selected API for this script in our mapping
         new_script_apis[[script_name]] <<- selected_api
-        
-        # Define base path
-        path <- "."
         
         clean_templates <- list(
           mongo = list(

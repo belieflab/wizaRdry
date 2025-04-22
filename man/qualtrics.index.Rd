@@ -2,7 +2,7 @@
 % Please edit documentation in R/getQualtrics.R
 \name{qualtrics.index}
 \alias{qualtrics.index}
-\title{Get Available Qualtrics Surveys}
+\title{Display table of available Qualtrics surveys}
 \usage{
 qualtrics.index(institution = NULL)
 }

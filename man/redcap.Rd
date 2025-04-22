@@ -2,7 +2,7 @@
 % Please edit documentation in R/getRedcap.R
 \name{redcap}
 \alias{redcap}
-\title{Get Data from REDCap}
+\title{Fetch data from REDCap to be stored in a data frame}
 \usage{
 redcap(
   instrument_name = NULL,

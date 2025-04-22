@@ -2,7 +2,7 @@
 % Please edit documentation in R/getMongo.R
 \name{mongo.index}
 \alias{mongo.index}
-\title{Get Available MongoDB Collections}
+\title{Display table of available MongoDB collections}
 \usage{
 mongo.index(db_name = NULL)
 }

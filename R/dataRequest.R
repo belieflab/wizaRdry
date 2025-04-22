@@ -1,4 +1,4 @@
-#' Data Request
+#' Generate clean data frames from cleaning scripts created in the ./clean directory
 #'
 #' This function processes requests for clean data sequentially for specified measures.
 #' It makes a request to the appropriate API for the named measure or measures
@@ -9,17 +9,24 @@
 #' @param csv Optional; Boolean, if TRUE creates a .csv extract in ./tmp.
 #' @param rdata Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.
 #' @param spss Optional; Boolean, if TRUE creates a .sav extract in ./tmp.
+#' @param skip_prompt Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+#'   prompts for confirmation unless the user has previously chosen to remember their preference.
 #' @return Prints the time taken for the data request process.
 #' @export
 #' @examples
 #' \dontrun{
 #'   clean("prl", csv=TRUE)
 #'   clean("rgpts", "kamin", rdata=TRUE)
+#'   
+#'   # Skip confirmation prompts
+#'   clean("prl", csv=TRUE, skip_prompt=TRUE)
 #' }
 #' 
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-#' 
-clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
+clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = FALSE) {
+  
+  # Define base path
+  path <- "." # Or whatever directory you're working from
   
   # Required Libraries Setup
   
@@ -60,22 +67,57 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
       data_list <- as.character(data_list)
     }
     
+
+    # Check for user preferences file
+    user_prefs_file <- file.path(path, "..wizaRdry_prefs")
+    user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE)
+    
+    if (file.exists(user_prefs_file)) {
+      tryCatch({
+        user_prefs <- readRDS(user_prefs_file)
+        # Add the auto_clean field if it doesn't exist
+        if (is.null(user_prefs$auto_clean)) {
+          user_prefs$auto_clean <- FALSE
+        }
+      }, error = function(e) {
+        # If file exists but can't be read, create a new one
+        user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE)
+      })
+    }
+    
     # Validate measures against predefined lists
     invalid_scripts <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
     
+    # If we have invalid scripts to create and need to prompt
     if (length(invalid_scripts) > 0) {
-      message(paste(invalid_scripts, collapse = ", "), " does not have a cleaning script, please create one in clean/.\n")
-      
-      response <- readline(prompt = sprintf("Would you like to create cleaning scripts for %s now? y/n ",
-                                            paste(invalid_scripts, collapse = ", ")))
-      
-      while (!tolower(response) %in% c("y", "n")) {
-        response <- readline(prompt = "Please enter either y or n: ")
-      }
-      
-      if (tolower(response) == "n") {
-        # Instead of stopping with an error, return invisibly
-        return(invisible(NULL))
+      # If skip_prompt is TRUE or user has previously set auto_clean to TRUE, bypass the prompt
+      if (!skip_prompt && !user_prefs$auto_clean) {
+        response <- readline(prompt = sprintf("Would you like to create cleaning scripts for %s now? y/n ",
+                                              paste(invalid_scripts, collapse = ", ")))
+        
+        while (!tolower(response) %in% c("y", "n")) {
+          response <- readline(prompt = "Please enter either y or n: ")
+        }
+        
+        # Ask if they want to remember this choice
+        if (tolower(response) == "y") {
+          remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
+          
+          while (!tolower(remember) %in% c("y", "n")) {
+            remember <- readline(prompt = "Please enter either y or n: ")
+          }
+          
+          if (tolower(remember) == "y") {
+            user_prefs$auto_clean <- TRUE
+            saveRDS(user_prefs, user_prefs_file)
+            message("Your preference has been saved. Use clean(skip_prompt = FALSE) to show this prompt again.")
+          }
+        }
+        
+        if (tolower(response) == "n") {
+          # Instead of stopping with an error, return invisibly
+          return(invisible(NULL))
+        }
       }
       
       # If response is "y", allow user to select api:
@@ -102,9 +144,6 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE) {
       
       # Use the function - select API once for all scripts
       selected_api <- api_selection()
-      
-      # Define base path
-      path <- "." # Or whatever directory you're working from
       
       # Process each invalid script
       for (script_name in invalid_scripts) {
