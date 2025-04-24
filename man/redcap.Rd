@@ -12,6 +12,7 @@ redcap(
   records = NULL,
   fields = NULL,
   exclude_pii = TRUE,
+  interview_date = NULL,
   date_format = "ymd"
 )
 }
@@ -29,6 +30,10 @@ redcap(
 \item{fields}{Optional vector of specific fields}
 
 \item{exclude_pii}{Default TRUE remove all fields marked as identifiable}
+
+\item{interview_date}{Optional; can be either:
+- A date string in various formats (ISO, US, etc.) to filter data up to that date
+- A boolean TRUE to return only rows with non-NA interview_date values}
 
 \item{date_format}{Default ymd define date format for interview_date}
 }

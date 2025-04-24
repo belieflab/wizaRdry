@@ -4,7 +4,12 @@
 \alias{qualtrics}
 \title{Retrieve Survey Data from Qualtrics}
 \usage{
-qualtrics(qualtrics_alias, institution = NULL, label = FALSE)
+qualtrics(
+  qualtrics_alias,
+  institution = NULL,
+  label = FALSE,
+  interview_date = NULL
+)
 }
 \arguments{
 \item{qualtrics_alias}{The alias for the Qualtrics survey to be retrieved.}
@@ -12,6 +17,10 @@ qualtrics(qualtrics_alias, institution = NULL, label = FALSE)
 \item{institution}{Optional. The institution name (e.g., "temple" or "nu"). If NULL, all institutions will be searched.}
 
 \item{label}{Logical indicating whether to return coded values or their associated labels (default is FALSE).}
+
+\item{interview_date}{Optional; can be either:
+- A date string in various formats (ISO, US, etc.) to filter data up to that date
+- A boolean TRUE to return only rows with non-NA interview_date values}
 }
 \value{
 A cleaned and harmonized data frame containing the survey data with superkeys first.

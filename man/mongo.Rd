@@ -9,7 +9,8 @@ mongo(
   db_name = NULL,
   identifier = NULL,
   chunk_size = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  interview_date = NULL
 )
 }
 \arguments{
@@ -22,6 +23,10 @@ mongo(
 \item{chunk_size}{Number of records per chunk (optional)}
 
 \item{verbose}{Logical; if TRUE, displays detailed progress messages. Default is FALSE.}
+
+\item{interview_date}{Optional; can be either:
+- A date string in various formats (ISO, US, etc.) to filter data up to that date
+- A boolean TRUE to return only rows with non-NA interview_date values}
 }
 \value{
 A data frame containing the MongoDB data with superkeys first

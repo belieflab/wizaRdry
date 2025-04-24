@@ -24,7 +24,6 @@ and splits the data based on column name prefixes.
 \details{
 The function performs the following steps:
 \itemize{
-\item Retrieves the raw Qualtrics data using the getSurvey() function
 \item Identifies which identifier column to use (participantId, workerId, PROLIFIC_PID, or src_subject_id)
 \item Determines survey prefixes by analyzing column names
 \item Creates separate dataframes for each survey prefix found
@@ -32,13 +31,27 @@ The function performs the following steps:
 }
 }
 \examples{
-\dontrun{
-# Parse a Qualtrics export containing multiple surveys
+# Parse a data frame containing multiple surveys
+combined_df <- data.frame(
+  record_id = c("REC001", "REC002", "REC003", "REC004"),
+  src_subject_id = c("SUB001", "SUB002", "SUB003", "SUB004"),
+  subjectkey = c("KEY001", "KEY002", "KEY003", "KEY004"),
+  site = c("Yale", "NU", "Yale", "NU"),
+  phenotype = c("A", "B", "A", "C"),
+  visit = c(1, 2, 2, 1),
+  state = c("complete", "completed baseline", "in progress", NA),
+  status = c(NA, NA, NA, "complete"),
+  lost_to_followup = c(FALSE, FALSE, TRUE, NA),
+  interview_date = c("2023-01-15", "2023/02/20", NA, "2023-03-10"),
+  foo_1 = c(1, 3, 5, 7),
+  foo_2 = c("a", "b", "c", "d"),
+  bar_1 = c(2, 4, 6, 8),
+  bar_2 = c("w", "x", "y", "z")
+)
 rune(combined_df)
 
 # After running, access individual survey dataframes directly:
-head(pss)  # Access the PSS survey dataframe
-head(cesd) # Access the CESD survey dataframe
-}
+head(foo)  # Access the foo dataframe
+head(bar)  # Access the bar dataframe
 
 }

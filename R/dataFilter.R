@@ -37,7 +37,6 @@
 #'         are specified, returns the entire dataframe with applied row filters.
 #'
 #' @examples
-#' \donttest{
 #' # Create a sample dataframe
 #' sample_df <- data.frame(
 #'   record_id = c("REC001", "REC002", "REC003", "REC004"),
@@ -90,7 +89,6 @@
 #'                  site = "Yale",
 #'                  visit = 1,
 #'                  cols = c("record_id", "src_subject_id", "site"))
-#' }
 #' @import dplyr
 #' @import lubridate
 #' @export

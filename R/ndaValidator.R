@@ -623,13 +623,15 @@ fetch_structure_elements <- function(structure_name, nda_base_url) {
 # Calculate similarity with more accurate prefix handling
 # Calculate similarity with more accurate prefix handling
 # Modified find_and_rename_fields function with automatic unknown field handling
-find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE, 
+# Modified find_and_rename_fields function - fixed to NOT drop renamed fields
+find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
                                    auto_drop_unknown = FALSE,
                                    interactive_mode = TRUE) {
   renamed <- list(
     df = df,
     renames = character(),
     columns_to_drop = character(),
+    renamed_fields = character(), # NEW: Track which fields were renamed
     similarity_scores = list()
   )
   
@@ -694,12 +696,12 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
         best_match <- names(similarities)[which.max(similarities)]
         best_score <- max(similarities)
         
-        if (best_score > 0.9) {  # Increased threshold for more conservative matching
+        if (best_score > 0.9) {  # High confidence automatic match
           # Present option to rename in interactive mode
           rename_field <- TRUE
           
           if(interactive_mode) {
-            rename_input <- safe_readline(prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ", 
+            rename_input <- safe_readline(prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ",
                                                            field, best_match, best_score * 100), default = "y")
             rename_field <- tolower(rename_input) %in% c("y", "yes")
           }
@@ -716,29 +718,82 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
             # Mark original column for dropping
             renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
             
+            # Track renamed fields
+            renamed$renamed_fields <- c(renamed$renamed_fields, field)
+            
             # Store the rename operation
             renamed$renames <- c(renamed$renames,
                                  sprintf("%s -> %s (%.2f%%)",
                                          field, best_match, best_score * 100))
           }
         } else {
+          # Lower confidence match - allow user to select from top matches
           if(verbose) {
             cat(sprintf("No automatic rename - best match below 90%% threshold\n"))
           }
           
-          # Mark this as a column to drop if auto_drop_unknown is TRUE
-          drop_field <- auto_drop_unknown
+          # Present top 3 matches as options
+          top_matches <- head(sort(similarities, decreasing = TRUE), 3)
+          selected_match <- NULL
           
           if(interactive_mode) {
-            drop_input <- safe_readline(prompt = sprintf("Drop field '%s'? (y/n): ", field), default = if(auto_drop_unknown) "y" else "n")
-            drop_field <- tolower(drop_input) %in% c("y", "yes")
-          }
-          
-          if(drop_field) {
-            renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-            if(verbose) cat(sprintf("Will drop field '%s'\n", field))
-          } else if(verbose) {
-            cat(sprintf("Keeping field '%s'\n", field))
+            # Modified to allow selection from numbers
+            rename_input <- safe_readline(
+              prompt = sprintf("Select match for '%s' (1-3 to select, 0 to skip): ", field), 
+              default = "0"
+            )
+            
+            # Check if input is a number between 1-3
+            if(grepl("^[1-3]$", rename_input)) {
+              match_idx <- as.integer(rename_input)
+              if(match_idx <= length(top_matches)) {
+                selected_match <- names(top_matches)[match_idx]
+              }
+            }
+            
+            # If user selected a match
+            if(!is.null(selected_match)) {
+              if(verbose) {
+                message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
+                                field, selected_match, top_matches[match_idx] * 100))
+              }
+              
+              # Add the new column with renamed data
+              renamed$df[[selected_match]] <- df[[field]]
+              
+              # Mark original column for dropping
+              renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
+              
+              # Track renamed fields
+              renamed$renamed_fields <- c(renamed$renamed_fields, field)
+              
+              # Store the rename operation
+              renamed$renames <- c(renamed$renames,
+                                   sprintf("%s -> %s (%.2f%%)",
+                                           field, selected_match, top_matches[match_idx] * 100))
+            } else {
+              # Ask if we should drop the field
+              drop_input <- safe_readline(prompt = sprintf("Drop field '%s'? (y/n): ", field), 
+                                          default = if(auto_drop_unknown) "y" else "n")
+              drop_field <- tolower(drop_input) %in% c("y", "yes")
+              
+              if(drop_field) {
+                renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
+                if(verbose) cat(sprintf("Will drop field '%s'\n", field))
+              } else if(verbose) {
+                cat(sprintf("Keeping field '%s'\n", field))
+              }
+            }
+          } else {
+            # Non-interactive mode - use auto_drop_unknown setting
+            drop_field <- auto_drop_unknown
+            
+            if(drop_field) {
+              renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
+              if(verbose) cat(sprintf("Will drop field '%s'\n", field))
+            } else if(verbose) {
+              cat(sprintf("Keeping field '%s'\n", field))
+            }
           }
         }
       } else {
@@ -746,7 +801,8 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
         drop_field <- auto_drop_unknown
         
         if(interactive_mode) {
-          drop_input <- safe_readline(prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field), default = if(auto_drop_unknown) "y" else "n")
+          drop_input <- safe_readline(prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field), 
+                                      default = if(auto_drop_unknown) "y" else "n")
           drop_field <- tolower(drop_input) %in% c("y", "yes")
         }
         
@@ -904,8 +960,9 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         
         # Determine which environment contains the original dataframe
         env_to_use <- NULL
-        if(exists(measure_name, envir = globalenv())) {
-          env_to_use <- globalenv()
+        calling_env <- parent.frame(2) # The environment that called this function
+        if(exists(measure_name, envir = calling_env)) {
+          env_to_use <- calling_env
         } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
           env_to_use <- .wizaRdry_env
         }
@@ -1049,8 +1106,9 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             
             # Update in environment
             env_to_use <- NULL
-            if(exists(measure_name, envir = globalenv())) {
-              env_to_use <- globalenv()
+            calling_env <- parent.frame(2) # The environment that called this function
+            if(exists(measure_name, envir = calling_env)) {
+              env_to_use <- calling_env
             } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
               env_to_use <- .wizaRdry_env
             }
@@ -1449,6 +1507,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
 
 # Modified ndaValidator to include column name standardization
 # new structure based on observations from Stanford
+# Modified version of ndaValidator to properly handle renamed fields
 ndaValidator <- function(measure_name,
                          api,
                          limited_dataset = FALSE,
@@ -1463,7 +1522,7 @@ ndaValidator <- function(measure_name,
     all_columns_to_drop <- character(0)
     
     if (!exists(".wizaRdry_env")) {
-      .wizaRdry_env <- new.env(parent = globalenv())
+      .wizaRdry_env <- new.env(parent = parent.frame())
     }
     
     # Get the dataframe from the environment
@@ -1474,7 +1533,7 @@ ndaValidator <- function(measure_name,
       tryCatch({
         # Convert POSIXct and other complex classes to character
         if (inherits(df[[col]], "POSIXt") || 
-            inherits(df[[col]], "Date") || 
+            inherits(df[[col]], "Date") ||
             length(class(df[[col]])) > 1) {
           
           if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
@@ -1535,14 +1594,18 @@ ndaValidator <- function(measure_name,
     df <- standardize_field_names(df, measure_name, verbose = verbose)
     
     # Rename fields with close matches - track columns to drop
-    renamed_results <- find_and_rename_fields(df, elements, structure_name, 
-                                              verbose = verbose, 
-                                              auto_drop_unknown = auto_drop_unknown, 
+    renamed_results <- find_and_rename_fields(df, elements, structure_name,
+                                              verbose = verbose,
+                                              auto_drop_unknown = auto_drop_unknown,
                                               interactive_mode = interactive_mode)
     df <- renamed_results$df
     
+    # Get the list of fields that were renamed (not to be dropped at the end)
+    renamed_fields <- renamed_results$renamed_fields
+    
     # Collect columns that were dropped during renaming
-    all_columns_to_drop <- c(all_columns_to_drop, renamed_results$columns_to_drop)
+    all_columns_to_drop <- c(all_columns_to_drop, 
+                             setdiff(renamed_results$columns_to_drop, renamed_fields))
     
     # PHASE 3: Value Transformation
     if(verbose) message("\n\n--- PHASE 3: Value Transformation ---")
@@ -1576,16 +1639,18 @@ ndaValidator <- function(measure_name,
     assign(measure_name, df, envir = .wizaRdry_env)
     
     # Final validation - also collects unknown fields to drop
-    validation_results <- validate_structure(df, elements, measure_name, api, 
+    validation_results <- validate_structure(df, elements, measure_name, api,
                                              verbose = verbose,
                                              auto_drop_unknown = auto_drop_unknown,
                                              missing_required_fields = missing_required_fields,
                                              interactive_mode = interactive_mode,
                                              collect_only = TRUE)  # Don't update script yet
     
-    # Add the unknown fields that were identified during validation
+    # Add the unknown fields that were identified during validation 
+    # BUT exclude fields that were successfully renamed
     if(length(validation_results$unknown_fields_dropped) > 0) {
-      all_columns_to_drop <- c(all_columns_to_drop, validation_results$unknown_fields_dropped)
+      fields_to_drop <- setdiff(validation_results$unknown_fields_dropped, renamed_fields)
+      all_columns_to_drop <- c(all_columns_to_drop, fields_to_drop)
     }
     
     # Final check for missing required values
@@ -1594,12 +1659,15 @@ ndaValidator <- function(measure_name,
     }
     
     # Now update the cleaning script with ALL columns to drop in one operation
+    # BUT EXCLUDE renamed fields
+    all_columns_to_drop <- setdiff(all_columns_to_drop, renamed_fields)
+    
     if(length(all_columns_to_drop) > 0) {
       update_cleaning_script <- FALSE
       
       if(interactive_mode) {
         update_input <- safe_readline(
-          prompt = sprintf("Update cleaning script with code to drop %d fields? (y/n): ", 
+          prompt = sprintf("Update cleaning script with code to drop %d fields? (y/n): ",
                            length(all_columns_to_drop)), 
           default = "y")
         update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
@@ -1609,7 +1677,7 @@ ndaValidator <- function(measure_name,
       
       if(update_cleaning_script) {
         if(verbose) {
-          cat("\nUpdating cleaning script with all fields to drop:")
+          cat("\nUpdating cleaning script with fields to drop (excluding renamed fields):")
           cat(sprintf("\n  %s", paste(all_columns_to_drop, collapse=", ")))
         }
         
@@ -1670,7 +1738,7 @@ ndaValidator <- function(measure_name,
         })
         
         if(verbose && update_result) {
-          cat("\nCleaning script updated with all", length(all_columns_to_drop), "fields to drop")
+          cat("\nCleaning script updated with", length(all_columns_to_drop), "fields to drop")
         }
       }
     }

@@ -3,6 +3,9 @@
 #' @param qualtrics_alias The alias for the Qualtrics survey to be retrieved.
 #' @param institution Optional. The institution name (e.g., "temple" or "nu"). If NULL, all institutions will be searched.
 #' @param label Logical indicating whether to return coded values or their associated labels (default is FALSE).
+#' @param interview_date Optional; can be either:
+#'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
+#'        - A boolean TRUE to return only rows with non-NA interview_date values
 #' @return A cleaned and harmonized data frame containing the survey data with superkeys first.
 #' @importFrom dplyr %>% select mutate
 #' @export
@@ -11,7 +14,7 @@
 #' # Get survey by alias (will search all institutions)
 #' survey_data <- qualtrics("rgpts")
 #' }
-qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE) {
+qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interview_date = NULL) {
   # Load necessary source files
   
   # Validate config
@@ -78,6 +81,92 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE) {
   
   # Get identifier from config
   identifier <- cfg$identifier
+  
+  # Create a copy of the original dataframe to preserve original values
+  original_df <- df
+  
+  # Advanced date parsing function that handles multiple formats
+  parseAnyDate <- function(date_string) {
+    if (is.na(date_string) || is.null(date_string)) {
+      return(NA)
+    }
+    
+    # Try multiple date formats sequentially
+    date <- NULL
+    
+    # Try ISO format (YYYY-MM-DD)
+    if (grepl("^\\d{4}-\\d{1,2}-\\d{1,2}$", date_string)) {
+      date <- tryCatch(ymd(date_string), error = function(e) NULL)
+    } 
+    # Try US format (MM/DD/YYYY)
+    else if (grepl("^\\d{1,2}/\\d{1,2}/\\d{4}$", date_string)) {
+      date <- tryCatch(mdy(date_string), error = function(e) NULL)
+    } 
+    # Try European format (DD.MM.YYYY)
+    else if (grepl("^\\d{1,2}\\.\\d{1,2}\\.\\d{4}$", date_string)) {
+      date <- tryCatch(dmy(date_string), error = function(e) NULL)
+    }
+    # Try Canadian format (YYYY/MM/DD)
+    else if (grepl("^\\d{4}/\\d{1,2}/\\d{1,2}$", date_string)) {
+      date <- tryCatch(ymd(date_string), error = function(e) NULL)
+    }
+    # Try other format (DD-MM-YYYY)
+    else if (grepl("^\\d{1,2}-\\d{1,2}-\\d{4}$", date_string)) {
+      date <- tryCatch(dmy(date_string), error = function(e) NULL)
+    }
+    # Try abbreviated month name (15-Jan-2023 or Jan 15, 2023)
+    else if (grepl("[A-Za-z]", date_string)) {
+      date <- tryCatch(parse_date_time(date_string, c("dmy", "mdy")), error = function(e) NULL)
+    }
+    
+    # If all attempts fail, return NA
+    if (is.null(date) || all(is.na(date))) {
+      warning("Failed to parse date: ", date_string, ". Treating as NA.")
+      return(NA)
+    }
+    
+    return(as.Date(date))
+  }
+  
+  # Handle interview_date filtering
+  if ("interview_date" %in% names(df)) {
+    # Create a temporary date column for filtering but don't modify the original
+    df$temp_date <- sapply(df$interview_date, parseAnyDate)
+    
+    # Handle the interview_date parameter
+    if (!is.null(interview_date)) {
+      if (is.logical(interview_date) && interview_date == TRUE) {
+        # Keep only rows with non-NA interview_date values
+        rows_to_keep <- !is.na(df$temp_date)
+        df <- df[rows_to_keep, ]
+        original_df <- original_df[rows_to_keep, ]
+      } else if (is.character(interview_date) || inherits(interview_date, "Date")) {
+        # Filter by specific date
+        input_date <- tryCatch({
+          if (inherits(interview_date, "Date")) {
+            interview_date
+          } else {
+            parseAnyDate(interview_date)
+          }
+        }, error = function(e) {
+          stop("Failed to parse interview_date parameter: ", interview_date)
+        })
+        
+        if (is.na(input_date)) {
+          stop("Failed to parse interview_date parameter: ", interview_date)
+        }
+        
+        rows_to_keep <- df$temp_date <= input_date
+        df <- df[rows_to_keep, ]
+        original_df <- original_df[rows_to_keep, ]
+      } else {
+        stop("interview_date must be either a date string or TRUE")
+      }
+    }
+    
+    # Remove the temporary date column
+    df$temp_date <- NULL
+  }
   
   # Harmonize the data
   clean_df <- qualtricsHarmonization(df, identifier, qualtrics_alias)
@@ -245,8 +334,7 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
 qualtrics.index <- function(institution = NULL) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
-  options(warn = -1)
-  
+
   tryCatch({
     # Load necessary source files for helper functions
     
@@ -453,8 +541,7 @@ qualtrics.dict <- function(survey_alias, exclude_embedded = TRUE) {
     old_warn <- options("warn")
     old_opt <- options(qualtRics.progress = FALSE)
     on.exit({options(old_warn); options(old_opt)}, add = TRUE)
-    options(warn = -1)
-    
+
     # Get survey data with suppressed output
     survey_data <- suppressMessages(wizaRdry::qualtrics(survey_alias))
     colmap <- qualtRics::extract_colmap(respdata = survey_data)

@@ -38,6 +38,9 @@
 #' @examples
 #' \dontrun{
 #' # Initialize in current directory
+#' scry()
+#' 
+#' # Repair structure in current directory
 #' scry(repair = TRUE)
 #' 
 #' # Initialize in a specific directory with an R project
@@ -238,7 +241,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
   } else {
     # Create new .gitignore with all patterns
     writeLines(c(secrets_pattern, tmp_pattern, pem_pattern, prefs_pattern), gitignore_file)
-    message("Created .gitignore with secrets.R, *.pem, and tmp/* patterns")
+    message("Created .gitignore with secrets.R, *.pem, tmp/*, and .wizaRdry_prefs patterns")
   }
   
   # Ensure .gitkeep exists in tmp directory but is tracked
@@ -310,6 +313,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
       "# Main analysis script for this wizaRdry project",
       "",
       "# Load wizaRdry library:",
+      "if(!require(wizaRdry)) {install.packages('wizaRdry')}; library(wizaRdry)",
       "",
       "# Check available REDCap forms:",
       "# redcap.index()",

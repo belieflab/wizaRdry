@@ -524,7 +524,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     
     # Add limited de-identification summary
     if (limited_dataset == FALSE) {
-      message("Dataset has been de-identified using date-shifting and age-capping.")
+      message("\nDataset has been de-identified using date-shifting and age-capping.")
     }
     
     # audio alert of validation

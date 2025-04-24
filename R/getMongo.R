@@ -221,6 +221,9 @@ formatDuration <- function(duration) {
 #' @param identifier Field to use as identifier (optional)
 #' @param chunk_size Number of records per chunk (optional)
 #' @param verbose Logical; if TRUE, displays detailed progress messages. Default is FALSE.
+#' @param interview_date Optional; can be either:
+#'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
+#'        - A boolean TRUE to return only rows with non-NA interview_date values
 #' @importFrom mongolite mongo ssl_options
 #' @importFrom parallel detectCores
 #' @importFrom future plan multisession
@@ -237,7 +240,7 @@ formatDuration <- function(duration) {
 #' # Get data from MongoDB collection
 #' data <- mongo("collection_name")
 #' }
-mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE) {
+mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE, interview_date = NULL) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
   
@@ -271,7 +274,7 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
   # Find valid identifier
   if (is.null(identifier)) {
     for (key in trimws(strsplit(identifier, ",")[[1]])) {
-      count <- Mongo$count(sprintf('{"%s": {"$exists": true, "$ne": ""}}', key))
+      count <- Mongo$count(sprintf('{"$s": {"$exists": true, "$ne": ""}}', key))
       if (count > 0) {
         identifier <- key
         break
@@ -282,8 +285,6 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
   if (is.null(identifier)) {
     stop("No valid identifier found in the collection.")
   }
-  
-  # message(sprintf("Using identifier: %s", identifier))
   
   # Get total records
   query_json <- sprintf('{"%s": {"$ne": ""}}', identifier)
@@ -325,6 +326,7 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
       chunk_size <- 1000  # Conservative default
     }
   }
+  
   message(sprintf("Processing: %d chunks x %d records in parallel (%d workers)",
                   params$num_chunks, params$chunk_size, params$workers))
   
@@ -336,11 +338,10 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
   plan(future::multisession, workers = workers)
   
   # Progress message
-  #message("Retrieving data:")
-  #message(sprintf("Found %d records in %s/%s", total_records, db_name, collection_name))
   message(sprintf("\nImporting %s records from %s/%s into dataframe...",
                   formatC(total_records, format = "d", big.mark = ","),
                   db_name, collection_name))
+  
   # Initialize custom progress bar
   pb <- initializeLoadingAnimation(num_chunks)
   
@@ -376,20 +377,50 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
     updateLoadingAnimation(pb, i)
   }
   
-  # Collect results
-  results <- lapply(future_results, future::value)
+  # Collect results using efficient future_lapply
+  results <- future.apply::future_lapply(future_results, future::value)
   
   # Combine results
-  # message("\nCombining data chunks...")
   df <- dplyr::bind_rows(results)
   completeLoadingAnimation(pb)
+  
+  # Handle interview_date filtering if needed
+  if (!is.null(interview_date) && "interview_date" %in% names(df)) {
+    message("Filtering by interview date...", appendLF = FALSE)
+    
+    # Convert dates only once for the whole dataframe - much more efficient
+    if (!inherits(df$interview_date, "Date")) {
+      df$interview_date <- parse_dates_to_iso(df$interview_date, "interview_date")
+      # The parse_dates_to_iso function already outputs a message with success percentage
+    } else {
+      message(" using existing Date format.")
+    }
+    
+    # Apply the filter based on the parameter type
+    if (is.logical(interview_date) && interview_date) {
+      # Keep only non-NA interview dates
+      df <- df[!is.na(df$interview_date), ]
+      
+    } else if (is.character(interview_date) || inherits(interview_date, "Date")) {
+      # Parse the cutoff date once
+      if (is.character(interview_date)) {
+        cutoff_date <- parse_dates_to_iso(interview_date, "filter_date")
+        if (all(is.na(cutoff_date))) {
+          stop("Failed to parse interview_date parameter: ", interview_date)
+        }
+      } else {
+        cutoff_date <- interview_date
+      }
+      
+      # Keep only rows with dates up to the cutoff
+      df <- df[df$interview_date <= cutoff_date, ]
+    }
+  }
   
   # Harmonize data
   message(sprintf("Harmonizing data on %s...", identifier), appendLF = FALSE)  # Prevents line feed
   clean_df <- taskHarmonization(df, identifier, collection_name)
-  Sys.sleep(0.5)  # Optional: small pause for visual effect
   message(sprintf("\rHarmonizing data on %s...done.", identifier))  # Overwrites the line with 'done'
-  # "\u2713"
   
   # List of allowed superkey columns to prioritize
   allowed_superkey_cols <- c(
@@ -438,8 +469,7 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
   # Report execution time
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "secs")
-  Sys.sleep(0.5)  # Optional: small pause for visual effect
-  message(sprintf("\nData frame '%s' retrieved in %s.", collection_name, formatDuration(duration-1)))  # minus 1 to account for sleep
+  message(sprintf("\nData frame '%s' retrieved in %s.", collection_name, formatDuration(duration)))
   
   return(clean_df)
 }
@@ -684,8 +714,7 @@ getCollectionsFromConnection <- function(mongo_connection) {
 mongo.index <- function(db_name = NULL) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
-  options(warn = -1)
-  
+
   # Function to suppress specific warnings by pattern
   suppressSpecificWarning <- function(expr, pattern) {
     withCallingHandlers(

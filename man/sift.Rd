@@ -94,7 +94,6 @@ are specified, returns the entire dataframe with applied row filters.
 Filter data frame by superkey parameters, rows, and columns
 }
 \examples{
-\donttest{
 # Create a sample dataframe
 sample_df <- data.frame(
   record_id = c("REC001", "REC002", "REC003", "REC004"),
@@ -147,5 +146,4 @@ filtered12 <- sift(sample_df,
                  site = "Yale",
                  visit = 1,
                  cols = c("record_id", "src_subject_id", "site"))
-}
 }

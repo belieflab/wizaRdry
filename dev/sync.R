@@ -28,7 +28,7 @@ process_file("../api/dataFilter.R", "R/dataFilter.R")
 process_file("../api/dataMerge.R", "R/dataMerge.R")
 process_file("../api/dataParse.R", "R/dataParse.R")
 
-process_file("../api/scry.R", "R/scry.R")
+file.copy(from = "../api/scry.R", to = "R/scry.R", overwrite = TRUE)
 
 process_file("../api/src/createExtract.R", "R/createExtract.R")
 

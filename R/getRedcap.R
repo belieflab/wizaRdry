@@ -78,6 +78,9 @@ formatDuration <- function(duration) {
 #' @param records Optional vector of specific record IDs
 #' @param fields Optional vector of specific fields
 #' @param exclude_pii Default TRUE remove all fields marked as identifiable
+#' @param interview_date Optional; can be either:
+#'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
+#'        - A boolean TRUE to return only rows with non-NA interview_date values
 #' @param date_format Default ymd define date format for interview_date
 #'
 #' @return A data frame containing the requested REDCap data
@@ -90,7 +93,7 @@ formatDuration <- function(duration) {
 redcap <- function(instrument_name = NULL, raw_or_label = "raw",
                    redcap_event_name = NULL, batch_size = 1000,
                    records = NULL, fields = NULL, exclude_pii = TRUE,
-                   date_format = "ymd") {
+                   interview_date = NULL, date_format = "ymd") {
   start_time <- Sys.time()
   
   # Define the allowed superkey columns explicitly
@@ -511,6 +514,92 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
                       paste(pii_cols_present, collapse = ", ")))
       df <- df[, !names(df) %in% pii_fields, drop = FALSE]
     }
+  }
+  
+  # Create a copy of the original dataframe to preserve original values
+  original_df <- df
+  
+  # Advanced date parsing function that handles multiple formats
+  parseAnyDate <- function(date_string) {
+    if (is.na(date_string) || is.null(date_string)) {
+      return(NA)
+    }
+    
+    # Try multiple date formats sequentially
+    date <- NULL
+    
+    # Try ISO format (YYYY-MM-DD)
+    if (grepl("^\\d{4}-\\d{1,2}-\\d{1,2}$", date_string)) {
+      date <- tryCatch(ymd(date_string), error = function(e) NULL)
+    } 
+    # Try US format (MM/DD/YYYY)
+    else if (grepl("^\\d{1,2}/\\d{1,2}/\\d{4}$", date_string)) {
+      date <- tryCatch(mdy(date_string), error = function(e) NULL)
+    } 
+    # Try European format (DD.MM.YYYY)
+    else if (grepl("^\\d{1,2}\\.\\d{1,2}\\.\\d{4}$", date_string)) {
+      date <- tryCatch(dmy(date_string), error = function(e) NULL)
+    }
+    # Try Canadian format (YYYY/MM/DD)
+    else if (grepl("^\\d{4}/\\d{1,2}/\\d{1,2}$", date_string)) {
+      date <- tryCatch(ymd(date_string), error = function(e) NULL)
+    }
+    # Try other format (DD-MM-YYYY)
+    else if (grepl("^\\d{1,2}-\\d{1,2}-\\d{4}$", date_string)) {
+      date <- tryCatch(dmy(date_string), error = function(e) NULL)
+    }
+    # Try abbreviated month name (15-Jan-2023 or Jan 15, 2023)
+    else if (grepl("[A-Za-z]", date_string)) {
+      date <- tryCatch(parse_date_time(date_string, c("dmy", "mdy")), error = function(e) NULL)
+    }
+    
+    # If all attempts fail, return NA
+    if (is.null(date) || all(is.na(date))) {
+      warning("Failed to parse date: ", date_string, ". Treating as NA.")
+      return(NA)
+    }
+    
+    return(as.Date(date))
+  }
+  
+  # Handle interview_date filtering
+  if ("interview_date" %in% names(df)) {
+    # Create a temporary date column for filtering but don't modify the original
+    df$temp_date <- sapply(df$interview_date, parseAnyDate)
+    
+    # Handle the interview_date parameter
+    if (!is.null(interview_date)) {
+      if (is.logical(interview_date) && interview_date == TRUE) {
+        # Keep only rows with non-NA interview_date values
+        rows_to_keep <- !is.na(df$temp_date)
+        df <- df[rows_to_keep, ]
+        original_df <- original_df[rows_to_keep, ]
+      } else if (is.character(interview_date) || inherits(interview_date, "Date")) {
+        # Filter by specific date
+        input_date <- tryCatch({
+          if (inherits(interview_date, "Date")) {
+            interview_date
+          } else {
+            parseAnyDate(interview_date)
+          }
+        }, error = function(e) {
+          stop("Failed to parse interview_date parameter: ", interview_date)
+        })
+        
+        if (is.na(input_date)) {
+          stop("Failed to parse interview_date parameter: ", interview_date)
+        }
+        
+        rows_to_keep <- df$temp_date <= input_date
+        df <- df[rows_to_keep, ]
+        original_df <- original_df[rows_to_keep, ]
+      } else {
+        stop("interview_date must be either a date string or TRUE")
+      }
+    }
+    
+    # Remove the temporary date column
+    df$temp_date <- NULL
   }
   
   # Reorder columns to put superkey columns first
