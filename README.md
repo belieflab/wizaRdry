@@ -171,10 +171,10 @@ nda("demoses01", "lshrs01", "prl01")
 to.csv(df, "data_export")
 
 # Create R data file
-to.rda(df, "data_export")
+to.rds(df, "data_export")
 
 # Create SPSS file
-to.sps(df, "data_export")
+to.sav(df, "data_export")
 ```
 
 ## Workflows
