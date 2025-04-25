@@ -22,7 +22,7 @@ install.packages("devtools")
 devtools::install_github("belieflab/wizaRdry")
 ```
 
-Once accepted on CRAN, you will be able to install the released version with:
+You can install the latest published version from CRAN with:
 
 ```r
 install.packages("wizaRdry")
