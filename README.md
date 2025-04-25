@@ -147,9 +147,8 @@ Cleaning scripts are written inside the `clean/` directory and called by their s
 
 ```r
 # Filter data
-filtered_data <- sift(df, 
-                           rows = c("sub001","sub002"),
-                           cols = c("src_subject_id", "phenotype"))
+filtered_data <- sift(df, rows = c("sub001","sub002"),
+                          cols = c("src_subject_id", "phenotype"))
 
 # Merge datasets
 merged_data <- meld(demo_clean, rgpts_clean) 
@@ -176,9 +175,6 @@ to.rda(df, "data_export")
 
 # Create SPSS file
 to.sps(df, "data_export")
-
-# Create NDA submission template
-to.nda(eefrt01)
 ```
 
 ## Workflows
