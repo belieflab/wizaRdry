@@ -92,8 +92,8 @@ to.csv <- function(df, df_name = NULL, path = ".", skip_prompt = FALSE) {
     }
     
     if (tolower(response) == "n") {
-      # Instead of stopping with an error, return invisibly
-      return(invisible(NULL))
+      message(".csv creation cancelled.")
+      invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
   

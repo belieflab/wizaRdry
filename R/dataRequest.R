@@ -92,7 +92,9 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = F
     if (length(invalid_scripts) > 0) {
       # If skip_prompt is TRUE or user has previously set auto_clean to TRUE, bypass the prompt
       if (!skip_prompt && !user_prefs$auto_clean) {
-        response <- readline(prompt = sprintf("Would you like to create cleaning scripts for %s now? y/n ",
+        script_word <- ifelse(length(invalid_scripts) > 1, "scripts", "script")
+        response <- readline(prompt = sprintf("Would you like to create cleaning %s for %s now? y/n ",
+                                              script_word,
                                               paste(invalid_scripts, collapse = ", ")))
         
         while (!tolower(response) %in% c("y", "n")) {
@@ -115,8 +117,8 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = F
         }
         
         if (tolower(response) == "n") {
-          # Instead of stopping with an error, return invisibly
-          return(invisible(NULL))
+          message("Cleaning script creation cancelled.")
+          invokeRestart("abort")  # This exits without the "Error:" prefix
         }
       }
       

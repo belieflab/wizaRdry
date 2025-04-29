@@ -93,8 +93,8 @@ to.rds <- function(df, df_name = NULL, path = ".", skip_prompt = FALSE) {
     }
     
     if (tolower(response) == "n") {
-      # Instead of stopping with an error, return invisibly
-      return(invisible(NULL))
+      message(".rds creation cancelled.")
+      invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
   

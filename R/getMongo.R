@@ -378,7 +378,11 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
   }
   
   # Collect results using efficient future_lapply
-  results <- future.apply::future_lapply(future_results, future::value)
+  # doesn't work with sing for some reason
+  # results <- future.apply::future_lapply(future_results, future::value)
+  
+  # OLD version (works with sing/ch):
+  results <- lapply(future_results, future::value)
   
   # Combine results
   df <- dplyr::bind_rows(results)

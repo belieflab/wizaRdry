@@ -98,8 +98,8 @@ to.nda <- function(df, path = ".", skip_prompt = FALSE) {
     }
     
     if (tolower(response) == "n") {
-      # Instead of stopping with an error, return invisibly
-      return(invisible(NULL))
+      message("NDA submission template creation cancelled.")
+      invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
   

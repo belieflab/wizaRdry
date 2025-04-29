@@ -92,8 +92,12 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     if (length(invalid_structures) > 0) {
       # If skip_prompt is TRUE or user has previously set auto_nda to TRUE, bypass the prompt
       if (!skip_prompt && !user_prefs$auto_nda) {
-        response <- readline(prompt = sprintf("Would you like to create NDA templates for %s now? y/n ",
+        
+        template_word <- ifelse(length(invalid_structures) > 1, "templates", "template")
+        response <- readline(prompt = sprintf("Would you like to create NDA submission %s for %s now? y/n ",
+                                              template_word,
                                               paste(invalid_structures, collapse = ", ")))
+     
         
         while (!tolower(response) %in% c("y", "n")) {
           response <- readline(prompt = "Please enter either y or n: ")
@@ -115,8 +119,8 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
         }
         
         if (tolower(response) == "n") {
-          # Instead of stopping with an error, return invisibly
-          return(invisible(NULL))
+          message("NDA submission template script creation cancelled.")
+          invokeRestart("abort")  # This exits without the "Error:" prefix
         }
       }
       
