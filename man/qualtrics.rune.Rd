@@ -4,12 +4,22 @@
 \alias{qualtrics.rune}
 \title{Parse composite Qualtrics survey into component data frames by variable prefix}
 \usage{
-qualtrics.rune(qualtrics_alias, label = FALSE, lower = TRUE)
+qualtrics.rune(
+  qualtrics_alias,
+  institution = NULL,
+  label = FALSE,
+  interview_date = NULL,
+  lower = TRUE
+)
 }
 \arguments{
 \item{qualtrics_alias}{Character string specifying the Qualtrics survey alias to retrieve.}
 
+\item{institution}{Character string; default NULL, specify location}
+
 \item{label}{Logical; default TRUE, returns coded values as labels instead of raw values.}
+
+\item{interview_date}{Logical or Date String, returns all data before date}
 
 \item{lower}{default TRUE convert prefixes to lower case}
 }

@@ -32,7 +32,7 @@ usethis::use_build_ignore("dev")
 
 
 # syncs all functions from dev (belieflab/api) to wizaRdry
-source("dev/sync.R")
+# source("dev/sync.R")
 
 # Generate documentation from roxygen comments
 devtools::document()
