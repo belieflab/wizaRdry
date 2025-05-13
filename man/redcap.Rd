@@ -13,7 +13,8 @@ redcap(
   fields = NULL,
   exclude_pii = TRUE,
   interview_date = NULL,
-  date_format = "ymd"
+  date_format = "ymd",
+  complete = NULL
 )
 }
 \arguments{
@@ -36,6 +37,8 @@ redcap(
 - A boolean TRUE to return only rows with non-NA interview_date values}
 
 \item{date_format}{Default ymd define date format for interview_date}
+
+\item{complete}{Option boolean TRUE will return only forms marked as complete in REDCap}
 }
 \value{
 A data frame containing the requested REDCap data

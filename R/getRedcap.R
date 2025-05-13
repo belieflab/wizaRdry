@@ -82,6 +82,7 @@ formatDuration <- function(duration) {
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
 #' @param date_format Default ymd define date format for interview_date
+#' @param complete Option boolean TRUE will return only forms marked as complete in REDCap
 #'
 #' @return A data frame containing the requested REDCap data
 #' @export
@@ -93,7 +94,7 @@ formatDuration <- function(duration) {
 redcap <- function(instrument_name = NULL, raw_or_label = "raw",
                    redcap_event_name = NULL, batch_size = 1000,
                    records = NULL, fields = NULL, exclude_pii = TRUE,
-                   interview_date = NULL, date_format = "ymd") {
+                   interview_date = NULL, date_format = "ymd", complete = NULL) {
   start_time <- Sys.time()
 
   # Define the allowed superkey columns explicitly
@@ -623,6 +624,47 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
 
   # Attach the instrument name as an attribute without an extra parameter
   attr(df, "redcap_instrument") <- instrument_name
+
+  # allow sort by complete
+  if (!is.null(instrument_name) && !is.null(complete)) {
+    # Construct the complete variable name based on instrument_name
+    complete_var <- paste0(instrument_name, "_complete")
+
+    # Check if the complete variable exists in the dataframe
+    if (complete_var %in% names(df)) {
+      # Check for NA values in the complete variable
+      na_counts <- sum(is.na(df[[complete_var]]))
+      if (na_counts > 0) {
+        message(sprintf("Note: Found %d rows with NA values in %s", na_counts, complete_var))
+      }
+
+      # If complete is TRUE, keep only complete records
+      # If complete is FALSE, keep only incomplete records
+      if (is.logical(complete)) {
+        if (complete) {
+          message("Filtering for complete records only...")
+          # Handle both raw (1) and label ("Complete") formats
+          if (raw_or_label == "raw") {
+            df <- df[df[[complete_var]] == 1, ]
+          } else {
+            df <- df[df[[complete_var]] == "Complete", ]
+          }
+        } else {
+          message("Filtering for incomplete records only...")
+          # Handle both raw (0) and label ("Incomplete") formats
+          if (raw_or_label == "raw") {
+            df <- df[df[[complete_var]] == 0, ]
+          } else {
+            df <- df[df[[complete_var]] == "Incomplete", ]
+          }
+        }
+      } else {
+        warning("The 'complete' parameter should be TRUE or FALSE. Ignoring filter.")
+      }
+    } else {
+      warning(paste0("Complete variable '", complete_var, "' not found in the dataset. Ignoring filter."))
+    }
+  }
 
   # Show duration
   end_time <- Sys.time()
