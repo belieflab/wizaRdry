@@ -13,19 +13,19 @@ The wizaRdry package provides a comprehensive data analysis framework specifical
 
 ## Installation
 
-You can install the latest development version from GitHub:
+You can install the latest published version from CRAN with:
+
+```r
+install.packages("wizaRdry")
+```
+
+Alternativley, you can install the latest development version from GitHub:
 
 ```r
 remove.packages("wizaRdry")
 rstudioapi::restartSession()
 install.packages("devtools")
 devtools::install_github("belieflab/wizaRdry")
-```
-
-You can install the latest published version from CRAN with:
-
-```r
-install.packages("wizaRdry")
 ```
 
 ## Getting Started
