@@ -16,28 +16,28 @@
 #' }
 qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interview_date = NULL) {
   # Load necessary source files
-  
+
   # Validate config
   cfg <- validate_config("qualtrics")
-  
+
   # Get secrets using get_secret() to keep it secret, keep it safe
   baseUrls <- get_secret("baseUrls")
   apiKeys <- get_secret("apiKeys")
-  
+
   # Get survey ID
   survey_id <- NULL
-  
+
   if (!is.null(institution)) {
     # Check if institution exists
     if (!(institution %in% names(cfg$qualtrics$survey_ids))) {
       stop(paste("Institution", institution, "not found in ./config.yml configuration."))
     }
-    
+
     # Check if survey exists in specified institution
     if (!(qualtrics_alias %in% names(cfg$qualtrics$survey_ids[[institution]]))) {
       stop(paste("Survey", qualtrics_alias, "not found in institution", institution))
     }
-    
+
     survey_id <- cfg$qualtrics$survey_ids[[institution]][[qualtrics_alias]]
   } else {
     # Search all institutions
@@ -50,22 +50,22 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
         break
       }
     }
-    
+
     if (!found) {
       stop(sprintf("Qualtrics survey '%s' not found in any institution.", qualtrics_alias))
     }
   }
-  
+
   message(sprintf("Retrieving '%s' survey from %s Qualtrics...", qualtrics_alias, institution))
-  
+
   # Connect to Qualtrics
   connectQualtrics()
-  
+
   # Show loading animation (if implemented)
   if (exists("show_loading_animation")) {
     show_loading_animation()
   }
-  
+
   # Fetch the data
   df <- qualtRics::fetch_survey(
     surveyID = survey_id,
@@ -74,34 +74,34 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
     convert = label,
     add_column_map = TRUE
   )
-  
+
   if (!is.data.frame(df)) {
     stop(paste("fetch_survey did not return a data frame for", qualtrics_alias))
   }
-  
+
   # Get identifier from config
   identifier <- cfg$identifier
-  
+
   # Create a copy of the original dataframe to preserve original values
   original_df <- df
-  
+
   # Advanced date parsing function that handles multiple formats
   parseAnyDate <- function(date_string) {
     if (is.na(date_string) || is.null(date_string)) {
       return(NA)
     }
-    
+
     # Try multiple date formats sequentially
     date <- NULL
-    
+
     # Try ISO format (YYYY-MM-DD)
     if (grepl("^\\d{4}-\\d{1,2}-\\d{1,2}$", date_string)) {
       date <- tryCatch(ymd(date_string), error = function(e) NULL)
-    } 
+    }
     # Try US format (MM/DD/YYYY)
     else if (grepl("^\\d{1,2}/\\d{1,2}/\\d{4}$", date_string)) {
       date <- tryCatch(mdy(date_string), error = function(e) NULL)
-    } 
+    }
     # Try European format (DD.MM.YYYY)
     else if (grepl("^\\d{1,2}\\.\\d{1,2}\\.\\d{4}$", date_string)) {
       date <- tryCatch(dmy(date_string), error = function(e) NULL)
@@ -118,21 +118,21 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
     else if (grepl("[A-Za-z]", date_string)) {
       date <- tryCatch(parse_date_time(date_string, c("dmy", "mdy")), error = function(e) NULL)
     }
-    
+
     # If all attempts fail, return NA
     if (is.null(date) || all(is.na(date))) {
       warning("Failed to parse date: ", date_string, ". Treating as NA.")
       return(NA)
     }
-    
+
     return(as.Date(date))
   }
-  
+
   # Handle interview_date filtering
   if ("interview_date" %in% names(df)) {
     # Create a temporary date column for filtering but don't modify the original
     df$temp_date <- sapply(df$interview_date, parseAnyDate)
-    
+
     # Handle the interview_date parameter
     if (!is.null(interview_date)) {
       if (is.logical(interview_date) && interview_date == TRUE) {
@@ -151,26 +151,27 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
         }, error = function(e) {
           stop("Failed to parse interview_date parameter: ", interview_date)
         })
-        
+
         if (is.na(input_date)) {
           stop("Failed to parse interview_date parameter: ", interview_date)
         }
-        
-        rows_to_keep <- df$temp_date <= input_date
+
+        # If we're here with a valid date, keep rows with dates before or equal to input_date
+        rows_to_keep <- !is.na(df$temp_date) & df$temp_date <= input_date
         df <- df[rows_to_keep, ]
         original_df <- original_df[rows_to_keep, ]
       } else {
         stop("interview_date must be either a date string or TRUE")
       }
     }
-    
-    # Remove the temporary date column
+
+    # Remove temporary column after filtering
     df$temp_date <- NULL
   }
-  
+
   # Harmonize the data
   clean_df <- qualtricsHarmonization(df, identifier, qualtrics_alias)
-  
+
   # List of allowed superkey columns to prioritize
   allowed_superkey_cols <- c(
     "record_id",
@@ -196,25 +197,25 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
     "visit",
     "week"
   )
-  
+
   # Reorder columns to have superkeys first
   if (is.data.frame(clean_df) && ncol(clean_df) > 0) {
     # Identify which superkey columns are actually in the data
     present_superkeys <- intersect(allowed_superkey_cols, names(clean_df))
-    
+
     # Get all other columns (non-superkeys)
     other_cols <- setdiff(names(clean_df), present_superkeys)
-    
+
     # If there are matching superkeys, reorder the columns
     if (length(present_superkeys) > 0) {
       # Create new column order with superkeys first, then other columns
       new_order <- c(present_superkeys, other_cols)
-      
+
       # Reorder the dataframe
       clean_df <- clean_df[, new_order, drop = FALSE]
     }
   }
-  
+
   return(clean_df)
 }
 
@@ -233,20 +234,20 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
 connectQualtrics <- function() {
   # Validate secrets
   validate_secrets("qualtrics")
-  
+
   # Get secrets using get_secret() to keep it secret, keep it safe
   baseUrls <- get_secret("baseUrls")
   apiKeys <- get_secret("apiKeys")
-  
-  
+
+
   if (!exists("apiKeys") || !exists("baseUrls")) {
     stop("apiKeys and/or baseUrls arrays not found in secrets.R")
   }
-  
+
   if (length(apiKeys) != length(baseUrls)) {
     stop("apiKeys and baseUrls arrays must have the same length.")
   }
-  
+
   # Suppress messages about .Renviron
   suppressMessages({
     for (i in seq_along(apiKeys)) {
@@ -258,12 +259,12 @@ connectQualtrics <- function() {
           install = TRUE,
           overwrite = TRUE
         )
-        
+
         # If credentials were set successfully, also read them into current session
         if (file.exists("~/.Renviron")) {
           readRenviron("~/.Renviron")
         }
-        
+
         return(TRUE)
       }, error = function(e) {
         if (i == length(apiKeys)) {
@@ -288,38 +289,38 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
   if (!is.data.frame(df)) {
     stop("Input to qualtricsHarmonization is not a data frame.")
   }
-  
+
   # Validate config
   cfg <- validate_config("qualtrics")
-  
+
   # Check for visit variable, if not add baseline
   `%!in%` <- Negate(`%in%`)
   if ("visit" %!in% colnames(df) && cfg$study_alias == 'capr') {
     df$visit <- "bl"
   }
-  
+
   # If visit variable exists, standardize values
   if ("visit" %in% colnames(df) && cfg$study_alias == 'capr') {
-    df$visit <- ifelse(is.na(df$visit), "bl", 
-                       ifelse(df$visit == "0", "bl", 
-                              ifelse(df$visit == "12", "12m", 
+    df$visit <- ifelse(is.na(df$visit), "bl",
+                       ifelse(df$visit == "0", "bl",
+                              ifelse(df$visit == "12", "12m",
                                      ifelse(df$visit == "24", "24m", df$visit))))
   }
-  
+
   # Additional processing can be uncommented and modified as needed
   # df$src_subject_id <- as.numeric(df$src_subject_id)
   # df$interview_date <- as.Date(df$interview_date, "%m/%d/%Y")
   # df$measure <- qualtrics_alias
-  
+
   # convert dates (from string ("m/d/Y") to iso date format)
   if ("interview_date" %in% colnames(df)) {
     df$interview_date <- parse_dates_to_iso(df$interview_date, "interview_date")
   }
-  
+
   suppressWarnings(return(df))
 }
 
-#' Display table of available Qualtrics surveys 
+#' Display table of available Qualtrics surveys
 #'
 #' Retrieves a list of all available surveys in the configured Qualtrics account.
 #'
@@ -329,7 +330,7 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
 #' @return A data frame containing the IDs and names of all available surveys
 #'   in the configured Qualtrics account. Can be used to identify surveys for
 #'   further data retrieval.
-#'   
+#'
 #' @export
 qualtrics.index <- function(institution = NULL) {
   # Temporarily suppress warnings
@@ -337,36 +338,36 @@ qualtrics.index <- function(institution = NULL) {
 
   tryCatch({
     # Load necessary source files for helper functions
-    
+
     # Load required secrets and configuration
     validate_secrets("qualtrics")
-    
+
     # Get secrets using get_secret() to keep it secret, keep it safe
     baseUrls <- get_secret("baseUrls")
     apiKeys <- get_secret("apiKeys")
-    
+
     cfg <- validate_config("qualtrics")
-    
+
     # Connect to Qualtrics using the existing helper function
     connectQualtrics()
-    
+
     # Get all surveys
     message("Fetching available Qualtrics surveys...")
     surveys <- qualtRics::all_surveys()
-    
+
     # Filter by institution if specified
     if (!is.null(institution) && !is.null(cfg$qualtrics$survey_ids)) {
       if (institution %in% names(cfg$qualtrics$survey_ids)) {
         # Extract the survey IDs for the specified institution
         inst_surveys <- cfg$qualtrics$survey_ids[[institution]]
-        
+
         # Create a mapping of configured surveys for this institution
         configured_surveys <- data.frame(
           id = unlist(inst_surveys),
           alias = names(inst_surveys),
           stringsAsFactors = FALSE
         )
-        
+
         # Filter and merge with alias information
         surveys <- merge(surveys, configured_surveys, by = "id", all.y = TRUE)
         message(paste0("Filtered to ", nrow(surveys), " surveys from institution '", institution, "'"))
@@ -381,7 +382,7 @@ qualtrics.index <- function(institution = NULL) {
         institution = character(0),
         stringsAsFactors = FALSE
       )
-      
+
       for (inst in names(cfg$qualtrics$survey_ids)) {
         inst_surveys <- cfg$qualtrics$survey_ids[[inst]]
         if (length(inst_surveys) > 0) {
@@ -394,18 +395,18 @@ qualtrics.index <- function(institution = NULL) {
           all_mapped_surveys <- rbind(all_mapped_surveys, inst_df)
         }
       }
-      
+
       # Merge with the surveys data
       if (nrow(all_mapped_surveys) > 0) {
         surveys <- merge(surveys, all_mapped_surveys, by = "id", all = TRUE)
       }
     }
-    
+
     # Format the output
     if (nrow(surveys) > 0) {
       # Sort by name for easier reading
       surveys <- surveys[order(surveys$name), ]
-      
+
       # Create output table
       if ("alias" %in% colnames(surveys)) {
         if ("institution" %in% colnames(surveys)) {
@@ -437,27 +438,27 @@ qualtrics.index <- function(institution = NULL) {
           stringsAsFactors = FALSE
         )
       }
-      
+
       # Print the results in a user-friendly format
       message(paste0("\nFound ", nrow(result), " Qualtrics surveys:"))
       print(result, row.names = TRUE)
-      
+
       # Restore previous warning setting
       options(old_warn)
-      
+
       return(invisible(surveys))
     } else {
       message("No surveys found.")
-      
+
       # Restore previous warning setting
       options(old_warn)
-      
+
       return(invisible(NULL))
     }
   }, error = function(e) {
     # Restore previous warning setting before stopping
     options(old_warn)
-    
+
     stop(paste("Error connecting to Qualtrics:", e$message))
   })
 }
@@ -475,29 +476,29 @@ qualtrics.index <- function(institution = NULL) {
 qualtrics.dict <- function(survey_alias, exclude_embedded = TRUE) {
   # First handle the case of a non-existent variable being passed without quotes
   var_name <- NULL
-  
+
   # Only try to get the name if survey_alias is missing
   if (missing(survey_alias)) {
     stop("Survey alias is required")
   }
-  
+
   # Capture the actual call
   call_expr <- substitute(survey_alias)
-  
+
   # Check if it's a symbol (variable name) that doesn't exist
   if (is.symbol(call_expr) && !exists(as.character(call_expr))) {
     var_name <- as.character(call_expr)
     message(sprintf("Object '%s' not found, using as survey alias instead.", var_name))
     survey_alias <- var_name
   }
-  
+
   # Now proceed with normal function logic
-  
+
   # Check if input is a data frame
   if (is.data.frame(survey_alias)) {
     # Input is already a data frame, use it directly
     colmap <- qualtRics::extract_colmap(respdata = survey_alias)
-    
+
     # Filter to include only QID fields
     if (exclude_embedded && !is.null(colmap)) {
       if ("ImportId" %in% names(colmap)) {
@@ -506,21 +507,21 @@ qualtrics.dict <- function(survey_alias, exclude_embedded = TRUE) {
         colmap <- colmap[!is.na(colmap$qid) & grepl("^QID", colmap$qid), ]
       }
     }
-    
+
     return(colmap)
   }
-  
+
   # Input is a string
   if (is.character(survey_alias)) {
     # First, check if it's a variable name in the global environment
     if (exists(survey_alias)) {
       var_data <- base::get(survey_alias)
-      
+
       # Check if the variable is a data frame
       if (is.data.frame(var_data)) {
         message(sprintf("Using existing data frame '%s' from environment.", survey_alias))
         colmap <- qualtRics::extract_colmap(respdata = var_data)
-        
+
         # Filter to include only QID fields
         if (exclude_embedded && !is.null(colmap)) {
           if ("ImportId" %in% names(colmap)) {
@@ -529,14 +530,14 @@ qualtrics.dict <- function(survey_alias, exclude_embedded = TRUE) {
             colmap <- colmap[!is.na(colmap$qid) & grepl("^QID", colmap$qid), ]
           }
         }
-        
+
         return(colmap)
       }
     }
-    
+
     # Not a variable or not a data frame, treat as survey alias
     message(sprintf("Fetching dictionary for alias '%s' from Qualtrics.", survey_alias))
-    
+
     # Temporarily suppress warnings and disable progress bars
     old_warn <- options("warn")
     old_opt <- options(qualtRics.progress = FALSE)
@@ -545,7 +546,7 @@ qualtrics.dict <- function(survey_alias, exclude_embedded = TRUE) {
     # Get survey data with suppressed output
     survey_data <- suppressMessages(wizaRdry::qualtrics(survey_alias))
     colmap <- qualtRics::extract_colmap(respdata = survey_data)
-    
+
     # Filter to include only QID fields
     if (exclude_embedded && !is.null(colmap)) {
       if ("ImportId" %in% names(colmap)) {
@@ -554,10 +555,10 @@ qualtrics.dict <- function(survey_alias, exclude_embedded = TRUE) {
         colmap <- colmap[!is.na(colmap$qid) & grepl("^QID", colmap$qid), ]
       }
     }
-    
+
     return(colmap)
   }
-  
+
   # Invalid input type
   stop("Input must be either a data frame or a string (survey alias or variable name).")
 }
@@ -576,28 +577,28 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
   if (is.null(date_vector) || length(date_vector) == 0) {
     return(date_vector)
   }
-  
+
   # Skip if already in Date format
   if (inherits(date_vector, "Date")) {
     return(date_vector)
   }
-  
+
   # If already a POSIXct or POSIXlt, convert to Date
   if (inherits(date_vector, "POSIXt")) {
     return(as.Date(date_vector))
   }
-  
+
   # Convert to character if not already
   date_vector <- as.character(date_vector)
-  
+
   # Remove any NA values for analysis
   non_na_dates <- date_vector[!is.na(date_vector) & date_vector != ""]
-  
+
   if (length(non_na_dates) == 0) {
     # All NA or empty, just return a vector of NAs
     return(as.Date(date_vector))
   }
-  
+
   # Define a set of possible date formats to try
   possible_formats <- c(
     # American formats
@@ -607,36 +608,36 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
     # Other common formats
     "dmy", "dmY", "d/m/y", "d/m/Y", "d-m-y", "d-m-Y",
     # Month name formats
-    "mdy_b", "mdY_b", "b_d_y", "b_d_Y", 
-    "dmy_b", "dmY_b", "d_b_y", "d_b_Y", 
+    "mdy_b", "mdY_b", "b_d_y", "b_d_Y",
+    "dmy_b", "dmY_b", "d_b_y", "d_b_Y",
     "ymd_b", "Ymd_b", "y_b_d", "Y_b_d"
   )
-  
+
   # Try to detect the date format
   tryCatch({
     # Sample the first few non-NA dates to guess format
     sample_size <- min(100, length(non_na_dates))
     sample_dates <- non_na_dates[1:sample_size]
-    
+
     # Try parsing with each format and keep track of success rate
     format_success <- numeric(length(possible_formats))
-    
+
     for (i in seq_along(possible_formats)) {
       parsed_dates <- suppressWarnings(
         lubridate::parse_date_time(sample_dates, possible_formats[i], quiet = TRUE)
       )
       format_success[i] <- sum(!is.na(parsed_dates)) / length(sample_dates)
     }
-    
+
     # Find the format with the highest success rate
     best_format_idx <- which.max(format_success)
     best_format <- possible_formats[best_format_idx]
-    
+
     # If the best format doesn't parse at least 50% of dates, try combo of top formats
     if (format_success[best_format_idx] < 0.5) {
       # Get top 3 formats
       top_formats <- possible_formats[order(format_success, decreasing = TRUE)[1:3]]
-      
+
       # Try parsing with these formats
       parsed_dates <- suppressWarnings(
         lubridate::parse_date_time(date_vector, top_formats, quiet = TRUE)
@@ -647,26 +648,26 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
         lubridate::parse_date_time(date_vector, best_format, quiet = TRUE)
       )
     }
-    
+
     # Convert to Date class
     result <- as.Date(parsed_dates)
-    
+
     # Basic validation: check for impossibly old dates (before 1900) or future dates
     result[result < as.Date("1900-01-01") | result > Sys.Date() + 30] <- NA
-    
+
     # Log stats about parsing
     success_rate <- sum(!is.na(result)) / length(date_vector) * 100
-    message(sprintf("Parsed %s: %.1f%% successful using %s format", 
-                    column_name, success_rate, 
-                    ifelse(format_success[best_format_idx] < 0.5, 
+    message(sprintf("Parsed %s: %.1f%% successful using %s format",
+                    column_name, success_rate,
+                    ifelse(format_success[best_format_idx] < 0.5,
                            paste(top_formats, collapse=", "), best_format)))
-    
+
     return(result)
   }, error = function(e) {
     # Fallback: try base R's as.Date with common formats
     warning(sprintf("Advanced date parsing failed for %s: %s. Falling back to basic parsing.",
                     column_name, e$message))
-    
+
     fallback_formats <- c("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")
     for (fmt in fallback_formats) {
       parsed <- suppressWarnings(as.Date(date_vector, format = fmt))
@@ -675,7 +676,7 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
         return(parsed)
       }
     }
-    
+
     # If all else fails, return NA
     warning(sprintf("All date parsing methods failed for %s", column_name))
     return(as.Date(rep(NA, length(date_vector))))

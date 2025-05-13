@@ -14,31 +14,31 @@ getAvailableMemory <- function() {
             if (is.na(total)) return(NULL)
             total / (1024^3)  # Convert to GB
           }, error = function(e) NULL)
-          
+
           avail_mem <- tryCatch({
             # Get multiple memory metrics for better available memory calculation
             mem_info <- system('wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /Value', intern = TRUE)
-            
+
             # Extract free physical memory
             free_line <- grep("FreePhysicalMemory=", mem_info, value = TRUE)
             if (length(free_line) == 0) return(NULL)
             free_mem <- as.numeric(sub("FreePhysicalMemory=", "", free_line))
             if (is.na(free_mem)) return(NULL)
-            
+
             # Get total visible memory for percentage calculation
             total_line <- grep("TotalVisibleMemorySize=", mem_info, value = TRUE)
             if (length(total_line) == 0) return(NULL)
             total_visible <- as.numeric(sub("TotalVisibleMemorySize=", "", total_line))
             if (is.na(total_visible)) return(NULL)
-            
+
             # Convert KB to GB and add 20% buffer for cached memory
             available <- (free_mem / (1024^2)) * 1.2
-            
+
             # Sanity check - don't return more than 90% of total memory
             max_available <- (total_visible / (1024^2)) * 0.9
             min(available, max_available)
           }, error = function(e) NULL)
-          
+
           # Return both metrics, with NULL handling
           return(list(
             total = if (is.null(total_mem)) NULL else round(total_mem, 1),
@@ -50,28 +50,28 @@ getAvailableMemory <- function() {
         mem_info <- system("sysctl hw.memsize", intern = TRUE)
         as.numeric(strsplit(mem_info, " ")[[1]][2]) / (1024^3)
       }, error = function(e) NULL)
-      
+
       # More accurate available memory detection for Mac
       avail_mem <- tryCatch({
         vm_stat <- system("vm_stat", intern = TRUE)
         page_size <- 4096  # Default page size for Mac
-        
+
         # Extract different memory stats
         get_pages <- function(pattern) {
           line <- grep(pattern, vm_stat, value = TRUE)
           as.numeric(sub(".*: *(\\d+).*", "\\1", line))
         }
-        
+
         free_pages <- get_pages("Pages free:")
         inactive_pages <- get_pages("Pages inactive:")
         purgeable_pages <- get_pages("Pages purgeable:")
         cached_pages <- get_pages("File-backed pages:")
-        
+
         # Calculate available memory including cache and purgeable
         total_available_pages <- free_pages + inactive_pages + purgeable_pages + cached_pages
         (total_available_pages * page_size) / (1024^3)  # Convert to GB
       }, error = function(e) NULL)
-      
+
       return(list(
         total = total_mem,
         available = avail_mem
@@ -80,14 +80,14 @@ getAvailableMemory <- function() {
       # Linux
       if (file.exists("/proc/meminfo")) {
         mem_info <- readLines("/proc/meminfo")
-        
+
         # Helper function to extract memory values
         get_mem_value <- function(pattern) {
           line <- grep(pattern, mem_info, value = TRUE)
           value <- as.numeric(strsplit(line, "\\s+")[[1]][2])  # Get the number
           value / (1024^2)  # Convert KB to GB
         }
-        
+
         # Get all relevant memory metrics
         total_mem <- get_mem_value("MemTotal:")
         free_mem <- get_mem_value("MemFree:")
@@ -95,7 +95,7 @@ getAvailableMemory <- function() {
         cached_mem <- get_mem_value("Cached:")
         buffers_mem <- get_mem_value("Buffers:")
         slab_mem <- get_mem_value("SReclaimable:")  # Reclaimable kernel memory
-        
+
         # Calculate true available memory
         # MemAvailable is already calculated by kernel using a sophisticated algorithm
         # But we can fall back to our own calculation if needed
@@ -106,7 +106,7 @@ getAvailableMemory <- function() {
           # free + ((cached + buffers + slab) * 0.8)
           avail_mem <- free_mem + ((cached_mem + buffers_mem + slab_mem) * 0.8)
         }
-        
+
         return(list(
           total = total_mem,
           available = avail_mem
@@ -131,7 +131,7 @@ calculateResourceParams <- function(total_records, mem_info, num_cores) {
     chunk_size = 1000,
     workers = num_cores  # Use all cores by default
   )
-  
+
   # Adjust chunk size based on available memory
   if (!is.null(mem_info$available)) {
     if (mem_info$available < 4) {
@@ -144,15 +144,15 @@ calculateResourceParams <- function(total_records, mem_info, num_cores) {
       params$chunk_size <- 5000
     }
   }
-  
+
   # Adjust for very small datasets
   if (total_records < params$chunk_size * 2) {
     params$chunk_size <- max(500, floor(total_records / 2))
   }
-  
+
   # Calculate resulting chunks
   params$num_chunks <- ceiling(total_records / params$chunk_size)
-  
+
   return(params)
 }
 
@@ -194,7 +194,7 @@ completeLoadingAnimation <- function(pb) {
 }
 
 #' Format a time duration in a human-readable way
-#' 
+#'
 #' @name formatDuration
 #' @param duration The duration to format in seconds or minutes
 #' @return A formatted string representing the duration
@@ -243,34 +243,34 @@ formatDuration <- function(duration) {
 mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE, interview_date = NULL) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
-  
+
   # Setup cleanup on exit
   on.exit({
     disconnectMongo(Mongo)
   })
-  
+
   # Suppress MongoDB messages globally
   options(mongolite.quiet = TRUE)
-  
+
   # Get configuration
   cfg <- validate_config("mongo")
-  
+
   if (is.null(db_name)) {
     db_name <- cfg$mongo$collection
   }
-  
+
   # Validate identifier
   if (is.null(identifier)) {
     identifier <- cfg$identifier
   }
-  
+
   if (is.null(identifier) || any(identifier == "")) {
     stop("No identifier specified in the config file.")
   }
-  
+
   # Try connecting - will now throw explicit error if collection doesn't exist
   Mongo <- ConnectMongo(collection_name, db_name)
-  
+
   # Find valid identifier
   if (is.null(identifier)) {
     for (key in trimws(strsplit(identifier, ",")[[1]])) {
@@ -281,20 +281,20 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
       }
     }
   }
-  
+
   if (is.null(identifier)) {
     stop("No valid identifier found in the collection.")
   }
-  
+
   # Get total records
   query_json <- sprintf('{"%s": {"$ne": ""}}', identifier)
   total_records <- Mongo$count(query_json)
-  
+
   # Get and display system resources
   mem_info <- getAvailableMemory()
   num_cores <- parallel::detectCores(logical = TRUE)
   workers <- num_cores
-  
+
   # Display system info
   if (!is.null(mem_info$total)) {
     message(sprintf("System resources: %.0fGB RAM, %d-core CPU",
@@ -302,14 +302,14 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
   } else {
     message(sprintf("System resources: %d-core CPU.", num_cores))
   }
-  
+
   # Calculate parameters once
   params <- calculateResourceParams(total_records, mem_info, num_cores)
-  
+
   if (!is.null(mem_info$available)) {
     message(sprintf("Memory available: %.0fGB RAM", mem_info$available))
   }
-  
+
   # Adjust chunk size based on memory
   if (is.null(chunk_size)) {  # Only if not manually specified
     if (!is.null(mem_info$available)) {
@@ -326,25 +326,25 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
       chunk_size <- 1000  # Conservative default
     }
   }
-  
+
   message(sprintf("Processing: %d chunks x %d records in parallel (%d workers)",
                   params$num_chunks, params$chunk_size, params$workers))
-  
+
   # Setup chunks
   num_chunks <- ceiling(total_records / chunk_size)
   chunks <- createChunks(total_records, chunk_size)
-  
+
   # Setup parallel processing with quiet connections
   plan(future::multisession, workers = workers)
-  
+
   # Progress message
   message(sprintf("\nImporting %s records from %s/%s into dataframe...",
                   formatC(total_records, format = "d", big.mark = ","),
                   db_name, collection_name))
-  
+
   # Initialize custom progress bar
   pb <- initializeLoadingAnimation(num_chunks)
-  
+
   # Process chunks
   future_results <- vector("list", length(chunks))
   for (i in seq_along(chunks)) {
@@ -352,13 +352,13 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
       temp <- tempfile()
       sink(temp)
       chunk_mongo <- NULL  # Initialize connection variable
-      
+
       on.exit({
         sink()
         unlink(temp)
         disconnectMongo(chunk_mongo)  # Cleanup connection in worker
       })
-      
+
       tryCatch({
         chunk_mongo <- ConnectMongo(collection_name, db_name)
         batch_info <- chunks[[i]]
@@ -376,22 +376,22 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
     })
     updateLoadingAnimation(pb, i)
   }
-  
+
   # Collect results using efficient future_lapply
   # doesn't work with sing for some reason
   # results <- future.apply::future_lapply(future_results, future::value)
-  
+
   # OLD version (works with sing/ch):
   results <- lapply(future_results, future::value)
-  
+
   # Combine results
   df <- dplyr::bind_rows(results)
   completeLoadingAnimation(pb)
-  
+
   # Handle interview_date filtering if needed
   if (!is.null(interview_date) && "interview_date" %in% names(df)) {
     message("Filtering by interview date...", appendLF = FALSE)
-    
+
     # Convert dates only once for the whole dataframe - much more efficient
     if (!inherits(df$interview_date, "Date")) {
       df$interview_date <- parse_dates_to_iso(df$interview_date, "interview_date")
@@ -399,12 +399,12 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
     } else {
       message(" using existing Date format.")
     }
-    
+
     # Apply the filter based on the parameter type
     if (is.logical(interview_date) && interview_date) {
       # Keep only non-NA interview dates
       df <- df[!is.na(df$interview_date), ]
-      
+
     } else if (is.character(interview_date) || inherits(interview_date, "Date")) {
       # Parse the cutoff date once
       if (is.character(interview_date)) {
@@ -415,17 +415,18 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
       } else {
         cutoff_date <- interview_date
       }
-      
+
       # Keep only rows with dates up to the cutoff
-      df <- df[df$interview_date <= cutoff_date, ]
+      # Make sure we only keep non-NA dates before or equal to the cutoff
+      df <- df[!is.na(df$interview_date) & df$interview_date <= cutoff_date, ]
     }
   }
-  
+
   # Harmonize data
   message(sprintf("Harmonizing data on %s...", identifier), appendLF = FALSE)  # Prevents line feed
   clean_df <- taskHarmonization(df, identifier, collection_name)
   message(sprintf("\rHarmonizing data on %s...done.", identifier))  # Overwrites the line with 'done'
-  
+
   # List of allowed superkey columns to prioritize
   allowed_superkey_cols <- c(
     "record_id",
@@ -451,30 +452,30 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
     "visit",
     "week"
   )
-  
+
   # Reorder columns to have superkeys first
   if (is.data.frame(clean_df) && ncol(clean_df) > 0) {
     # Identify which superkey columns are actually in the data
     present_superkeys <- intersect(allowed_superkey_cols, names(clean_df))
-    
+
     # Get all other columns (non-superkeys)
     other_cols <- setdiff(names(clean_df), present_superkeys)
-    
+
     # If there are matching superkeys, reorder the columns
     if (length(present_superkeys) > 0) {
       # Create new column order with superkeys first, then other columns
       new_order <- c(present_superkeys, other_cols)
-      
+
       # Reorder the dataframe
       clean_df <- clean_df[, new_order, drop = FALSE]
     }
   }
-  
+
   # Report execution time
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "secs")
   message(sprintf("\nData frame '%s' retrieved in %s.", collection_name, formatDuration(duration)))
-  
+
   return(clean_df)
 }
 
@@ -511,21 +512,21 @@ createChunks <- function(total_records, chunk_size) {
 ConnectMongo <- function(collection_name, db_name) {
   # Validate secrets
   validate_secrets("mongo")
-  
+
   config <- validate_config("mongo")
-  
+
   # Get secrets using get_secret() to keep it secret, keep it safe
   connectionString <- get_secret("connectionString")
-  
+
   if (is.null(db_name)) {
     db_name = config$mongo$collection
   }
   options <- ssl_options(weak_cert_validation = TRUE, key = "rds-combined-ca-bundle.pem")
-  
+
   # The key is to use sink() to capture and discard the messages
   temp <- tempfile()
   sink(temp)
-  
+
   # Create connection without specifying collection first
   base_connection <- mongolite::mongo(
     collection = collection_name, # This is a system collection that always exists
@@ -534,36 +535,36 @@ ConnectMongo <- function(collection_name, db_name) {
     verbose = FALSE,
     options = options
   )
-  
+
   # Check if the collection exists
   collections_list <- getCollectionsFromConnection(base_connection)
-  
+
   # Close the base connection
   base_connection$disconnect()
   sink()
   unlink(temp)
-  
+
   # Validate that collection exists
   if (!collection_name %in% collections_list) {
-    stop(sprintf("Collection '%s' does not exist in database '%s'. Available collections: %s", 
+    stop(sprintf("Collection '%s' does not exist in database '%s'. Available collections: %s",
                  collection_name, db_name, paste(collections_list, collapse=", ")))
   }
-  
+
   # If we get here, the collection exists - create normal connection
   sink(temp)
   on.exit({
     sink()
     unlink(temp)
   })
-  
+
   Mongo <- mongolite::mongo(
-    collection = collection_name, 
+    collection = collection_name,
     db = db_name,
     url = connectionString,
     verbose = FALSE,
     options = options
   )
-  
+
   return(Mongo)
 }
 
@@ -577,7 +578,7 @@ disconnectMongo <- function(mongo_conn) {
     temp <- tempfile()
     sink(file = temp, type = "output")
     sink(file = temp, type = "message")
-    
+
     # Try disconnect with warning suppression
     tryCatch({
       suppressWarnings({
@@ -596,7 +597,7 @@ disconnectMongo <- function(mongo_conn) {
 
 #' Retrieve Mongo Data
 #'
-#' Retrieves data from MongoDB based on the specified batch information and query criteria. 
+#' Retrieves data from MongoDB based on the specified batch information and query criteria.
 #' It filters out entries where the specified identifier doesn't exist or is empty.
 #'
 #' @param Mongo The MongoDB connection object.
@@ -613,11 +614,11 @@ getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
   # Check for both exists AND non-empty
   query_json <- sprintf('{"%s": {"$exists": true, "$ne": ""}}', identifier)
   if(verbose) message(paste("Using query:", query_json))
-  
+
   # Get initial data
   df <- Mongo$find(query = query_json, skip = batch_info$start, limit = batch_info$size)
   if(verbose) message(paste("Initial rows:", nrow(df)))
-  
+
   # Only proceed with filtering if we have data
   if (!is.null(df) && nrow(df) > 0) {
     # Print sample of data before filtering
@@ -625,11 +626,11 @@ getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
       message("Sample before filtering:")
       message(head(df[[identifier]]))
     }
-    
+
     # Apply both NA and empty string filtering
     df <- df[!is.na(df[[identifier]]) & df[[identifier]] != "", ]
     if(verbose) message(paste("Rows after complete filtering:", nrow(df)))
-    
+
     # Print sample after filtering
     if(verbose) {
       message("Sample after filtering:")
@@ -638,23 +639,23 @@ getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
   } else {
     if(verbose) message("No data found in initial query")
   }
-  
+
   return(df)
 }
 
 
 #' Task Data Harmonization Function
 #'
-#' This function performs data cleaning and preparation tasks, including handling missing values, 
-#' converting date formats, and adding necessary columns. It is tailored for a specific dataset 
+#' This function performs data cleaning and preparation tasks, including handling missing values,
+#' converting date formats, and adding necessary columns. It is tailored for a specific dataset
 #' structure used in psychological or medical research.
 #'
-#' @param df A data frame containing the data to be harmonized. 
-#' @param identifier A string that specifies the unique identifier for the dataset; 
+#' @param df A data frame containing the data to be harmonized.
+#' @param identifier A string that specifies the unique identifier for the dataset;
 #' it influences how date conversions and subsetting are handled.
 #' @param collection_name A string representing the specific collection that needs harmonization.
 #'
-#' @return A data frame with the harmonized data, including standardized 'visit' column entries, 
+#' @return A data frame with the harmonized data, including standardized 'visit' column entries,
 #' converted interview dates, and added 'measure' column based on the task.
 #'
 #' @examples
@@ -671,31 +672,31 @@ getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
 #' @importFrom stats setNames
 #' @noRd
 taskHarmonization <- function(df, identifier, collection_name) {
-  
+
   # Ensure 'visit' column exists and update it as necessary
   if (!("visit" %in% colnames(df))) {
     df$visit <- "bl"  # Add 'visit' column with all values as "bl" if it doesn't exist
   } else {
     df$visit <- ifelse(is.na(df$visit) | df$visit == "", "bl", df$visit)  # Replace empty or NA 'visit' values with "bl"
   }
-  
+
   # capr wants as.numeric
   # if (config$mongo$collection === "capr") {
   #   df$src_subject_id <- as.numeric(df$src_subject_id)
   # }
-  
+
   # convert dates (from string ("m/d/Y") to iso date format)
   if ("interview_date" %in% colnames(df)) {
     df$interview_date <- parse_dates_to_iso(df$interview_date, "interview_date")
   }
-  
+
   # add measure column
   # df$measure <- collection_name
-  
+
   return(df)
   # comment into add prefixes (will break code)
   #return(addPrefixToColumnss(df,collection_name))
-  
+
 }
 
 getCollectionsFromConnection <- function(mongo_connection) {
@@ -703,17 +704,17 @@ getCollectionsFromConnection <- function(mongo_connection) {
   return(collections$cursor$firstBatch$name)
 }
 
-#' Display table of available MongoDB collections 
-#' 
+#' Display table of available MongoDB collections
+#'
 #'
 #' Retrieves a list of all available collections in the configured MongoDB database.
 #'
-#' @param db_name Optional; the name of the database to connect to. If NULL, uses the database 
+#' @param db_name Optional; the name of the database to connect to. If NULL, uses the database
 #'   specified in the configuration file.
 #'
 #' @return A character vector containing the names of all available collections
 #'   in the configured MongoDB database.
-#'   
+#'
 #' @export
 mongo.index <- function(db_name = NULL) {
   # Temporarily suppress warnings
@@ -730,26 +731,26 @@ mongo.index <- function(db_name = NULL) {
       }
     )
   }
-  
+
   validate_secrets("mongo")
-  
+
   config <- validate_config("mongo")
-  
+
   # Get secrets using get_secret() to keep it secret, keep it safe
   connectionString <- get_secret("connectionString")
-  
+
   if (is.null(db_name)) {
     db_name = config$mongo$collection
   }
-  
+
   options <- ssl_options(weak_cert_validation = TRUE, key = "rds-combined-ca-bundle.pem")
-  
+
   # Create a temporary sink to capture MongoDB connection messages
   temp <- tempfile()
   sink(temp)
-  
+
   result <- NULL
-  
+
   # Create a direct connection to the database without specifying a collection
   tryCatch({
     # Use suppressSpecificWarning to handle the endSessions warning
@@ -762,33 +763,33 @@ mongo.index <- function(db_name = NULL) {
         verbose = FALSE,
         options = options
       )
-      
+
       # Get the list of collections
       collections <- base_connection$run('{"listCollections":1,"nameOnly":true}')
       result <- collections$cursor$firstBatch$name
-      
+
       # Try to disconnect with warning suppression
       suppressWarnings(base_connection$disconnect())
-      
+
       # Force garbage collection to clean up any lingering connections
       rm(base_connection)
       invisible(gc(verbose = FALSE))
     }, "endSessions")
-    
+
     sink()
     unlink(temp)
-    
+
     # Restore previous warning setting
     options(old_warn)
-    
+
     return(result)
   }, error = function(e) {
     sink()
     unlink(temp)
-    
+
     # Restore previous warning setting before stopping
     options(old_warn)
-    
+
     stop(paste("Error connecting to MongoDB:", e$message))
   })
 }
@@ -807,28 +808,28 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
   if (is.null(date_vector) || length(date_vector) == 0) {
     return(date_vector)
   }
-  
+
   # Skip if already in Date format
   if (inherits(date_vector, "Date")) {
     return(date_vector)
   }
-  
+
   # If already a POSIXct or POSIXlt, convert to Date
   if (inherits(date_vector, "POSIXt")) {
     return(as.Date(date_vector))
   }
-  
+
   # Convert to character if not already
   date_vector <- as.character(date_vector)
-  
+
   # Remove any NA values for analysis
   non_na_dates <- date_vector[!is.na(date_vector) & date_vector != ""]
-  
+
   if (length(non_na_dates) == 0) {
     # All NA or empty, just return a vector of NAs
     return(as.Date(date_vector))
   }
-  
+
   # Define a set of possible date formats to try
   possible_formats <- c(
     # American formats
@@ -838,36 +839,36 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
     # Other common formats
     "dmy", "dmY", "d/m/y", "d/m/Y", "d-m-y", "d-m-Y",
     # Month name formats
-    "mdy_b", "mdY_b", "b_d_y", "b_d_Y", 
-    "dmy_b", "dmY_b", "d_b_y", "d_b_Y", 
+    "mdy_b", "mdY_b", "b_d_y", "b_d_Y",
+    "dmy_b", "dmY_b", "d_b_y", "d_b_Y",
     "ymd_b", "Ymd_b", "y_b_d", "Y_b_d"
   )
-  
+
   # Try to detect the date format
   tryCatch({
     # Sample the first few non-NA dates to guess format
     sample_size <- min(100, length(non_na_dates))
     sample_dates <- non_na_dates[1:sample_size]
-    
+
     # Try parsing with each format and keep track of success rate
     format_success <- numeric(length(possible_formats))
-    
+
     for (i in seq_along(possible_formats)) {
       parsed_dates <- suppressWarnings(
         lubridate::parse_date_time(sample_dates, possible_formats[i], quiet = TRUE)
       )
       format_success[i] <- sum(!is.na(parsed_dates)) / length(sample_dates)
     }
-    
+
     # Find the format with the highest success rate
     best_format_idx <- which.max(format_success)
     best_format <- possible_formats[best_format_idx]
-    
+
     # If the best format doesn't parse at least 50% of dates, try combo of top formats
     if (format_success[best_format_idx] < 0.5) {
       # Get top 3 formats
       top_formats <- possible_formats[order(format_success, decreasing = TRUE)[1:3]]
-      
+
       # Try parsing with these formats
       parsed_dates <- suppressWarnings(
         lubridate::parse_date_time(date_vector, top_formats, quiet = TRUE)
@@ -878,26 +879,26 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
         lubridate::parse_date_time(date_vector, best_format, quiet = TRUE)
       )
     }
-    
+
     # Convert to Date class
     result <- as.Date(parsed_dates)
-    
+
     # Basic validation: check for impossibly old dates (before 1900) or future dates
     result[result < as.Date("1900-01-01") | result > Sys.Date() + 30] <- NA
-    
+
     # Log stats about parsing
     success_rate <- sum(!is.na(result)) / length(date_vector) * 100
-    message(sprintf("Parsed %s: %.1f%% successful using %s format", 
-                    column_name, success_rate, 
-                    ifelse(format_success[best_format_idx] < 0.5, 
+    message(sprintf("Parsed %s: %.1f%% successful using %s format",
+                    column_name, success_rate,
+                    ifelse(format_success[best_format_idx] < 0.5,
                            paste(top_formats, collapse=", "), best_format)))
-    
+
     return(result)
   }, error = function(e) {
     # Fallback: try base R's as.Date with common formats
     warning(sprintf("Advanced date parsing failed for %s: %s. Falling back to basic parsing.",
                     column_name, e$message))
-    
+
     fallback_formats <- c("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")
     for (fmt in fallback_formats) {
       parsed <- suppressWarnings(as.Date(date_vector, format = fmt))
@@ -906,7 +907,7 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
         return(parsed)
       }
     }
-    
+
     # If all else fails, return NA
     warning(sprintf("All date parsing methods failed for %s", column_name))
     return(as.Date(rep(NA, length(date_vector))))
