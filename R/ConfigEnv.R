@@ -2,7 +2,7 @@
 # Install config package if needed
 
 #' Configuration Environment Class
-#' 
+#'
 #' @importFrom R6 R6Class
 #' @noRd
 ConfigEnv <- R6::R6Class("ConfigEnv",
@@ -10,7 +10,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                            # Store configuration
                            config = NULL,
                            config_file = NULL,
-                           
+
                            # Define validation specs for each API
                            api_specs = list(
                              mongo = list(
@@ -24,50 +24,54 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              ),
                              sql = list(
                                required = c()  # Add required fields for SQL as needed
+                             ),
+                             missing_values = list(
+                               required = c(),  # No required fields - all are optional
+                               types = c("skipped", "refused", "unknown")  # Valid category types
                              )
                            ),
-                           
+
                            initialize = function(config_file = "config.yml") {
                              # Check if config file exists
                              if (!file.exists(config_file)) {
                                stop(config_file, " not found. Please create this file with the required API configurations.")
                              }
-                             
+
                              # Store the config file path
                              self$config_file <- config_file
-                             
+
                              # Load configuration
                              self$config <- config::get(file = config_file)
-                             
+
                              # Process variable substitutions
                              self$process_substitutions()
                            },
-                           
+
                            # Method to handle variable substitutions like ${study_alias}
                            process_substitutions = function() {
                              # Process mongo collection name if it references study_alias
                              if (!is.null(self$config$mongo) &&
                                  !is.null(self$config$mongo$collection) &&
                                  self$config$mongo$collection == "${study_alias}") {
-                               
+
                                if (!is.null(self$config$study_alias)) {
                                  self$config$mongo$collection <- self$config$study_alias
                                } else {
                                  warning("Cannot substitute ${study_alias} in mongo.collection: study_alias is not defined in config")
                                }
                              }
-                             
+
                              # Add more substitution rules as needed
                            },
-                           
+
                            # Get a specific configuration value
                            get_value = function(path) {
                              # Split the path by dots
                              parts <- strsplit(path, "\\.")[[1]]
-                             
+
                              # Start with the root config
                              result <- self$config
-                             
+
                              # Navigate through the path
                              for (part in parts) {
                                if (is.null(result) || !part %in% names(result)) {
@@ -75,53 +79,53 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                }
                                result <- result[[part]]
                              }
-                             
+
                              return(result)
                            },
-                           
+
                            # Check if a configuration value exists
                            has_value = function(path) {
                              !is.null(self$get_value(path))
                            },
-                           
+
                            # Check which APIs are configured
                            get_configured_apis = function() {
                              configured_apis <- character(0)
-                             
+
                              for (api_type in names(self$api_specs)) {
                                if (self$has_value(api_type)) {
                                  configured_apis <- c(configured_apis, api_type)
                                }
                              }
-                             
+
                              return(configured_apis)
                            },
-                           
+
                            # Validate specific API configuration
                            validate_config = function(api_type = NULL) {
                              # If no API type specified, validate core config
                              if (is.null(api_type)) {
                                return(self$validate_core_config())
                              }
-                             
+
                              # Check if the API type is supported
                              if (!api_type %in% names(self$api_specs)) {
                                stop("Unknown API type: '", api_type, "'. Valid options are: ",
                                     paste(names(self$api_specs), collapse=", "))
                              }
-                             
+
                              # Check if this API is actually configured
                              if (!self$has_value(api_type)) {
                                # If the API section doesn't exist, skip validation but return TRUE
                                # message("The '", api_type, "' section is not defined in config.yml, skipping validation.")
                                return(TRUE)
                              }
-                             
+
                              all_errors <- c()
-                             
+
                              # Get API specs
                              specs <- self$api_specs[[api_type]]
-                             
+
                              # Check required fields
                              for (field in specs$required) {
                                field_path <- paste0(api_type, ".", field)
@@ -129,7 +133,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                  all_errors <- c(all_errors, paste("Missing '", field, "' setting in the ", api_type, " section"))
                                }
                              }
-                             
+
                              # API-specific additional validations
                              if (api_type == "mongo") {
                                # Check if collection is empty after substitution
@@ -153,8 +157,50 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                # Any redcap-specific validations
                              } else if (api_type == "sql") {
                                # Any sql-specific validations
+                             } else if (api_type == "missing_values") {
+                               # Get the current missing_values configuration
+                               missing_value_config <- self$get_value("missing_values")
+
+                               # If any categories are defined, validate them
+                               if (!is.null(missing_value_config)) {
+                                 config_categories <- names(missing_value_config)
+
+                                 # Check that all provided categories are valid
+                                 unexpected_categories <- setdiff(config_categories, specs$types)
+                                 if (length(unexpected_categories) > 0) {
+                                   all_errors <- c(all_errors, paste0("Unexpected categories in missing_values: ",
+                                                                      paste(unexpected_categories, collapse=", "),
+                                                                      ". Allowed categories are: ",
+                                                                      paste(specs$types, collapse=", ")))
+                                 }
+
+                                 # For each provided category, check its values
+                                 for (category in intersect(config_categories, specs$types)) {
+                                   category_values <- self$get_value(paste0("missing_values.", category))
+
+                                   # Check if the category is a list or vector
+                                   if (!is.vector(category_values) && !is.list(category_values)) {
+                                     all_errors <- c(all_errors, paste0("The '", category, "' category must be a list or vector of values"))
+                                   }
+
+                                   # Check if the list has at least one value
+                                   if (length(category_values) == 0) {
+                                     all_errors <- c(all_errors, paste0("The '", category, "' category must contain at least one value"))
+                                   }
+                                 }
+
+                                 # Missing categories are ok - we'll use defaults
+                                 missing_categories <- setdiff(specs$types, config_categories)
+                                 if (length(missing_categories) > 0) {
+                                   message("Note: The following missing value categories are not defined and will use R's default NA: ",
+                                           paste(missing_categories, collapse=", "))
+                                 }
+                               } else {
+                                 # If missing_values section is completely empty, just inform the user
+                                 message("Note: No missing value categories defined. Default R NA values will be used for all missing value types.")
+                               }
                              }
-                             
+
                              # If we found any errors, report them all at once
                              if (length(all_errors) > 0) {
                                stop(api_type, " configuration errors in ", self$config_file, ":\n- ",
@@ -163,23 +209,23 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              # else {
                              #   message("The ", api_type, " configuration in ", self$config_file, " is valid.")
                              # }
-                             
+
                              return(TRUE)
                            },
-                           
+
                            # Validate core configuration
                            validate_core_config = function() {
                              all_errors <- c()
-                             
+
                              # Check required global fields
                              required_fields <- c("study_alias", "identifier")
-                             
+
                              for (field in required_fields) {
                                if (!self$has_value(field)) {
                                  all_errors <- c(all_errors, paste("Missing required '", field, "' setting in the root configuration"))
                                }
                              }
-                             
+
                              # If we found any errors, report them all at once
                              if (length(all_errors) > 0) {
                                stop("Core configuration errors in ", self$config_file, ":\n- ",
@@ -187,16 +233,40 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              } else {
                                # message("The core configuration in ", self$config_file, " is valid.")
                              }
-                             
+
                              return(TRUE)
+                           },
+
+                           # Get missing value codes for a specific category
+                           get_missing_values = function(category = NULL) {
+                             # If no category specified, return all missing values
+                             if (is.null(category)) {
+                               return(self$get_value("missing_values"))
+                             }
+
+                             # Check if the category is valid
+                             valid_categories <- self$api_specs$missing_values$types
+                             if (!category %in% valid_categories) {
+                               stop("Invalid missing value category: '", category, "'. Valid options are: ",
+                                    paste(valid_categories, collapse=", "))
+                             }
+
+                             # Get values for the specific category
+                             values <- self$get_value(paste0("missing_values.", category))
+
+                             # If no values are defined, return NULL to indicate default NA should be used
+                             if (is.null(values)) {
+                               return(NULL)
+                             }
+
+                             return(values)
                            }
-                         )
-)
+                         ))
 
 # Create a function to validate configuration and return the config
 validate_config <- function(api_type = NULL, config_file = "config.yml") {
   config_env <- ConfigEnv$new(config_file)
-  
+
   # If no specific API type is provided, just validate core config
   if (is.null(api_type)) {
     validation_result <- config_env$validate_core_config()
@@ -204,11 +274,17 @@ validate_config <- function(api_type = NULL, config_file = "config.yml") {
     # If a specific API type is requested, validate just that one
     validation_result <- config_env$validate_config(api_type)
   }
-  
+
   # If validation passes, return the config
   if (validation_result) {
     return(config_env$config)
   } else {
     return(NULL)  # Or handle failure appropriately
   }
+}
+
+# Helper function to get missing value codes
+get_missing_values <- function(category = NULL, config_file = "config.yml") {
+  config_env <- ConfigEnv$new(config_file)
+  return(config_env$get_missing_values(category))
 }

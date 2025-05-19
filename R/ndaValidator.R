@@ -23,14 +23,14 @@ handle_missing_fields <- function(df, elements, missing_required, verbose = FALS
   if(verbose) {
     message("\nAuto-adding missing required fields with missing value codes:")
   }
-  
+
   for (field in missing_required) {
     element <- elements[elements$name == field, ]
-    
+
     if(verbose) {
       cat("\nNotes for", field, ":", element$notes)
     }
-    
+
     # Extract missing value code from notes (e.g. -999)
     missing_code <- NULL
     if (!is.na(element$notes)) {
@@ -40,7 +40,7 @@ handle_missing_fields <- function(df, elements, missing_required, verbose = FALS
         missing_code <- paste0("-", value)  # Make it negative
       }
     }
-    
+
     if (!is.null(missing_code)) {
       # Convert to proper type and fill entire column
       if (element$type == "Float") {
@@ -50,14 +50,14 @@ handle_missing_fields <- function(df, elements, missing_required, verbose = FALS
       } else {
         df[[field]] <- missing_code
       }
-      
+
       if(verbose) {
-        cat(sprintf("\n- Added %s with missing code %s as type %s", 
+        cat(sprintf("\n- Added %s with missing code %s as type %s",
                     field, missing_code, element$type))
       }
     }
   }
-  
+
   if(verbose) cat("\n")
   return(df)
 }
@@ -65,30 +65,30 @@ handle_missing_fields <- function(df, elements, missing_required, verbose = FALS
 # Generic function for field standardization
 standardize_field_names <- function(df, measure_name, verbose = FALSE) {
   if(verbose) cat("\nStandardizing common field names...")
-  
+
   # Track all transformations for summary
   transformations <- list()
-  
+
   # Handle index -> trial conversion
   if ("index" %in% names(df)) {
     if(verbose) cat("\n\nProcessing 'index' to 'trial' conversion...")
-    
+
     # Store original state for summary
     orig_values <- head(df$index, 3)
-    
+
     # Convert to numeric if not already
     df$index <- as.numeric(df$index)
-    
+
     # Create trial column
     df$trial <- df$index
-    
+
     # Set non-positive values to NA
     df$trial[df$index <= 0] <- NA
-    
+
     # Count transformations
     total_rows <- length(df$index)
     positive_rows <- sum(df$index > 0, na.rm = TRUE)
-    
+
     # Store transformation summary
     transformations[["index_to_trial"]] <- list(
       from = "index",
@@ -98,7 +98,7 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
       sample_before = orig_values,
       sample_after = head(df$trial, 3)
     )
-    
+
     if(verbose) {
       cat(sprintf("\n  Total rows: %d", total_rows))
       cat(sprintf("\n  Valid rows: %d", positive_rows))
@@ -106,11 +106,11 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
       cat(sprintf("\n    Before: %s", paste(orig_values, collapse=", ")))
       cat(sprintf("\n    After:  %s", paste(head(df$trial, 3), collapse=", ")))
     }
-    
+
     # Remove original column
     df$index <- NULL
   }
-  
+
   # Print summary if any transformations occurred
   if(verbose && length(transformations) > 0) {
     cat("\n\nField standardization summary:")
@@ -122,7 +122,7 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
     }
     cat("\n")
   }
-  
+
   return(df)
 }
 
@@ -131,9 +131,9 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
 # Properly fixed get_mapping_rules function
 get_mapping_rules <- function(notes) {
   if (is.null(notes) || is.na(notes) || notes == "") return(NULL)
-  
+
   rules <- list()
-  
+
   tryCatch({
     # Handle array notation like "1=(0.9, 0.5, 0.1)"
     if (grepl("=\\(.*\\)", notes)) {
@@ -151,7 +151,7 @@ get_mapping_rules <- function(notes) {
         }
       }
     }
-    
+
     # Handle simple mappings like "0=Never" or "0 = Never"
     if (grepl("[^=]+=[^;]+", notes)) {
       patterns <- strsplit(notes, ";\\s*")[[1]]
@@ -170,160 +170,179 @@ get_mapping_rules <- function(notes) {
     warning(sprintf("Error parsing mapping rules: %s\nNotes: %s", e$message, notes))
     return(list())  # Return empty list on error instead of NULL
   })
-  
+
   return(rules)
 }
 
-# Improved apply_null_transformations function
-# Properly fixed apply_null_transformations function to handle inverted rules mapping correctly
-# Improved apply_null_transformations that uses ValueRange from elements
-apply_null_transformations <- function(df, elements, verbose = TRUE) {
-  if (verbose) cat("\nApplying null value transformations...")
+# Modified apply_null_transformations to use the config
+apply_null_transformations <- function(df, elements, verbose = TRUE, config_file = NULL) {
+  if(verbose) cat("\nApplying null value transformations...")
   transform_summary <- list()
-  
+
+  # Load missing value codes from config if available
+  missing_codes <- NULL
+  if (!is.null(config_file)) {
+    tryCatch({
+      config_env <- ConfigEnv$new(config_file)
+      missing_codes <- config_env$get_missing_values()
+    }, error = function(e) {
+      if(verbose) {
+        message("Note: Could not load missing value codes from config: ", e$message)
+        message("Using NDA data dictionary values only.")
+      }
+    })
+  }
+
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     type <- elements$type[i]
     notes <- elements$notes[i]
     value_range <- elements$valueRange[i]
-    
+
     if (field_name %in% names(df)) {
       tryCatch({
-        # Extract transformation rules from Notes for display
+        # Extract rules for context and to determine missing value meanings
         rules <- get_mapping_rules(notes)
-        
+
         # Extract missing value codes directly from ValueRange
-        missing_codes <- list()
-        
+        na_code <- NULL
+        missing_code <- NULL
+        refused_code <- NULL
+        skipped_code <- NULL
+
+        # Parse valueRange for special codes
         if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
-          # Split value range by semicolons
           range_parts <- trimws(strsplit(value_range, ";")[[1]])
-          
-          # Check for range notation (e.g., "0::4")
-          range_pattern <- "^\\d+::\\d+$"
-          
-          # Extract special codes (non-range parts)
-          special_codes <- range_parts[!grepl(range_pattern, range_parts)]
-          
-          # Map common codes to their meanings - DON'T hardcode the meanings
-          # Instead check all special codes for possible missing value indicators
-          for (code in special_codes) {
-            # Look at the rules to determine what this code represents
+
+          # Extract the special codes by examining both valueRange and rules
+          # This dynamically identifies the meaning of codes
+          for (code in range_parts) {
+            # Skip range notation (like "0::4")
+            if (grepl("::", code)) next
+
+            # Check if this code exists in the rules
             if (code %in% names(rules)) {
-              value_meaning <- rules[[code]]
-              
-              # Check if this value represents a missing value type
-              if (grepl("N/?A", value_meaning, ignore.case = TRUE)) {
-                missing_codes$na <- code
-              } else if (grepl("Missing", value_meaning, ignore.case = TRUE)) {
-                missing_codes$missing <- code
-              } else if (grepl("Refused", value_meaning, ignore.case = TRUE)) {
-                missing_codes$refused <- code
+              value_meaning <- tolower(rules[[code]])
+              code_value <- as.numeric(code)  # Convert to numeric value
+
+              # Determine what this code represents based on NDA descriptions
+              if (grepl("n/?a|no answer|missing", value_meaning, ignore.case = TRUE)) {
+                if(is.null(na_code) || is.null(missing_code)) {
+                  # Map to 'unknown' category
+                  na_code <- code_value
+                  missing_code <- code_value
+                }
+              } else if (grepl("wish|refuse|decline|999$|777$", value_meaning, ignore.case = TRUE)) {
+                # Map to 'refused' category
+                refused_code <- code_value
+              } else if (grepl("skip|condition|branch", value_meaning, ignore.case = TRUE)) {
+                # Map to 'skipped' category
+                skipped_code <- code_value
               }
             }
           }
-          
-          # If we couldn't find meanings, use common patterns as a fallback
-          if (length(missing_codes) == 0) {
-            # Common NDA codes
-            if ("-99" %in% special_codes) missing_codes$na <- "-99"
-            if ("77" %in% special_codes) missing_codes$refused <- "77"
-            if ("88" %in% special_codes) missing_codes$missing <- "88"
-            
-            # Other common NDA-style patterns
-            if ("-999" %in% special_codes) missing_codes$na <- "-999"
-            if ("999" %in% special_codes) missing_codes$missing <- "999"
-            if ("888" %in% special_codes) missing_codes$refused <- "888"
+        }
+
+        # Override with config values if available
+        if (!is.null(missing_codes)) {
+          # For 'unknown' category
+          if (!is.null(missing_codes$unknown) && length(missing_codes$unknown) > 0) {
+            for (code in missing_codes$unknown) {
+              code_num <- as.numeric(code)
+              if (!is.na(code_num)) {
+                missing_code <- code_num
+                na_code <- code_num
+                break
+              }
+            }
+          }
+
+          # For 'refused' category
+          if (!is.null(missing_codes$refused) && length(missing_codes$refused) > 0) {
+            for (code in missing_codes$refused) {
+              code_num <- as.numeric(code)
+              if (!is.na(code_num)) {
+                refused_code <- code_num
+                break
+              }
+            }
+          }
+
+          # For 'skipped' category
+          if (!is.null(missing_codes$skipped) && length(missing_codes$skipped) > 0) {
+            for (code in missing_codes$skipped) {
+              code_num <- as.numeric(code)
+              if (!is.na(code_num)) {
+                skipped_code <- code_num
+                break
+              }
+            }
           }
         }
-        
-        # Display the rules and detected codes
-        if (verbose && (!is.null(rules) && length(rules) > 0)) {
+
+        # Display what we found
+        if (verbose && (!is.null(na_code) || !is.null(missing_code) ||
+                        !is.null(refused_code) || !is.null(skipped_code))) {
           cat(sprintf("\n\nField: %s", field_name))
-          cat("\n  Rules found:")
-          for (rule_code in names(rules)) {
-            cat(sprintf("\n    %s -> %s", rule_code, rules[[rule_code]]))
+
+          if (!is.null(na_code)) cat(sprintf("\n  NA/Unknown code: %d", na_code))
+          if (!is.null(missing_code) && missing_code != na_code)
+            cat(sprintf("\n  Missing code: %d", missing_code))
+          if (!is.null(refused_code)) cat(sprintf("\n  Refused code: %d", refused_code))
+          if (!is.null(skipped_code)) cat(sprintf("\n  Skipped code: %d", skipped_code))
+
+          if (!is.null(rules) && length(rules) > 0) {
+            cat("\n  Rules found:")
+            for (rule_code in names(rules)) {
+              cat(sprintf("\n    %s -> %s", rule_code, rules[[rule_code]]))
+            }
           }
         }
-        
-        # Display the missing codes
-        if (verbose && length(missing_codes) > 0) {
-          cat("\n  Missing value codes from ValueRange:")
-          for (code_type in names(missing_codes)) {
-            cat(sprintf("\n    %s: %s", code_type, missing_codes[[code_type]]))
-          }
-        } else if (verbose) {
-          cat("\n  No missing value codes found in ValueRange")
-        }
-        
-        # Store original values
+
+        # Store original values for comparison
         orig_values <- head(unique(df[[field_name]]))
-        
-        # Convert to character for consistent processing
-        df[[field_name]] <- as.character(df[[field_name]])
-        
-        # Counter for transformations
-        transform_count <- 0
-        
-        # Apply NA code if available
-        if (!is.null(missing_codes$na)) {
-          na_mask <- is.na(df[[field_name]])
-          na_count <- sum(na_mask)
-          
-          if (na_count > 0) {
-            df[[field_name]][na_mask] <- missing_codes$na
-            transform_count <- transform_count + na_count
-            if (verbose) cat(sprintf("\n  Transformed %d NA values to %s", 
-                                     na_count, missing_codes$na))
-          }
-        }
-        
-        # Apply missing code to empty strings if available
-        if (!is.null(missing_codes$missing)) {
-          empty_mask <- df[[field_name]] == "" | df[[field_name]] %in% c("null", "NULL", "NaN", "nan")
-          empty_count <- sum(empty_mask)
-          
-          if (empty_count > 0) {
-            df[[field_name]][empty_mask] <- missing_codes$missing
-            transform_count <- transform_count + empty_count
-            if (verbose) cat(sprintf("\n  Transformed %d empty values to %s", 
-                                     empty_count, missing_codes$missing))
-          }
-        }
-        
-        # Apply refused code if available
-        if (!is.null(missing_codes$refused)) {
-          refused_mask <- tolower(df[[field_name]]) %in% c("refused", "refuse", "ref")
-          refused_count <- sum(refused_mask)
-          
-          if (refused_count > 0) {
-            df[[field_name]][refused_mask] <- missing_codes$refused
-            transform_count <- transform_count + refused_count
-            if (verbose) cat(sprintf("\n  Transformed %d refused values to %s", 
-                                     refused_count, missing_codes$refused))
-          }
-        }
-        
-        # Apply type conversion
-        if (type %in% c("Integer", "Float")) {
-          if (verbose) cat(sprintf("\n  Converting to %s", type))
-          
-          if (type == "Integer") {
-            df[[field_name]] <- as.integer(df[[field_name]])
-          } else if (type == "Float") {
+
+        # Prepare the column by converting to numeric if needed
+        if (type %in% c("Integer", "Float") &&
+            (!is.null(na_code) || !is.null(missing_code) ||
+             !is.null(refused_code) || !is.null(skipped_code))) {
+          if (is.character(df[[field_name]])) {
             df[[field_name]] <- as.numeric(df[[field_name]])
           }
         }
-        
+
+        # Count transformations
+        transform_count <- 0
+
+        # Apply NA code replacement
+        if (!is.null(na_code)) {
+          na_mask <- is.na(df[[field_name]])
+          na_count <- sum(na_mask)
+
+          if (na_count > 0) {
+            df[[field_name]][na_mask] <- na_code
+            transform_count <- transform_count + na_count
+            if (verbose) cat(sprintf("\n  Replaced %d NA values with %d", na_count, na_code))
+          }
+        }
+
+        # Apply type conversion after replacements
+        if (type %in% c("Integer", "Float") && transform_count > 0) {
+          if (type == "Integer") {
+            df[[field_name]] <- as.integer(df[[field_name]])
+          }
+          # Float type is already handled by as.numeric above
+        }
+
         # Store transformation summary
         transform_summary[[field_name]] <- list(
           type = type,
-          transformed = transform_count,
+          nulls_transformed = transform_count,
           values_before = orig_values,
           values_after = head(unique(df[[field_name]]))
         )
-        
-        # Print comparison
+
+        # Display transformation results
         if (verbose && transform_count > 0) {
           cat("\n  Value comparison:")
           cat(sprintf("\n    Before: %s", paste(orig_values, collapse=", ")))
@@ -337,75 +356,102 @@ apply_null_transformations <- function(df, elements, verbose = TRUE) {
       })
     }
   }
-  
+
   # Print summary
   if (verbose && length(transform_summary) > 0) {
     cat("\n\nNull transformation summary:")
     for (field in names(transform_summary)) {
       cat(sprintf("\n- %s", field))
-      if (transform_summary[[field]]$transformed > 0) {
-        cat(sprintf(" (%d values transformed)", transform_summary[[field]]$transformed))
+      if (transform_summary[[field]]$nulls_transformed > 0) {
+        cat(sprintf(" (%d nulls transformed)", transform_summary[[field]]$nulls_transformed))
       }
     }
     cat("\n")
   }
-  
+
   return(df)
 }
 
-
-
-# Convert fields to their proper type based on NDA definition
-# Modify the apply_type_conversions function to be more robust
-# Convert fields to proper type based on NDA definition
-# Modified apply_type_conversions - CRITICAL to preserve special codes
-# Fixed version with NO DEFAULT VALUE - only uses value range
-fix_na_values <- function(df, elements, verbose = FALSE) {
+# Modified fix_na_values to use the config
+fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config.yml") {
   if(verbose) cat("\n\nFixing remaining NA values...")
-  
+
+  # Load missing value codes from config if available
+  missing_codes <- NULL
+  if (!is.null(config_file) && file.exists(config_file)) {
+    tryCatch({
+      config_env <- ConfigEnv$new(config_file)
+      missing_codes <- config_env$get_missing_values()
+      if(verbose && !is.null(missing_codes)) {
+        message("Using missing value codes from ", config_file)
+      }
+    }, error = function(e) {
+      if(verbose) {
+        message("Note: Could not load missing value codes from config: ", e$message)
+        message("Using NDA data dictionary values only.")
+      }
+    })
+  } else if(verbose) {
+    message("Note: Config file not found. Using NDA data dictionary values only.")
+  }
+
+  # Load missing value codes from config if available
+  missing_codes <- NULL
+  if (!is.null(config_file)) {
+    tryCatch({
+      config_env <- ConfigEnv$new(config_file)
+      missing_codes <- config_env$get_missing_values()
+    }, error = function(e) {
+      if(verbose) {
+        message("Note: Could not load missing value codes from config: ", e$message)
+        message("Using NDA data dictionary values only.")
+      }
+    })
+  }
+
   # Identify numeric columns with NA values
   any_fixed <- FALSE
-  
+
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     type <- elements$type[i]
     value_range <- elements$valueRange[i]
     notes <- elements$notes[i]
-    
+
     if (!field_name %in% names(df)) next
     if (!is.numeric(df[[field_name]])) next
     if (!any(is.na(df[[field_name]]))) next
-    
+
     # Found a numeric column with NAs - determine appropriate code
-    na_code <- NULL  # No default - must find in value range
-    
+    na_code <- NULL  # No default - must find in value range or config
+
     # First try to find NA code in value range
     if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
       range_parts <- trimws(strsplit(value_range, ";")[[1]])
-      
+
       # Get the rules to interpret what each special code means
       rules <- get_mapping_rules(notes)
-      
+
       # Look for NA codes in special values by examining rules
       for (code in range_parts) {
         if (grepl("::", code)) next  # Skip range notation
-        
+
         # Check if this code exists in rules
         if (code %in% names(rules)) {
-          value_meaning <- rules[[code]]
-          
+          value_meaning <- tolower(rules[[code]])
+
           # Check if this represents a missing value
-          if (grepl("N/?A", value_meaning, ignore.case = TRUE)) {
+          if (grepl("n/?a|no answer|missing", value_meaning, ignore.case = TRUE)) {
             na_code <- as.numeric(code)
             if(verbose) cat(sprintf("\n  Found NA code from rules: %s = %s", code, value_meaning))
             break  # Found an NA code, stop looking
           }
         }
       }
-      
+
       # If we couldn't find NA code in rules, look for common patterns in value range
       if (is.null(na_code)) {
-        # Look for typical NA codes 
+        # Look for typical NA codes in the value range
         # Don't set a default - only use if found in the value range
         if ("-99" %in% range_parts) {
           na_code <- -99
@@ -419,14 +465,26 @@ fix_na_values <- function(df, elements, verbose = FALSE) {
         }
       }
     }
-    
+
+    # Try to use config-specified 'unknown' values if no code was found
+    if (is.null(na_code) && !is.null(missing_codes) && !is.null(missing_codes$unknown)) {
+      for (code in missing_codes$unknown) {
+        code_num <- as.numeric(code)
+        if (!is.na(code_num)) {
+          na_code <- code_num
+          if(verbose) cat(sprintf("\n  Using NA code %d from config", na_code))
+          break
+        }
+      }
+    }
+
     # Apply fix ONLY if a valid NA code was found
     if (!is.null(na_code)) {
       na_count <- sum(is.na(df[[field_name]]))
       if (na_count > 0) {
-        if(verbose) cat(sprintf("\n  Fixed %d NA values in '%s' with %d", 
+        if(verbose) cat(sprintf("\n  Fixed %d NA values in '%s' with %d",
                                 na_count, field_name, na_code))
-        
+
         df[[field_name]][is.na(df[[field_name]])] <- na_code
         any_fixed <- TRUE
       }
@@ -434,11 +492,11 @@ fix_na_values <- function(df, elements, verbose = FALSE) {
       cat(sprintf("\n  No NA code found for '%s' - NA values left as is", field_name))
     }
   }
-  
+
   if (!any_fixed && verbose) {
     cat("\n  No NA values fixed - either no NA values found or no NA codes identified")
   }
-  
+
   return(df)
 }
 
@@ -452,32 +510,32 @@ fix_na_values <- function(df, elements, verbose = FALSE) {
 apply_type_conversions <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nApplying type conversions...")
   conversion_summary <- list()
-  
+
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     type <- elements$type[i]
     value_range <- elements$valueRange[i]  # This is from the NDA API
     notes <- elements$notes[i]  # This contains code meanings
-    
+
     if (field_name %in% names(df) && !is.null(type)) {
       tryCatch({
         if (type %in% c("Integer", "Float")) {
           if(verbose) cat(sprintf("\n\nField: %s", field_name))
           if(verbose) cat(sprintf("\n  Target type: %s", type))
-          
+
           # Store original values
           orig_values <- head(df[[field_name]], 3)
-          
+
           # First, identify which special code should be used for NAs
           na_code <- NULL
           # Extract all special codes from valueRange
           if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
             range_parts <- trimws(strsplit(value_range, ";")[[1]])
             special_codes <- range_parts[!grepl("::", range_parts)]
-            
+
             # Get meanings of codes from notes
             rules <- get_mapping_rules(notes)
-            
+
             # Find the NA code based on NDA definitions
             for (code in special_codes) {
               if (code %in% names(rules)) {
@@ -489,54 +547,54 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
                 }
               }
             }
-            
+
             # If no NA code found but -99 is in the value range, use that
             if (is.null(na_code) && "-99" %in% special_codes) {
               na_code <- -99
               if(verbose) cat("\n  Using default -99 code from ValueRange")
             }
           }
-          
+
           # CRITICAL FIX: First convert to character (preserves NA status)
           char_values <- as.character(df[[field_name]])
-          
+
           # THEN identify NA positions in character representation
           na_positions <- which(is.na(char_values))
-          
+
           # Special handling for PSSP fields
           if (grepl("^pssp", field_name) && is.null(na_code)) {
             na_code <- -99
             if(verbose) cat("\n  Using -99 code for PSSP field")
           }
-          
+
           # Now apply type conversion using the character values
           if (type == "Integer") {
             df[[field_name]] <- as.integer(char_values)
           } else if (type == "Float") {
             df[[field_name]] <- as.numeric(char_values)
           }
-          
+
           # Replace NA values with the appropriate code if we found one
           if (!is.null(na_code) && length(na_positions) > 0) {
             df[[field_name]][na_positions] <- na_code
-            if(verbose) cat(sprintf("\n  Replaced %d NA values with %d", 
+            if(verbose) cat(sprintf("\n  Replaced %d NA values with %d",
                                     length(na_positions), na_code))
           }
-          
+
           # Double-check for any remaining NAs (could be introduced by conversion)
           remaining_na_positions <- which(is.na(df[[field_name]]))
           if (length(remaining_na_positions) > 0 && !is.null(na_code)) {
             df[[field_name]][remaining_na_positions] <- na_code
-            if(verbose) cat(sprintf("\n  Replaced %d additional NA values with %d", 
+            if(verbose) cat(sprintf("\n  Replaced %d additional NA values with %d",
                                     length(remaining_na_positions), na_code))
           }
-          
+
           # Final check for any remaining NAs
           na_count <- sum(is.na(df[[field_name]]))
           if (na_count > 0 && verbose) {
             cat(sprintf("\n  Warning: %d NA values remain", na_count))
           }
-          
+
           # Store conversion summary
           conversion_summary[[field_name]] <- list(
             type = type,
@@ -553,7 +611,7 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
       })
     }
   }
-  
+
   if(verbose && length(conversion_summary) > 0) {
     cat("\n\nType conversion summary:")
     for(field in names(conversion_summary)) {
@@ -564,28 +622,28 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
     }
     cat("\n")
   }
-  
+
   return(df)
 }
 
 # Demonstrate with standardize_dates as well
 standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRUE, limited_dataset = FALSE) {
   date_summary <- list()
-  
+
   for (col in date_cols) {
     if (col %in% names(df)) {
       tryCatch({
         if(verbose) cat(sprintf("\n\nField: %s", col))
-        
+
         # Store original values
         orig_dates <- head(df[[col]], 3)
-        
+
         # Convert to character first to ensure consistency
         dates <- as.character(df[[col]])
-        
+
         # Remove timezone information
         dates <- gsub("\\s+\\d{2}:\\d{2}:\\d{2}.*$", "", dates)
-        
+
         # Try different date formats with better error handling
         date_formats <- c(
           "%Y-%m-%d",    # 2023-12-31
@@ -595,10 +653,10 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
           "%m-%d-%Y",    # 12-31-2023
           "%Y%m%d"       # 20231231 (no separators)
         )
-        
+
         success <- FALSE
         parsed_dates <- NULL
-        
+
         for (format in date_formats) {
           parsed_dates <- tryCatch({
             temp_dates <- as.Date(dates, format = format)
@@ -608,32 +666,32 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
               NULL
             }
           }, error = function(e) NULL)
-          
+
           if (!is.null(parsed_dates)) {
             if(verbose) cat(sprintf("\n  Detected format: %s", format))
-            
+
             # Choose output format based on limited_dataset flag
             output_format <- ifelse(limited_dataset, "%m/%d/%Y", "%m/01/%Y")
-            
+
             # For dates that couldn't be parsed, keep the original value
             new_dates <- rep(NA, length(dates))
             valid_mask <- !is.na(parsed_dates)
-            
+
             # Format only the successful dates
             new_dates[valid_mask] <- format(parsed_dates[valid_mask], output_format)
-            
+
             # Keep original values for failures (but note them)
             if(any(!valid_mask) && verbose) {
               cat(sprintf("\n  Warning: %d dates could not be parsed", sum(!valid_mask)))
-              cat(sprintf("\n  Sample problematic values: %s", 
+              cat(sprintf("\n  Sample problematic values: %s",
                           paste(head(dates[!valid_mask]), collapse=", ")))
             }
-            
+
             # Update only the successful conversions
             df[[col]] <- new_dates
-            
+
             success <- TRUE
-            
+
             date_summary[[col]] <- list(
               original_format = format,
               sample_before = orig_dates,
@@ -643,12 +701,12 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
             break
           }
         }
-        
+
         if(!success && verbose) {
           cat(sprintf("\n  Warning: Could not determine date format"))
           cat(sprintf("\n  Sample values: %s", paste(head(dates), collapse=", ")))
         }
-        
+
       }, error = function(e) {
         if(verbose) {
           cat(sprintf("\n\nError processing dates in %s:", col))
@@ -657,7 +715,7 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
       })
     }
   }
-  
+
   if(verbose && length(date_summary) > 0) {
     if(limited_dataset == FALSE) message("\n\nDe-identifying interview_date using date-shifting...")
     cat("Date standardization summary:")
@@ -671,24 +729,24 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
     }
     cat("\n")
   }
-  
+
   return(df)
 }
 
 standardize_age <- function(df, verbose = TRUE, limited_dataset = limited_dataset) {
   if ("interview_age" %in% names(df) && limited_dataset == FALSE) {
     if(verbose && limited_dataset == FALSE) message("\nDe-identifying interview_age using age-capping...")
-    
+
     # Convert to numeric first
     df$interview_age <- as.numeric(df$interview_age)
     orig_age_stats <- summary(df$interview_age)
-    
+
     # Count values that will be changed
     values_to_change <- sum(df$interview_age > 1068, na.rm = TRUE)
-    
+
     # Apply the age standardization (cap at 1068 months = 89 years * 12)
     df$interview_age <- pmin(df$interview_age, 1068)
-    
+
     if(verbose) {
       cat("Age standardization summary:")
       cat("\nBefore:", capture.output(orig_age_stats))
@@ -700,7 +758,7 @@ standardize_age <- function(df, verbose = TRUE, limited_dataset = limited_datase
       }
     }
   }
-  
+
   return(df)
 }
 
@@ -709,26 +767,26 @@ calculate_similarity <- function(str1, str2) {
   # Convert to lowercase
   str1 <- tolower(str1)
   str2 <- tolower(str2)
-  
+
   # Create matrix
   m <- nchar(str1)
   n <- nchar(str2)
   d <- matrix(0, nrow = m + 1, ncol = n + 1)
   d[1,] <- 0:n
   d[,1] <- 0:m
-  
+
   # Fill matrix
   for (i in 2:(m + 1)) {
     for (j in 2:(n + 1)) {
       cost <- if (substr(str1, i-1, i-1) == substr(str2, j-1, j-1)) 0 else 1
       d[i,j] <- min(
-        d[i-1,j] + 1,      # deletion 
+        d[i-1,j] + 1,      # deletion
         d[i,j-1] + 1,      # insertion
         d[i-1,j-1] + cost  # substitution
       )
     }
   }
-  
+
   # Return similarity score (1 - normalized distance)
   return(1 - d[m+1,n+1] / max(m,n))
 }
@@ -744,20 +802,20 @@ standardize_handedness <- function(value) {
     "both" = "B",
     "ambidextrous" = "B"
   )
-  
+
   # Convert to lowercase for consistent matching
   value <- tolower(value)
-  
+
   # Map values using the handedness_map
   mapped_values <- handedness_map[value]
   mapped_values[is.na(mapped_values)] <- value[is.na(mapped_values)]
-  
+
   # Count and report transformations
   # n_transformed <- sum(value != mapped_values, na.rm = TRUE)
   # if (n_transformed > 0) {
   #   cat(sprintf("\nTransformed %d handedness values to NDA standard format\n", n_transformed))
   # }
-  
+
   return(mapped_values)
 }
 
@@ -778,41 +836,41 @@ standardize_binary <- function(value) {
     "y" = "1",
     "n" = "0"
   )
-  
+
   # Convert value to character without changing case
   value <- as.character(value)
-  
+
   # Keep track of which values were NA originally
   was_na <- is.na(value)
-  
+
   # Map values using the binary_map (exact match)
   mapped_values <- binary_map[value]
-  
+
   # For any unmatched values, try lowercase matching
   still_na <- is.na(mapped_values)
   if(any(still_na) && !all(was_na[still_na])) {
     mapped_values[still_na] <- binary_map[tolower(value[still_na])]
   }
-  
+
   # Keep original values for any remaining unmatched
   mapped_values[is.na(mapped_values) & !was_na] <- value[is.na(mapped_values) & !was_na]
-  
+
   # Restore original NAs
   mapped_values[was_na] <- NA
-  
+
   # Count and report transformations
   n_transformed <- sum(value != mapped_values, na.rm = TRUE)
   if (n_transformed > 0) {
     cat(sprintf("\nTransformed %d boolean values to 0/1 format\n", n_transformed))
   }
-  
+
   return(mapped_values)
 }
 
 # Parse array-like strings to vectors
 parse_array_string <- function(value) {
   if (is.null(value) || is.na(value)) return(NULL)
-  
+
   # Handle string arrays
   if (is.character(value)) {
     # Remove unicode prefix, brackets, and quotes
@@ -820,35 +878,35 @@ parse_array_string <- function(value) {
     values <- strsplit(clean_str, ",\\s*")[[1]]
     return(tolower(trimws(values)))
   }
-  
+
   # Handle numeric arrays
   if (is.numeric(value) && length(value) > 1) {
     return(sprintf("%.1f", value))
   }
-  
+
   return(tolower(trimws(value)))
 }
 
 # Helper function to fetch structure elements from API
 fetch_structure_elements <- function(structure_name, nda_base_url) {
-  
+
   # Save the URL parameter to a local variable with a different name to avoid conflicts
   api_url <- nda_base_url
-  
-  
+
+
   url <- sprintf("%s/datastructure/%s", api_url, structure_name)
   response <- httr::GET(url)
-  
+
   if (httr::status_code(response) != 200) {
     stop("Failed to fetch structure elements: ", content(response, "text"))
   }
-  
+
   content <- jsonlite::fromJSON(rawToChar(response$content))
-  
+
   if (!"dataElements" %in% names(content)) {
     stop("Unexpected API response format - no dataElements found")
   }
-  
+
   elements <- content$dataElements
   return(elements)
 }
@@ -867,25 +925,25 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
     renamed_fields = character(), # NEW: Track which fields were renamed
     similarity_scores = list()
   )
-  
+
   # Get dataframe column names
   df_cols <- names(df)
   valid_fields <- elements$name
-  
+
   # Get structure short name by taking last 2 digits of structure_name
   structure_prefix <- substr(structure_name, nchar(structure_name) - 1, nchar(structure_name))
-  
+
   # Find unknown fields
   unknown_fields <- setdiff(df_cols, valid_fields)
-  
+
   if (length(unknown_fields) > 0) {
     if(verbose) cat("\nAnalyzing field name similarities...\n")
-    
+
     for (field in unknown_fields) {
       # Check if this is a hierarchical field (contains multiple underscores with numbers)
       parts <- strsplit(field, "_")[[1]]
       num_parts <- sum(grepl("^\\d+$", parts))
-      
+
       # If field has more than 2 numeric parts, it's hierarchical - skip renaming
       if (num_parts > 2) {
         if(verbose) {
@@ -894,22 +952,22 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
         }
         next
       }
-      
+
       # For non-hierarchical fields, proceed with similarity matching
       base_field <- sub(paste0("^", structure_prefix, "_"), "", field)
-      
+
       # Calculate similarity scores
       similarities <- sapply(valid_fields, function(name) {
         # Remove prefix from target field if it exists
         target_base <- sub(paste0("^", structure_prefix, "_"), "", name)
-        
+
         # Calculate direct similarity
         calculate_similarity(field, name)
       })
-      
+
       # Store all similarity scores
       renamed$similarity_scores[[field]] <- sort(similarities, decreasing = TRUE)
-      
+
       if(verbose) {
         cat(sprintf("\nField: %s\n", field))
         cat("Top matches:\n")
@@ -921,39 +979,39 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
                       top_matches[i] * 100))
         }
       }
-      
+
       # Remove any NA values
       similarities <- similarities[!is.na(similarities)]
-      
+
       if (length(similarities) > 0) {
         best_match <- names(similarities)[which.max(similarities)]
         best_score <- max(similarities)
-        
+
         if (best_score > 0.9) {  # High confidence automatic match
           # Present option to rename in interactive mode
           rename_field <- TRUE
-          
+
           if(interactive_mode) {
             rename_input <- safe_readline(prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ",
                                                            field, best_match, best_score * 100), default = "y")
             rename_field <- tolower(rename_input) %in% c("y", "yes")
           }
-          
+
           if(rename_field) {
             if(verbose) {
               message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
                               field, best_match, best_score * 100))
             }
-            
+
             # Add the new column with renamed data
             renamed$df[[best_match]] <- df[[field]]
-            
+
             # Mark original column for dropping
             renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-            
+
             # Track renamed fields
             renamed$renamed_fields <- c(renamed$renamed_fields, field)
-            
+
             # Store the rename operation
             renamed$renames <- c(renamed$renames,
                                  sprintf("%s -> %s (%.2f%%)",
@@ -964,18 +1022,18 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
           if(verbose) {
             cat(sprintf("No automatic rename - best match below 90%% threshold\n"))
           }
-          
+
           # Present top 3 matches as options
           top_matches <- head(sort(similarities, decreasing = TRUE), 3)
           selected_match <- NULL
-          
+
           if(interactive_mode) {
             # Modified to allow selection from numbers
             rename_input <- safe_readline(
-              prompt = sprintf("Select match for '%s' (1-3 to select, 0 to skip): ", field), 
+              prompt = sprintf("Select match for '%s' (1-3 to select, 0 to skip): ", field),
               default = "0"
             )
-            
+
             # Check if input is a number between 1-3
             if(grepl("^[1-3]$", rename_input)) {
               match_idx <- as.integer(rename_input)
@@ -983,33 +1041,33 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
                 selected_match <- names(top_matches)[match_idx]
               }
             }
-            
+
             # If user selected a match
             if(!is.null(selected_match)) {
               if(verbose) {
                 message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
                                 field, selected_match, top_matches[match_idx] * 100))
               }
-              
+
               # Add the new column with renamed data
               renamed$df[[selected_match]] <- df[[field]]
-              
+
               # Mark original column for dropping
               renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-              
+
               # Track renamed fields
               renamed$renamed_fields <- c(renamed$renamed_fields, field)
-              
+
               # Store the rename operation
               renamed$renames <- c(renamed$renames,
                                    sprintf("%s -> %s (%.2f%%)",
                                            field, selected_match, top_matches[match_idx] * 100))
             } else {
               # Ask if we should drop the field
-              drop_input <- safe_readline(prompt = sprintf("Drop field '%s'? (y/n): ", field), 
+              drop_input <- safe_readline(prompt = sprintf("Drop field '%s'? (y/n): ", field),
                                           default = if(auto_drop_unknown) "y" else "n")
               drop_field <- tolower(drop_input) %in% c("y", "yes")
-              
+
               if(drop_field) {
                 renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
                 if(verbose) cat(sprintf("Will drop field '%s'\n", field))
@@ -1020,7 +1078,7 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
           } else {
             # Non-interactive mode - use auto_drop_unknown setting
             drop_field <- auto_drop_unknown
-            
+
             if(drop_field) {
               renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
               if(verbose) cat(sprintf("Will drop field '%s'\n", field))
@@ -1032,13 +1090,13 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
       } else {
         # No matches found
         drop_field <- auto_drop_unknown
-        
+
         if(interactive_mode) {
-          drop_input <- safe_readline(prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field), 
+          drop_input <- safe_readline(prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field),
                                       default = if(auto_drop_unknown) "y" else "n")
           drop_field <- tolower(drop_input) %in% c("y", "yes")
         }
-        
+
         if(drop_field) {
           renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
           if(verbose) cat(sprintf("Will drop field '%s'\n", field))
@@ -1047,7 +1105,7 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
         }
       }
     }
-    
+
     # Drop original columns after all renames
     if(length(renamed$columns_to_drop) > 0) {
       if(verbose) {
@@ -1056,14 +1114,14 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
       }
       renamed$df <- renamed$df[, !names(renamed$df) %in% renamed$columns_to_drop]
     }
-    
+
     if(verbose && length(renamed$renames) > 0) {
       cat("\n\nRename operations completed:")
       cat(paste("\n-", renamed$renames), sep = "")
       cat("\n")
     }
   }
-  
+
   return(renamed)
 }
 
@@ -1073,66 +1131,66 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
 # Updated get_violations function with special handling for ranges with both :: and ;
 get_violations <- function(value, range_str) {
   if (is.null(range_str) || is.na(range_str) || range_str == "") return(character(0))
-  
+
   # Special case for mixed ranges like "1::26;77"
   if (grepl("::", range_str) && grepl(";", range_str)) {
     # Split by semicolon first
     parts <- strsplit(range_str, ";")[[1]]
-    
+
     # Get the numeric range from the first part
     range_part <- parts[grepl("::", parts)][1]
     range <- as.numeric(strsplit(range_part, "::")[[1]])
-    
+
     # Get individual values from other parts
     individual_values <- as.numeric(parts[!grepl("::", parts)])
-    
+
     # Combine valid values: numbers in range plus individual values
     valid_values <- c(seq(from = range[1], to = range[2]), individual_values)
-    
+
     # Check for violations
     invalid_mask <- !value %in% valid_values
     invalid_mask[is.na(invalid_mask)] <- FALSE
-    
+
     return(sort(unique(value[invalid_mask])))
   }
-  
+
   # Rest of the function for simple ranges
   if (grepl("::", range_str)) {
     # Numeric range check
     range <- as.numeric(strsplit(range_str, "::")[[1]])
-    
+
     # Convert value to numeric if it's character
     if (is.character(value)) {
       value <- as.numeric(value)
     }
-    
+
     invalid_mask <- value < range[1] | value > range[2]
     invalid_mask[is.na(invalid_mask)] <- FALSE
     return(sort(unique(value[invalid_mask])))
   } else if (grepl(";", range_str)) {
     # Categorical values
     valid_values <- trimws(strsplit(range_str, ";")[[1]])
-    
+
     # Convert to character for comparison
     value_char <- as.character(value)
-    
+
     invalid_mask <- !value_char %in% valid_values
     invalid_mask[is.na(invalid_mask)] <- FALSE
     return(sort(unique(value[invalid_mask])))
   }
-  
+
   return(character(0))
 }
 
 # Main validation logic function
 # Modified validate_structure function with better error handling
-validate_structure <- function(df, elements, measure_name, api, verbose = FALSE, 
-                               auto_drop_unknown = FALSE, 
+validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
+                               auto_drop_unknown = FALSE,
                                missing_required_fields = character(0),
                                interactive_mode = TRUE,
                                collect_only = FALSE) {
   if(verbose) cat("\nValidating data structure...")
-  
+
   results <- list(
     valid = TRUE,
     missing_required = character(0),
@@ -1141,25 +1199,25 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     unknown_fields_dropped = character(0),  # Track which fields were dropped
     warnings = character(0)
   )
-  
+
   # Check for missing required fields
   if(length(missing_required_fields) > 0) {
     results$valid <- FALSE
     results$missing_required <- c(results$missing_required, missing_required_fields)
-    
+
     if(verbose) {
       cat("\n\nERROR: Required fields missing values:")
       cat(sprintf("\n  %s", paste(missing_required_fields, collapse=", ")))
       cat("\n  These must be fixed before data submission is possible.")
     }
   }
-  
+
   tryCatch({
     # Get field lists
     required_fields <- elements$name[elements$required == "Required"]
     valid_fields <- elements$name
     df_cols <- names(df)
-    
+
     # Check for unknown fields
     results$unknown_fields <- setdiff(df_cols, valid_fields)
     if(length(results$unknown_fields) > 0) {
@@ -1167,30 +1225,30 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         cat("\n\nUnknown fields detected:")
         cat(sprintf("\n  %s", paste(results$unknown_fields, collapse=", ")))
       }
-      
+
       drop_fields <- FALSE
-      
+
       if(interactive_mode) {
         # Prompt user for confirmation
-        user_input <- safe_readline(prompt = "Do you want to drop these unknown fields? (y/n): ", 
+        user_input <- safe_readline(prompt = "Do you want to drop these unknown fields? (y/n): ",
                                     default = if(auto_drop_unknown) "y" else "n")
         drop_fields <- tolower(user_input) %in% c("y", "yes")
       } else {
         # Use the auto_drop_unknown setting
         drop_fields <- auto_drop_unknown
       }
-      
+
       if(drop_fields) {
         # Track which fields were dropped
         results$unknown_fields_dropped <- results$unknown_fields
-        
+
         # Drop the unknown fields
         df <- df[, !names(df) %in% results$unknown_fields]
-        
+
         if(verbose) {
           cat("\nDropping unknown fields")
         }
-        
+
         # Determine which environment contains the original dataframe
         env_to_use <- NULL
         calling_env <- parent.frame(2) # The environment that called this function
@@ -1199,33 +1257,33 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
           env_to_use <- .wizaRdry_env
         }
-        
+
         # Update the dataframe in the appropriate environment
         if(!is.null(env_to_use)) {
           assign(measure_name, df, envir = env_to_use)
-          
+
           # Only update the cleaning script if not in collect_only mode
           if(!collect_only) {
             # Ask about updating cleaning script
             update_cleaning_script <- FALSE
-            
+
             if(interactive_mode) {
-              update_input <- safe_readline(prompt = "Update cleaning script with code to drop these fields? (y/n): ", 
+              update_input <- safe_readline(prompt = "Update cleaning script with code to drop these fields? (y/n): ",
                                             default = "y")
               update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
             } else {
               update_cleaning_script <- TRUE  # Always update in non-interactive mode
             }
-            
+
             if(update_cleaning_script) {
               # Generate R code for cleanup script
               tryCatch({
                 api_str <- as.character(api)
                 measure_name_str <- as.character(measure_name)
-                
+
                 # First try the expected path
                 cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
-                
+
                 # If not found, also check alternative location
                 if (!file.exists(cleaning_script_path)) {
                   alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
@@ -1234,16 +1292,16 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                     if(verbose) cat("\nFound cleaning script in alternative location:", cleaning_script_path)
                   }
                 }
-                
+
                 if(verbose) cat("\nAttempting to update cleaning script at:", cleaning_script_path)
-                
+
                 if(file.exists(cleaning_script_path)) {
                   # Read existing content
                   existing_content <- readLines(cleaning_script_path)
-                  
+
                   # Create the code to remove columns
                   unknown_fields_str <- paste(shQuote(results$unknown_fields), collapse=", ")
-                  
+
                   # ensure case-insensitive matching in the removal command
                   removal_code <- c(
                     "",
@@ -1252,10 +1310,10 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                            measure_name_str, ")) %in% tolower(c(",
                            unknown_fields_str, "))]")
                   )
-                  
+
                   # Write back the entire file with the new code appended
                   writeLines(c(existing_content, removal_code), cleaning_script_path)
-                  
+
                   if(verbose) cat("\nSuccessfully updated cleaning script with code to remove unknown fields")
                 } else if(verbose) {
                   cat("\nCould not find cleaning script at expected locations.")
@@ -1272,26 +1330,26 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             }
           }
         }
-        
+
         # Reset unknown fields list
         results$unknown_fields <- character(0)
-        
+
         # Update column names after dropping fields
         df_cols <- names(df)
       } else {
         if(verbose) cat("\nKeeping unknown fields in the dataset")
-        
+
         # Ask if validation should fail due to unknown fields
         fail_validation <- FALSE
-        
+
         if(interactive_mode) {
-          fail_input <- safe_readline(prompt = "Should validation fail because of unknown fields? (y/n): ", 
+          fail_input <- safe_readline(prompt = "Should validation fail because of unknown fields? (y/n): ",
                                       default = "n")
           fail_validation <- tolower(fail_input) %in% c("y", "yes")
         } else {
           fail_validation <- TRUE  # Always fail in non-interactive mode when fields aren't dropped
         }
-        
+
         if(fail_validation) {
           results$valid <- FALSE
           if(verbose) cat("\nValidation will fail due to unknown fields")
@@ -1300,7 +1358,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         }
       }
     }
-    
+
     # Check required fields
     missing_required <- required_fields[!required_fields %in% df_cols]
     if(length(missing_required) > 0) {
@@ -1313,30 +1371,30 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     } else if(verbose) {
       cat("\n\nAll required fields present")
     }
-    
+
     # Check value ranges
     if(verbose) cat("\n\nChecking value ranges...")
-    
+
     for(col in intersect(df_cols, valid_fields)) {
       element <- elements[elements$name == col, ]
-      
+
       if(nrow(element) > 0 &&
          !is.null(element$valueRange) &&
          !is.na(element$valueRange) &&
          element$valueRange != "") {
-        
+
         if(verbose) {
           cat(sprintf("\n\nField: %s", col))
           cat(sprintf("\n  Expected range: %s", element$valueRange))
         }
-        
+
         # Handle binary fields
         if(element$valueRange == "0;1") {
           values <- as.character(df[[col]])
           if(any(tolower(values) %in% c("true", "false"), na.rm = TRUE)) {
             if(verbose) cat("\n  Converting boolean values to 0/1")
             df[[col]] <- standardize_binary(values)
-            
+
             # Update in environment
             env_to_use <- NULL
             calling_env <- parent.frame(2) # The environment that called this function
@@ -1350,7 +1408,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             }
           }
         }
-        
+
         # Check for violations
         violating_values <- tryCatch({
           get_violations(df[[col]], element$valueRange)
@@ -1361,7 +1419,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
           )
           character(0)
         })
-        
+
         if(length(violating_values) > 0) {
           if(verbose) {
             cat("\n  Value range violations found:")
@@ -1372,15 +1430,15 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                           length(violating_values) - 5))
             }
           }
-          
+
           # Ask if these violations should cause validation to fail
           fail_due_to_violations <- TRUE
-          
+
           if(interactive_mode) {
             violation_input <- safe_readline(prompt = sprintf("Should violations in field '%s' cause validation to fail? (y/n): ", col), default = "y")
             fail_due_to_violations <- tolower(violation_input) %in% c("y", "yes")
           }
-          
+
           if(fail_due_to_violations) {
             results$valid <- FALSE
             results$value_range_violations[[col]] <- list(
@@ -1396,13 +1454,13 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         }
       }
     }
-    
+
     # Final summary
     if(verbose) {
       message("\n\nValidation Summary:")
       message(sprintf("- Status: %s",
                       if(results$valid) "PASSED" else "FAILED"))
-      
+
       if(length(results$unknown_fields) > 0) {
         message(sprintf("- Unknown fields: %d (%s)",
                         length(results$unknown_fields),
@@ -1411,19 +1469,19 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
           message(sprintf("  ... and %d more", length(results$unknown_fields) - 10))
         }
       }
-      
+
       if(length(results$missing_required) > 0) {
         message(sprintf("- Missing required fields: %d (%s)",
                         length(results$missing_required),
                         paste(results$missing_required, collapse=", ")))
       }
-      
+
       if(length(results$value_range_violations) > 0) {
         message(sprintf("- Fields with range violations: %d (%s)",
                         length(results$value_range_violations),
                         paste(names(results$value_range_violations), collapse=", ")))
       }
-      
+
       if(length(results$warnings) > 0) {
         message("\n\nWarnings:")
         for(warning in results$warnings) {
@@ -1432,20 +1490,20 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       }
       cat("\n")
     }
-    
+
   }, error = function(e) {
     results$valid <- FALSE
     results$warnings <- c(
       results$warnings,
       sprintf("Critical validation error: %s", e$message)
     )
-    
+
     if(verbose) {
       cat("\n\nCritical Validation Error:")
       cat(sprintf("\n  %s", e$message))
     }
   })
-  
+
   return(results)
 }
 
@@ -1472,10 +1530,10 @@ debug_print <- function(msg, df = NULL, sample_size = 5, debug = FALSE) {
 # Helper function to standardize column names
 standardize_column_names <- function(df, structure_name, verbose = FALSE) {
   if(verbose) cat("\nStandardizing column names...")
-  
+
   # Get structure short name by taking last 2 digits of structure_name
   prefix <- substr(structure_name, nchar(structure_name) - 1, nchar(structure_name))
-  
+
   # Create name mapping function
   standardize_name <- function(name) {
     # Replace hyphens with underscores (but don't lowercase)
@@ -1487,12 +1545,12 @@ standardize_column_names <- function(df, structure_name, verbose = FALSE) {
     }
     return(name)
   }
-  
-  
+
+
   # Standardize column names
   old_names <- names(df)
   new_names <- sapply(old_names, standardize_name)
-  
+
   # Report changes
   changed <- old_names != new_names
   if (any(changed) && verbose) {
@@ -1500,11 +1558,11 @@ standardize_column_names <- function(df, structure_name, verbose = FALSE) {
     for (i in which(changed)) {
       cat(sprintf("\n  %s -> %s", old_names[i], new_names[i]))
     }
-    
+
     # Add summary
     cat(sprintf("\n\nSummary: %d names standardized\n", sum(changed)))
   }
-  
+
   # Apply new names
   names(df) <- new_names
   return(df)
@@ -1513,13 +1571,13 @@ standardize_column_names <- function(df, structure_name, verbose = FALSE) {
 parse_field_name <- function(name) {
   # Split name into components
   parts <- strsplit(name, "_")[[1]]
-  
+
   # Extract prefix and numeric components
   prefix <- parts[1]  # e.g., "lec"
-  
+
   # Get all numeric components
   numbers <- as.numeric(grep("^\\d+$", parts, value = TRUE))
-  
+
   list(
     prefix = prefix,
     numbers = numbers,
@@ -1532,29 +1590,29 @@ compare_numeric_patterns <- function(name1, name2) {
   # Parse both names
   parsed1 <- parse_field_name(name1)
   parsed2 <- parse_field_name(name2)
-  
+
   # Must have same prefix
   if (parsed1$prefix != parsed2$prefix) {
     return(0)
   }
-  
+
   # Compare number of numeric components
   n1 <- length(parsed1$numbers)
   n2 <- length(parsed2$numbers)
-  
+
   # If one is hierarchical (has underscore numbers) and other isn't, they're different
   if ((grepl("_\\d+_\\d+", name1) && !grepl("_\\d+_\\d+", name2)) ||
       (!grepl("_\\d+_\\d+", name1) && grepl("_\\d+_\\d+", name2))) {
     return(0.3)  # Very low similarity for different patterns
   }
-  
+
   # Compare the actual numbers
   max_nums <- max(n1, n2)
   matching_nums <- sum(parsed1$numbers[1:min(n1, n2)] == parsed2$numbers[1:min(n1, n2)])
-  
+
   # Calculate similarity based on matching numbers
   similarity <- matching_nums / max_nums
-  
+
   return(similarity)
 }
 
@@ -1565,20 +1623,20 @@ compare_numeric_patterns <- function(name1, name2) {
 # Modified transform_value_ranges function
 transform_value_ranges <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nChecking and transforming value ranges...")
-  
+
   # Initialize missing field tracking
   missing_required_fields <- character(0)
-  
+
   # Initialize range_summary to store transformation details
   range_summary <- list()
-  
+
   # Check which columns are required
   required_fields <- elements$name[elements$required == "Required"]
-  
+
   # More robust check for missing/NA values in required fields
   missing_required <- FALSE
   missing_fields <- character(0)
-  
+
   for(field in required_fields) {
     if(field %in% names(df)) {
       if(is.character(df[[field]])) {
@@ -1586,7 +1644,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
       } else {
         missing_values <- is.na(df[[field]])
       }
-      
+
       if(any(missing_values)) {
         missing_required <- TRUE
         missing_fields <- c(missing_fields, field)
@@ -1596,45 +1654,45 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
       missing_fields <- c(missing_fields, field)
     }
   }
-  
+
   if(missing_required) {
     if(verbose) {
-      warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.', 
+      warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
                       paste(missing_fields, collapse=", ")))
     }
     # Store missing fields for later use
     missing_required_fields <- missing_fields
   }
-  
+
   # Process binary fields safely
   binary_fields <- elements$name[!is.na(elements$valueRange) & elements$valueRange == "0;1"]
   if (length(binary_fields) > 0) {
     if(verbose) cat("\n\nProcessing binary fields (0;1)...")
-    
+
     for (field in binary_fields) {
       if (field %in% names(df)) {
         # Safe conversion - always convert to character first
         values <- as.character(df[[field]])
         potential_booleans <- c("true", "false", "t", "f", "TRUE", "FALSE", "True", "False")
-        
+
         # Check if any of the values match potential boolean values
         has_boolean <- any(tolower(values) %in% tolower(potential_booleans), na.rm = TRUE)
-        
+
         if (has_boolean) {
           if(verbose) {
             cat(sprintf("\n\nField: %s", field))
             cat("\n  Converting boolean values to 0/1")
           }
-          
+
           # Store original values
           orig_values <- unique(values)
-          
+
           # Transform values more carefully
           result <- standardize_binary(values)
           # Make sure we don't introduce NAs where there weren't any before
           was_na <- is.na(values)
           df[[field]] <- result
-          
+
           # Store summary
           range_summary[[field]] <- list(
             type = "binary",
@@ -1642,7 +1700,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
             orig_values = orig_values,
             new_values = unique(df[[field]])
           )
-          
+
           if(verbose) {
             cat("\n  Value mapping:")
             cat(sprintf("\n    Before: %s", paste(head(orig_values), collapse=", ")))
@@ -1652,26 +1710,26 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
       }
     }
   }
-  
+
   # Process fields with value range rules
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     value_range <- elements$valueRange[i]
-    
+
     # Skip if field doesn't exist, has no range, or is binary (already processed)
-    if (!field_name %in% names(df) || 
-        is.na(value_range) || 
+    if (!field_name %in% names(df) ||
+        is.na(value_range) ||
         value_range == "" ||
-        value_range == "0;1" || 
+        value_range == "0;1" ||
         !grepl(";", value_range)) {
       next
     }
-    
+
     if(verbose) {
       cat(sprintf("\n\nField: %s", field_name))
       cat(sprintf("\n  Expected values: %s", value_range))
     }
-    
+
     # Store original values
     orig_values <- tryCatch({
       unique(df[[field_name]])
@@ -1679,12 +1737,12 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
       if(verbose) cat(sprintf("\n  Error getting unique values: %s", e$message))
       return(NA)
     })
-    
+
     # Get expected values and standardize
     expected_values <- trimws(unlist(strsplit(value_range, ";")))
     current_values <- df[[field_name]]
     transformed_count <- 0
-    
+
     # Special handling for handedness
     if(field_name == "handedness") {
       df[[field_name]] <- standardize_handedness(current_values)
@@ -1692,7 +1750,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
     } else {
       # Convert field to character for safer comparison
       df[[field_name]] <- as.character(df[[field_name]])
-      
+
       # Map case-insensitive matches for other fields
       for (exp_val in expected_values) {
         # Handle NA values specially
@@ -1703,7 +1761,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
         }
       }
     }
-    
+
     # Store summary
     range_summary[[field_name]] <- list(
       type = "categorical",
@@ -1711,7 +1769,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
       orig_values = orig_values,
       new_values = unique(df[[field_name]])
     )
-    
+
     if(verbose && transformed_count > 0) {
       cat(sprintf("\n  Transformed %d values", transformed_count))
       cat("\n  Value comparison:")
@@ -1719,7 +1777,7 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
       cat(sprintf("\n    After:  %s", paste(head(unique(df[[field_name]])), collapse=", ")))
     }
   }
-  
+
   # Print summary if needed
   if(verbose && length(range_summary) > 0) {
     cat("\n\nValue range transformation summary:")
@@ -1731,16 +1789,17 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
     }
     cat("\n")
   }
-  
+
   # Add the missing fields as an attribute to the dataframe
   attr(df, "missing_required_fields") <- missing_required_fields
-  
+
   return(df)
 }
 
 # Modified ndaValidator to include column name standardization
 # new structure based on observations from Stanford
 # Modified version of ndaValidator to properly handle renamed fields
+# Modified ndaValidator to include config file parameter
 ndaValidator <- function(measure_name,
                          api,
                          limited_dataset = FALSE,
@@ -1749,36 +1808,36 @@ ndaValidator <- function(measure_name,
                          debug = FALSE,
                          auto_drop_unknown = FALSE,
                          interactive_mode = TRUE) {
-  
+
   tryCatch({
     # Initialize a list to track all columns to be removed
     all_columns_to_drop <- character(0)
-    
+
     if (!exists(".wizaRdry_env")) {
       .wizaRdry_env <- new.env(parent = parent.frame())
     }
-    
+
     # Get the dataframe from the environment
     df <- base::get(measure_name, envir = .wizaRdry_env)
-    
+
     # Force all complex/problematic data types to character immediately
     for (col in names(df)) {
       tryCatch({
         # Convert POSIXct and other complex classes to character
-        if (inherits(df[[col]], "POSIXt") || 
+        if (inherits(df[[col]], "POSIXt") ||
             inherits(df[[col]], "Date") ||
             length(class(df[[col]])) > 1) {
-          
+
           if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
           df[[col]] <- as.character(df[[col]])
         }
-        
+
         # Test if column is accessible
         dummy <- df[[col]][1]
       }, error = function(e) {
         # If any error, convert to character
         if(verbose) message(sprintf("Column '%s' has an unusable type. Converting to character.", col))
-        
+
         # Try three different approaches to fix problematic columns
         tryCatch({
           df[[col]] <- as.character(df[[col]])
@@ -1793,56 +1852,56 @@ ndaValidator <- function(measure_name,
         })
       })
     }
-    
+
     # Save the cleaned dataframe
     assign(measure_name, df, envir = .wizaRdry_env)
-    
+
     # Get structure name and fetch elements
     structure_name <- measure_name
     message("\n\nFetching ", structure_name, " Data Structure from NDA API...")
     elements <- fetch_structure_elements(structure_name, nda_base_url)
-    
+
     if (is.null(elements) || nrow(elements) == 0) {
       stop("No elements found in the structure definition")
     }
-    
+
     # PHASE 1: NA Value Mapping
     if(verbose) message("\n\n--- PHASE 1: NA Value Mapping ---")
-    
-    # Apply null transformations first
+
+    # Apply null transformations first, passing the config file
     df <- apply_null_transformations(df, elements, verbose = verbose)
-    
+
     # Handle missing required fields
     required_fields <- elements$name[elements$required == "Required"]
     missing_required <- required_fields[!required_fields %in% names(df)]
     if(length(missing_required) > 0) {
       df <- handle_missing_fields(df, elements, missing_required, verbose = verbose)
     }
-    
+
     # PHASE 2: Column Standardization
     if(verbose) message("\n\n--- PHASE 2: Column Standardization ---")
-    
+
     # Standardize column names
     df <- standardize_column_names(df, structure_name, verbose = verbose)
     df <- standardize_field_names(df, measure_name, verbose = verbose)
-    
+
     # Rename fields with close matches - track columns to drop
     renamed_results <- find_and_rename_fields(df, elements, structure_name,
                                               verbose = verbose,
                                               auto_drop_unknown = auto_drop_unknown,
                                               interactive_mode = interactive_mode)
     df <- renamed_results$df
-    
+
     # Get the list of fields that were renamed (not to be dropped at the end)
     renamed_fields <- renamed_results$renamed_fields
-    
+
     # Collect columns that were dropped during renaming
-    all_columns_to_drop <- c(all_columns_to_drop, 
+    all_columns_to_drop <- c(all_columns_to_drop,
                              setdiff(renamed_results$columns_to_drop, renamed_fields))
-    
+
     # PHASE 3: Value Transformation
     if(verbose) message("\n\n--- PHASE 3: Value Transformation ---")
-    
+
     # Convert logical values to character
     for(col in names(df)) {
       if(is.logical(df[[col]])) {
@@ -1850,27 +1909,30 @@ ndaValidator <- function(measure_name,
         df[[col]] <- as.character(df[[col]])
       }
     }
-    
+
     # Transform value ranges
     df <- transform_value_ranges(df, elements, verbose = verbose)
-    
+
     # Extract missing required fields from attributes
     missing_required_fields <- attr(df, "missing_required_fields")
     if(is.null(missing_required_fields)) missing_required_fields <- character(0)
-    
+
     # Apply type conversions
     df <- apply_type_conversions(df, elements, verbose = verbose)
-    
+
+    # Apply NA value fixes with config
+    df <- fix_na_values(df, elements, verbose = verbose)
+
     # PHASE 4: Validation and De-Identification
     if(verbose) message("\n\n--- PHASE 4: Validation and De-Identification ---")
-    
+
     # De-identification steps
     df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
     df <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
-    
+
     # Save processed dataframe back to environment
     assign(measure_name, df, envir = .wizaRdry_env)
-    
+
     # Final validation - also collects unknown fields to drop
     validation_results <- validate_structure(df, elements, measure_name, api,
                                              verbose = verbose,
@@ -1878,50 +1940,50 @@ ndaValidator <- function(measure_name,
                                              missing_required_fields = missing_required_fields,
                                              interactive_mode = interactive_mode,
                                              collect_only = TRUE)  # Don't update script yet
-    
-    # Add the unknown fields that were identified during validation 
+
+    # Add the unknown fields that were identified during validation
     # BUT exclude fields that were successfully renamed
     if(length(validation_results$unknown_fields_dropped) > 0) {
       fields_to_drop <- setdiff(validation_results$unknown_fields_dropped, renamed_fields)
       all_columns_to_drop <- c(all_columns_to_drop, fields_to_drop)
     }
-    
+
     # Final check for missing required values
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
       if(verbose) message("\nValidation FAILED: Required fields are missing or contain NA values")
     }
-    
+
     # Now update the cleaning script with ALL columns to drop in one operation
     # BUT EXCLUDE renamed fields
     all_columns_to_drop <- setdiff(all_columns_to_drop, renamed_fields)
-    
+
     if(length(all_columns_to_drop) > 0) {
       update_cleaning_script <- FALSE
-      
+
       if(interactive_mode) {
         update_input <- safe_readline(
           prompt = sprintf("Update cleaning script with code to drop %d fields? (y/n): ",
-                           length(all_columns_to_drop)), 
+                           length(all_columns_to_drop)),
           default = "y")
         update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
       } else {
         update_cleaning_script <- TRUE
       }
-      
+
       if(update_cleaning_script) {
         if(verbose) {
           cat("\nUpdating cleaning script with fields to drop (excluding renamed fields):")
           cat(sprintf("\n  %s", paste(all_columns_to_drop, collapse=", ")))
         }
-        
+
         # Update the cleaning script
         update_result <- tryCatch({
           api_str <- as.character(api)
           measure_name_str <- as.character(measure_name)
-          
+
           # First try the expected path
           cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
-          
+
           # If not found, also check alternative location
           if (!file.exists(cleaning_script_path)) {
             alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
@@ -1930,16 +1992,16 @@ ndaValidator <- function(measure_name,
               if(verbose) cat("\nFound cleaning script in alternative location:", cleaning_script_path)
             }
           }
-          
+
           if(verbose) cat("\nAttempting to update cleaning script at:", cleaning_script_path)
-          
+
           if(file.exists(cleaning_script_path)) {
             # Read existing content
             existing_content <- readLines(cleaning_script_path)
-            
+
             # Create the code to remove columns
             unknown_fields_str <- paste(shQuote(unique(all_columns_to_drop)), collapse=", ")
-            
+
             removal_code <- c(
               "",
               "# Auto-generated code to remove unknown fields",
@@ -1947,10 +2009,10 @@ ndaValidator <- function(measure_name,
                      measure_name_str, ") %in% c(",
                      unknown_fields_str, ")]")
             )
-            
+
             # Write back the entire file with the new code appended
             writeLines(c(existing_content, removal_code), cleaning_script_path)
-            
+
             if(verbose) cat("\nSuccessfully updated cleaning script with code to remove unknown fields")
             TRUE
           } else {
@@ -1969,13 +2031,13 @@ ndaValidator <- function(measure_name,
           if(verbose) cat("\nError updating cleaning script:", e$message)
           FALSE
         })
-        
+
         if(verbose && update_result) {
           cat("\nCleaning script updated with", length(all_columns_to_drop), "fields to drop")
         }
       }
     }
-    
+
     return(validation_results)
   }, error = function(e) {
     message("Error in ndaValidator: ", e$message)
@@ -1990,41 +2052,60 @@ ndaValidator <- function(measure_name,
 # Modified apply_null_transformations with better error handling
 # This replacement for apply_null_transformations will actually fix the issue
 # More dynamic solution that doesn't assume -99
-apply_null_transformations <- function(df, elements, verbose = FALSE) {
+apply_null_transformations <- function(df, elements, verbose = TRUE, config_file = "./config.yml") {
   if(verbose) cat("\nApplying null value transformations...")
   transform_summary <- list()
-  
+
+  # Load missing value codes from config if available
+  missing_codes <- NULL
+  if (!is.null(config_file) && file.exists(config_file)) {
+    tryCatch({
+      config_env <- ConfigEnv$new(config_file)
+      missing_codes <- config_env$get_missing_values()
+      if(verbose && !is.null(missing_codes)) {
+        message("Using missing value codes from ", config_file)
+      }
+    }, error = function(e) {
+      if(verbose) {
+        message("Note: Could not load missing value codes from config: ", e$message)
+        message("Using NDA data dictionary values only.")
+      }
+    })
+  } else if(verbose) {
+    message("Note: Config file not found. Using NDA data dictionary values only.")
+  }
+
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     type <- elements$type[i]
     notes <- elements$notes[i]
     value_range <- elements$valueRange[i]
-    
+
     if (field_name %in% names(df)) {
       tryCatch({
         # Extract rules for context and to determine missing value meanings
         rules <- get_mapping_rules(notes)
-        
+
         # Extract missing value codes directly from ValueRange
         na_code <- NULL
         missing_code <- NULL
         refused_code <- NULL
-        
+
         # Parse valueRange for special codes
         if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
           range_parts <- trimws(strsplit(value_range, ";")[[1]])
-          
+
           # Extract the special codes by examining both valueRange and rules
           # This dynamically identifies the meaning of each special code
           for (code in range_parts) {
             # Skip range notation (like "0::4")
             if (grepl("::", code)) next
-            
+
             # Check if this code exists in the rules
             if (code %in% names(rules)) {
               value_meaning <- rules[[code]]
               code_value <- as.numeric(code)  # Convert to actual numeric value
-              
+
               # Determine what this code represents
               if (grepl("N/?A", value_meaning, ignore.case = TRUE)) {
                 na_code <- code_value
@@ -2036,15 +2117,15 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
             }
           }
         }
-        
+
         # Display what we found
         if (verbose && (!is.null(na_code) || !is.null(missing_code) || !is.null(refused_code))) {
           cat(sprintf("\n\nField: %s", field_name))
-          
+
           if (!is.null(na_code)) cat(sprintf("\n  NA code: %d", na_code))
           if (!is.null(missing_code)) cat(sprintf("\n  Missing code: %d", missing_code))
           if (!is.null(refused_code)) cat(sprintf("\n  Refused code: %d", refused_code))
-          
+
           if (!is.null(rules) && length(rules) > 0) {
             cat("\n  Rules found:")
             for (rule_code in names(rules)) {
@@ -2052,33 +2133,33 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
             }
           }
         }
-        
+
         # Store original values for comparison
         orig_values <- head(unique(df[[field_name]]))
-        
+
         # Prepare the column by converting to numeric if needed
-        if (type %in% c("Integer", "Float") && 
+        if (type %in% c("Integer", "Float") &&
             (!is.null(na_code) || !is.null(missing_code) || !is.null(refused_code))) {
           if (is.character(df[[field_name]])) {
             df[[field_name]] <- as.numeric(df[[field_name]])
           }
         }
-        
+
         # Count transformations
         transform_count <- 0
-        
+
         # Apply NA code replacement
         if (!is.null(na_code)) {
           na_mask <- is.na(df[[field_name]])
           na_count <- sum(na_mask)
-          
+
           if (na_count > 0) {
             df[[field_name]][na_mask] <- na_code
             transform_count <- transform_count + na_count
             if (verbose) cat(sprintf("\n  Replaced %d NA values with %d", na_count, na_code))
           }
         }
-        
+
         # Apply type conversion after replacements
         if (type %in% c("Integer", "Float") && transform_count > 0) {
           if (type == "Integer") {
@@ -2086,7 +2167,7 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
           }
           # Float type is already handled by as.numeric above
         }
-        
+
         # Store transformation summary
         transform_summary[[field_name]] <- list(
           type = type,
@@ -2094,7 +2175,7 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
           values_before = orig_values,
           values_after = head(unique(df[[field_name]]))
         )
-        
+
         # Display transformation results
         if (verbose && transform_count > 0) {
           cat("\n  Value comparison:")
@@ -2109,7 +2190,7 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
       })
     }
   }
-  
+
   # Print summary
   if (verbose && length(transform_summary) > 0) {
     cat("\n\nNull transformation summary:")
@@ -2121,7 +2202,7 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
     }
     cat("\n")
   }
-  
+
   return(df)
 }
 
@@ -2133,42 +2214,42 @@ check_special_values <- function(measure_name, verbose = TRUE) {
     if (verbose) message(sprintf("Dataset %s not found", measure_name))
     return(NULL)
   }
-  
+
   # Get the dataset (without specifying environment)
   df <- base::get(measure_name)
-  
+
   if (verbose) message(sprintf("\nChecking values in %s dataset...", measure_name))
-  
+
   # Check for -99 values in integer columns
   special_value_cols <- c()
-  
+
   for (col in names(df)) {
     # Skip non-numeric columns
     if (!is.numeric(df[[col]])) next
-    
+
     # Check for special values
     has_minus_99 <- any(df[[col]] == -99, na.rm = TRUE)
     has_na <- any(is.na(df[[col]]))
-    
+
     if (has_minus_99) {
       special_value_cols <- c(special_value_cols, col)
       if (verbose) {
-        message(sprintf("Column %s contains %d values of -99 and %d NA values", 
+        message(sprintf("Column %s contains %d values of -99 and %d NA values",
                         col, sum(df[[col]] == -99, na.rm = TRUE), sum(is.na(df[[col]]))))
       }
     } else if (has_na && verbose) {
-      message(sprintf("Column %s contains %d NA values but no -99 values", 
+      message(sprintf("Column %s contains %d NA values but no -99 values",
                       col, sum(is.na(df[[col]]))))
     }
   }
-  
+
   if (length(special_value_cols) > 0 && verbose) {
     message(sprintf("\nFound -99 values in %d columns:", length(special_value_cols)))
     message(paste(special_value_cols, collapse=", "))
   } else if (verbose) {
     message("\nNo -99 values found in any columns. Check for NAs instead.")
   }
-  
+
   return(invisible(special_value_cols))
 }
 
