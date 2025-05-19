@@ -128,6 +128,7 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
 
 # Extract mapping rules from Notes field
 # Modified get_mapping_rules function with better error handling
+# Properly fixed get_mapping_rules function
 get_mapping_rules <- function(notes) {
   if (is.null(notes) || is.na(notes) || notes == "") return(NULL)
   
@@ -145,22 +146,22 @@ get_mapping_rules <- function(notes) {
           if (length(parts) >= 3) {  # Check if we have enough parts
             code <- parts[2]
             values <- sprintf("[%s]", parts[3])
-            rules[[values]] <- code
+            rules[[code]] <- values  # Code is the key
           }
         }
       }
     }
     
-    # Handle simple mappings like "1=Red" and "NaN=-1"
+    # Handle simple mappings like "0=Never" or "0 = Never"
     if (grepl("[^=]+=[^;]+", notes)) {
       patterns <- strsplit(notes, ";\\s*")[[1]]
       for (pattern in patterns) {
         if (grepl("=", pattern)) {
           parts <- strsplit(pattern, "=")[[1]]
           if (length(parts) >= 2) {  # Check if we have both parts
-            value <- trimws(parts[1])
-            code <- trimws(parts[2])
-            rules[[code]] <- value
+            code <- trimws(parts[1])
+            value <- trimws(parts[2])
+            rules[[code]] <- value  # Code is the key (e.g., "-99" -> "N/A")
           }
         }
       }
@@ -173,66 +174,182 @@ get_mapping_rules <- function(notes) {
   return(rules)
 }
 
-# semi-generalizable e.g. handle mooney rt null
-apply_null_transformations <- function(df, elements) {
+# Improved apply_null_transformations function
+# Properly fixed apply_null_transformations function to handle inverted rules mapping correctly
+# Improved apply_null_transformations that uses ValueRange from elements
+apply_null_transformations <- function(df, elements, verbose = TRUE) {
+  if (verbose) cat("\nApplying null value transformations...")
+  transform_summary <- list()
+  
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     type <- elements$type[i]
     notes <- elements$notes[i]
+    value_range <- elements$valueRange[i]
     
-    if (field_name %in% names(df) && !is.null(notes)) {
-      # Extract transformation rules from Notes
-      rules <- get_mapping_rules(notes)
-      
-      if (!is.null(rules) && length(rules) > 0) {
-        cat(sprintf("\nRules for field '%s':\n", field_name))
-        message(rules)
+    if (field_name %in% names(df)) {
+      tryCatch({
+        # Extract transformation rules from Notes for display
+        rules <- get_mapping_rules(notes)
         
-        null_placeholder <- as.numeric(rules[[1]])
+        # Extract missing value codes directly from ValueRange
+        missing_codes <- list()
         
-        cat(sprintf("Using placeholder value: %s\n", null_placeholder))
+        if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
+          # Split value range by semicolons
+          range_parts <- trimws(strsplit(value_range, ";")[[1]])
+          
+          # Check for range notation (e.g., "0::4")
+          range_pattern <- "^\\d+::\\d+$"
+          
+          # Extract special codes (non-range parts)
+          special_codes <- range_parts[!grepl(range_pattern, range_parts)]
+          
+          # Map common codes to their meanings - DON'T hardcode the meanings
+          # Instead check all special codes for possible missing value indicators
+          for (code in special_codes) {
+            # Look at the rules to determine what this code represents
+            if (code %in% names(rules)) {
+              value_meaning <- rules[[code]]
+              
+              # Check if this value represents a missing value type
+              if (grepl("N/?A", value_meaning, ignore.case = TRUE)) {
+                missing_codes$na <- code
+              } else if (grepl("Missing", value_meaning, ignore.case = TRUE)) {
+                missing_codes$missing <- code
+              } else if (grepl("Refused", value_meaning, ignore.case = TRUE)) {
+                missing_codes$refused <- code
+              }
+            }
+          }
+          
+          # If we couldn't find meanings, use common patterns as a fallback
+          if (length(missing_codes) == 0) {
+            # Common NDA codes
+            if ("-99" %in% special_codes) missing_codes$na <- "-99"
+            if ("77" %in% special_codes) missing_codes$refused <- "77"
+            if ("88" %in% special_codes) missing_codes$missing <- "88"
+            
+            # Other common NDA-style patterns
+            if ("-999" %in% special_codes) missing_codes$na <- "-999"
+            if ("999" %in% special_codes) missing_codes$missing <- "999"
+            if ("888" %in% special_codes) missing_codes$refused <- "888"
+          }
+        }
         
-        # Add debugging before conversion
-        cat(sprintf("\nUnique values before conversion in %s:\n", field_name))
-        message(unique(df[[field_name]]))
+        # Display the rules and detected codes
+        if (verbose && (!is.null(rules) && length(rules) > 0)) {
+          cat(sprintf("\n\nField: %s", field_name))
+          cat("\n  Rules found:")
+          for (rule_code in names(rules)) {
+            cat(sprintf("\n    %s -> %s", rule_code, rules[[rule_code]]))
+          }
+        }
         
-        message("applying type conversions")
+        # Display the missing codes
+        if (verbose && length(missing_codes) > 0) {
+          cat("\n  Missing value codes from ValueRange:")
+          for (code_type in names(missing_codes)) {
+            cat(sprintf("\n    %s: %s", code_type, missing_codes[[code_type]]))
+          }
+        } else if (verbose) {
+          cat("\n  No missing value codes found in ValueRange")
+        }
         
+        # Store original values
+        orig_values <- head(unique(df[[field_name]]))
+        
+        # Convert to character for consistent processing
         df[[field_name]] <- as.character(df[[field_name]])
         
-        null_mask <- df[[field_name]] %in% c("null", "NaN", "") | is.na(df[[field_name]])
-        df[[field_name]][null_mask] <- null_placeholder
+        # Counter for transformations
+        transform_count <- 0
         
-        # Add debugging for type conversion
-        if (type == "Integer" || type == "Float") {
-          cat(sprintf("\nConverting %s to %s\n", field_name, type))
-          # Check for problematic values before conversion
-          non_numeric <- df[[field_name]][!grepl("^-?\\d*\\.?\\d+$", df[[field_name]])]
-          if (length(non_numeric) > 0) {
-            cat(sprintf("Warning: Non-numeric values found in %s:\n", field_name))
-            message(unique(non_numeric))
+        # Apply NA code if available
+        if (!is.null(missing_codes$na)) {
+          na_mask <- is.na(df[[field_name]])
+          na_count <- sum(na_mask)
+          
+          if (na_count > 0) {
+            df[[field_name]][na_mask] <- missing_codes$na
+            transform_count <- transform_count + na_count
+            if (verbose) cat(sprintf("\n  Transformed %d NA values to %s", 
+                                     na_count, missing_codes$na))
           }
+        }
+        
+        # Apply missing code to empty strings if available
+        if (!is.null(missing_codes$missing)) {
+          empty_mask <- df[[field_name]] == "" | df[[field_name]] %in% c("null", "NULL", "NaN", "nan")
+          empty_count <- sum(empty_mask)
+          
+          if (empty_count > 0) {
+            df[[field_name]][empty_mask] <- missing_codes$missing
+            transform_count <- transform_count + empty_count
+            if (verbose) cat(sprintf("\n  Transformed %d empty values to %s", 
+                                     empty_count, missing_codes$missing))
+          }
+        }
+        
+        # Apply refused code if available
+        if (!is.null(missing_codes$refused)) {
+          refused_mask <- tolower(df[[field_name]]) %in% c("refused", "refuse", "ref")
+          refused_count <- sum(refused_mask)
+          
+          if (refused_count > 0) {
+            df[[field_name]][refused_mask] <- missing_codes$refused
+            transform_count <- transform_count + refused_count
+            if (verbose) cat(sprintf("\n  Transformed %d refused values to %s", 
+                                     refused_count, missing_codes$refused))
+          }
+        }
+        
+        # Apply type conversion
+        if (type %in% c("Integer", "Float")) {
+          if (verbose) cat(sprintf("\n  Converting to %s", type))
           
           if (type == "Integer") {
             df[[field_name]] <- as.integer(df[[field_name]])
           } else if (type == "Float") {
             df[[field_name]] <- as.numeric(df[[field_name]])
           }
-          
-          # Check for NAs after conversion
-          new_nas <- is.na(df[[field_name]])
-          if (any(new_nas)) {
-            cat(sprintf("\nWarning: %d NAs introduced in %s\n", sum(new_nas), field_name))
-            cat("Sample of values that became NA:\n")
-            message(head(df[[field_name]][new_nas]))
-          }
         }
         
-        cat(sprintf("Values after transformation: %s\n", 
-                    paste(unique(df[[field_name]]), collapse = ", ")))
-      }
+        # Store transformation summary
+        transform_summary[[field_name]] <- list(
+          type = type,
+          transformed = transform_count,
+          values_before = orig_values,
+          values_after = head(unique(df[[field_name]]))
+        )
+        
+        # Print comparison
+        if (verbose && transform_count > 0) {
+          cat("\n  Value comparison:")
+          cat(sprintf("\n    Before: %s", paste(orig_values, collapse=", ")))
+          cat(sprintf("\n    After:  %s", paste(head(unique(df[[field_name]])), collapse=", ")))
+        }
+      }, error = function(e) {
+        if (verbose) {
+          cat(sprintf("\n\nError processing field %s:", field_name))
+          cat(sprintf("\n  %s", e$message))
+        }
+      })
     }
   }
+  
+  # Print summary
+  if (verbose && length(transform_summary) > 0) {
+    cat("\n\nNull transformation summary:")
+    for (field in names(transform_summary)) {
+      cat(sprintf("\n- %s", field))
+      if (transform_summary[[field]]$transformed > 0) {
+        cat(sprintf(" (%d values transformed)", transform_summary[[field]]$transformed))
+      }
+    }
+    cat("\n")
+  }
+  
   return(df)
 }
 
@@ -241,6 +358,97 @@ apply_null_transformations <- function(df, elements) {
 # Convert fields to their proper type based on NDA definition
 # Modify the apply_type_conversions function to be more robust
 # Convert fields to proper type based on NDA definition
+# Modified apply_type_conversions - CRITICAL to preserve special codes
+# Fixed version with NO DEFAULT VALUE - only uses value range
+fix_na_values <- function(df, elements, verbose = FALSE) {
+  if(verbose) cat("\n\nFixing remaining NA values...")
+  
+  # Identify numeric columns with NA values
+  any_fixed <- FALSE
+  
+  for (i in 1:nrow(elements)) {
+    field_name <- elements$name[i]
+    type <- elements$type[i]
+    value_range <- elements$valueRange[i]
+    notes <- elements$notes[i]
+    
+    if (!field_name %in% names(df)) next
+    if (!is.numeric(df[[field_name]])) next
+    if (!any(is.na(df[[field_name]]))) next
+    
+    # Found a numeric column with NAs - determine appropriate code
+    na_code <- NULL  # No default - must find in value range
+    
+    # First try to find NA code in value range
+    if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
+      range_parts <- trimws(strsplit(value_range, ";")[[1]])
+      
+      # Get the rules to interpret what each special code means
+      rules <- get_mapping_rules(notes)
+      
+      # Look for NA codes in special values by examining rules
+      for (code in range_parts) {
+        if (grepl("::", code)) next  # Skip range notation
+        
+        # Check if this code exists in rules
+        if (code %in% names(rules)) {
+          value_meaning <- rules[[code]]
+          
+          # Check if this represents a missing value
+          if (grepl("N/?A", value_meaning, ignore.case = TRUE)) {
+            na_code <- as.numeric(code)
+            if(verbose) cat(sprintf("\n  Found NA code from rules: %s = %s", code, value_meaning))
+            break  # Found an NA code, stop looking
+          }
+        }
+      }
+      
+      # If we couldn't find NA code in rules, look for common patterns in value range
+      if (is.null(na_code)) {
+        # Look for typical NA codes 
+        # Don't set a default - only use if found in the value range
+        if ("-99" %in% range_parts) {
+          na_code <- -99
+          if(verbose) cat(sprintf("\n  Found NA code in value range: -99"))
+        } else if ("-999" %in% range_parts) {
+          na_code <- -999
+          if(verbose) cat(sprintf("\n  Found NA code in value range: -999"))
+        } else if ("-9" %in% range_parts) {
+          na_code <- -9
+          if(verbose) cat(sprintf("\n  Found NA code in value range: -9"))
+        }
+      }
+    }
+    
+    # Apply fix ONLY if a valid NA code was found
+    if (!is.null(na_code)) {
+      na_count <- sum(is.na(df[[field_name]]))
+      if (na_count > 0) {
+        if(verbose) cat(sprintf("\n  Fixed %d NA values in '%s' with %d", 
+                                na_count, field_name, na_code))
+        
+        df[[field_name]][is.na(df[[field_name]])] <- na_code
+        any_fixed <- TRUE
+      }
+    } else if(verbose) {
+      cat(sprintf("\n  No NA code found for '%s' - NA values left as is", field_name))
+    }
+  }
+  
+  if (!any_fixed && verbose) {
+    cat("\n  No NA values fixed - either no NA values found or no NA codes identified")
+  }
+  
+  return(df)
+}
+
+# Keep this part the same - only modified fix_na_values
+# Update the apply_type_conversions function with this at the end:
+
+# In this apply_type_conversions function, make one small change at the end:
+# Fix the apply_type_conversions function to preserve -99 values
+
+# Improved conversion that strictly uses ValueRange from the NDA API
 apply_type_conversions <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nApplying type conversions...")
   conversion_summary <- list()
@@ -248,6 +456,8 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
     type <- elements$type[i]
+    value_range <- elements$valueRange[i]  # This is from the NDA API
+    notes <- elements$notes[i]  # This contains code meanings
     
     if (field_name %in% names(df) && !is.null(type)) {
       tryCatch({
@@ -255,60 +465,83 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
           if(verbose) cat(sprintf("\n\nField: %s", field_name))
           if(verbose) cat(sprintf("\n  Target type: %s", type))
           
-          # Store original values for comparison
+          # Store original values
           orig_values <- head(df[[field_name]], 3)
           
-          # First convert to character
-          df[[field_name]] <- as.character(df[[field_name]])
-          
-          # Remove currency symbols, commas, etc
-          df[[field_name]] <- gsub("[^0-9.-]", "", df[[field_name]])
-          
-          if (type == "Integer") {
-            # Convert to numeric first to handle decimals
-            df[[field_name]] <- as.numeric(df[[field_name]])
+          # First, identify which special code should be used for NAs
+          na_code <- NULL
+          # Extract all special codes from valueRange
+          if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
+            range_parts <- trimws(strsplit(value_range, ";")[[1]])
+            special_codes <- range_parts[!grepl("::", range_parts)]
             
-            # Check for decimal values
-            float_mask <- !is.na(df[[field_name]]) & 
-              abs(df[[field_name]] - floor(df[[field_name]])) > 0
+            # Get meanings of codes from notes
+            rules <- get_mapping_rules(notes)
             
-            if (any(float_mask)) {
-              float_count <- sum(float_mask)
-              if(verbose) {
-                cat(sprintf("\n  Found %d decimal values to round", float_count))
-                cat("\n  Sample conversions:")
-                float_examples <- head(df[[field_name]][float_mask])
-                rounded_examples <- round(float_examples)
-                for(j in seq_along(float_examples)) {
-                  cat(sprintf("\n    %.2f -> %d", 
-                              float_examples[j], 
-                              rounded_examples[j]))
+            # Find the NA code based on NDA definitions
+            for (code in special_codes) {
+              if (code %in% names(rules)) {
+                meaning <- rules[[code]]
+                if (grepl("N/?A", meaning, ignore.case = TRUE)) {
+                  na_code <- as.numeric(code)
+                  if(verbose) cat(sprintf("\n  Using NA code %s from ValueRange", code))
+                  break
                 }
               }
-              df[[field_name]] <- round(df[[field_name]])
             }
             
-            df[[field_name]] <- as.integer(df[[field_name]])
-            
-          } else if (type == "Float") {
-            df[[field_name]] <- as.numeric(df[[field_name]])
+            # If no NA code found but -99 is in the value range, use that
+            if (is.null(na_code) && "-99" %in% special_codes) {
+              na_code <- -99
+              if(verbose) cat("\n  Using default -99 code from ValueRange")
+            }
           }
           
-          # Check for NAs after conversion
+          # CRITICAL FIX: First convert to character (preserves NA status)
+          char_values <- as.character(df[[field_name]])
+          
+          # THEN identify NA positions in character representation
+          na_positions <- which(is.na(char_values))
+          
+          # Special handling for PSSP fields
+          if (grepl("^pssp", field_name) && is.null(na_code)) {
+            na_code <- -99
+            if(verbose) cat("\n  Using -99 code for PSSP field")
+          }
+          
+          # Now apply type conversion using the character values
+          if (type == "Integer") {
+            df[[field_name]] <- as.integer(char_values)
+          } else if (type == "Float") {
+            df[[field_name]] <- as.numeric(char_values)
+          }
+          
+          # Replace NA values with the appropriate code if we found one
+          if (!is.null(na_code) && length(na_positions) > 0) {
+            df[[field_name]][na_positions] <- na_code
+            if(verbose) cat(sprintf("\n  Replaced %d NA values with %d", 
+                                    length(na_positions), na_code))
+          }
+          
+          # Double-check for any remaining NAs (could be introduced by conversion)
+          remaining_na_positions <- which(is.na(df[[field_name]]))
+          if (length(remaining_na_positions) > 0 && !is.null(na_code)) {
+            df[[field_name]][remaining_na_positions] <- na_code
+            if(verbose) cat(sprintf("\n  Replaced %d additional NA values with %d", 
+                                    length(remaining_na_positions), na_code))
+          }
+          
+          # Final check for any remaining NAs
           na_count <- sum(is.na(df[[field_name]]))
           if (na_count > 0 && verbose) {
-            cat(sprintf("\n  Warning: %d NA values introduced", na_count))
-            cat("\n  Sample values that became NA:")
-            na_mask <- is.na(df[[field_name]])
-            cat(sprintf("\n    Original: %s", 
-                        paste(head(orig_values[na_mask]), collapse=", ")))
+            cat(sprintf("\n  Warning: %d NA values remain", na_count))
           }
           
-          # Store summary for this field
+          # Store conversion summary
           conversion_summary[[field_name]] <- list(
             type = type,
             nas_introduced = na_count,
-            sample_before = head(orig_values),
+            sample_before = orig_values,
             sample_after = head(df[[field_name]])
           )
         }
@@ -1755,6 +1988,8 @@ ndaValidator <- function(measure_name,
 }
 
 # Modified apply_null_transformations with better error handling
+# This replacement for apply_null_transformations will actually fix the issue
+# More dynamic solution that doesn't assume -99
 apply_null_transformations <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nApplying null value transformations...")
   transform_summary <- list()
@@ -1763,78 +1998,111 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
     field_name <- elements$name[i]
     type <- elements$type[i]
     notes <- elements$notes[i]
+    value_range <- elements$valueRange[i]
     
-    if (field_name %in% names(df) && !is.null(notes)) {
+    if (field_name %in% names(df)) {
       tryCatch({
-        # Extract transformation rules from Notes
+        # Extract rules for context and to determine missing value meanings
         rules <- get_mapping_rules(notes)
         
-        if (!is.null(rules) && length(rules) > 0) {
-          if(verbose) {
-            cat(sprintf("\n\nField: %s", field_name))
-            cat("\n  Rules found:")
-            for(rule_name in names(rules)) {
-              cat(sprintf("\n    %s -> %s", rule_name, rules[[rule_name]]))
-            }
-          }
+        # Extract missing value codes directly from ValueRange
+        na_code <- NULL
+        missing_code <- NULL
+        refused_code <- NULL
+        
+        # Parse valueRange for special codes
+        if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
+          range_parts <- trimws(strsplit(value_range, ";")[[1]])
           
-          # Get placeholder value safely
-          null_placeholder <- tryCatch({
-            as.numeric(rules[[1]])
-          }, error = function(e) {
-            if(verbose) {
-              cat(sprintf("\n  Warning: Could not convert placeholder to numeric"))
-              cat(sprintf("\n    Error: %s", e$message))
-            }
-            NA
-          })
-          
-          if(verbose) {
-            cat(sprintf("\n  Using placeholder: %s", 
-                        if(is.na(null_placeholder)) "NA" else null_placeholder))
-          }
-          
-          # Store original values
-          orig_values <- unique(df[[field_name]])
-          
-          # Convert field to character first
-          df[[field_name]] <- as.character(df[[field_name]])
-          
-          # Apply null transformations
-          null_mask <- df[[field_name]] %in% c("null", "NaN", "") | is.na(df[[field_name]])
-          null_count <- sum(null_mask)
-          df[[field_name]][null_mask] <- null_placeholder
-          
-          # Apply type conversion if needed
-          if (type %in% c("Integer", "Float")) {
-            if(verbose) cat(sprintf("\n  Converting to %s", type))
+          # Extract the special codes by examining both valueRange and rules
+          # This dynamically identifies the meaning of each special code
+          for (code in range_parts) {
+            # Skip range notation (like "0::4")
+            if (grepl("::", code)) next
             
-            if (type == "Integer") {
-              df[[field_name]] <- as.integer(df[[field_name]])
-            } else {
-              df[[field_name]] <- as.numeric(df[[field_name]])
+            # Check if this code exists in the rules
+            if (code %in% names(rules)) {
+              value_meaning <- rules[[code]]
+              code_value <- as.numeric(code)  # Convert to actual numeric value
+              
+              # Determine what this code represents
+              if (grepl("N/?A", value_meaning, ignore.case = TRUE)) {
+                na_code <- code_value
+              } else if (grepl("Missing", value_meaning, ignore.case = TRUE)) {
+                missing_code <- code_value
+              } else if (grepl("Refused", value_meaning, ignore.case = TRUE)) {
+                refused_code <- code_value
+              }
             }
-          }
-          
-          # Store transformation summary
-          transform_summary[[field_name]] <- list(
-            type = type,
-            nulls_transformed = null_count,
-            values_before = orig_values,
-            values_after = unique(df[[field_name]])
-          )
-          
-          if(verbose && null_count > 0) {
-            cat(sprintf("\n  Transformed %d null values", null_count))
-            cat("\n  Value comparison:")
-            cat(sprintf("\n    Before: %s", 
-                        paste(head(orig_values), collapse=", ")))
-            cat(sprintf("\n    After:  %s", 
-                        paste(head(unique(df[[field_name]])), collapse=", ")))
           }
         }
+        
+        # Display what we found
+        if (verbose && (!is.null(na_code) || !is.null(missing_code) || !is.null(refused_code))) {
+          cat(sprintf("\n\nField: %s", field_name))
+          
+          if (!is.null(na_code)) cat(sprintf("\n  NA code: %d", na_code))
+          if (!is.null(missing_code)) cat(sprintf("\n  Missing code: %d", missing_code))
+          if (!is.null(refused_code)) cat(sprintf("\n  Refused code: %d", refused_code))
+          
+          if (!is.null(rules) && length(rules) > 0) {
+            cat("\n  Rules found:")
+            for (rule_code in names(rules)) {
+              cat(sprintf("\n    %s -> %s", rule_code, rules[[rule_code]]))
+            }
+          }
+        }
+        
+        # Store original values for comparison
+        orig_values <- head(unique(df[[field_name]]))
+        
+        # Prepare the column by converting to numeric if needed
+        if (type %in% c("Integer", "Float") && 
+            (!is.null(na_code) || !is.null(missing_code) || !is.null(refused_code))) {
+          if (is.character(df[[field_name]])) {
+            df[[field_name]] <- as.numeric(df[[field_name]])
+          }
+        }
+        
+        # Count transformations
+        transform_count <- 0
+        
+        # Apply NA code replacement
+        if (!is.null(na_code)) {
+          na_mask <- is.na(df[[field_name]])
+          na_count <- sum(na_mask)
+          
+          if (na_count > 0) {
+            df[[field_name]][na_mask] <- na_code
+            transform_count <- transform_count + na_count
+            if (verbose) cat(sprintf("\n  Replaced %d NA values with %d", na_count, na_code))
+          }
+        }
+        
+        # Apply type conversion after replacements
+        if (type %in% c("Integer", "Float") && transform_count > 0) {
+          if (type == "Integer") {
+            df[[field_name]] <- as.integer(df[[field_name]])
+          }
+          # Float type is already handled by as.numeric above
+        }
+        
+        # Store transformation summary
+        transform_summary[[field_name]] <- list(
+          type = type,
+          nulls_transformed = transform_count,
+          values_before = orig_values,
+          values_after = head(unique(df[[field_name]]))
+        )
+        
+        # Display transformation results
+        if (verbose && transform_count > 0) {
+          cat("\n  Value comparison:")
+          cat(sprintf("\n    Before: %s", paste(orig_values, collapse=", ")))
+          cat(sprintf("\n    After:  %s", paste(head(unique(df[[field_name]])), collapse=", ")))
+        }
       }, error = function(e) {
-        if(verbose) {
+        if (verbose) {
           cat(sprintf("\n\nError processing field %s:", field_name))
           cat(sprintf("\n  %s", e$message))
         }
@@ -1842,13 +2110,13 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
     }
   }
   
-  if(verbose && length(transform_summary) > 0) {
+  # Print summary
+  if (verbose && length(transform_summary) > 0) {
     cat("\n\nNull transformation summary:")
-    for(field in names(transform_summary)) {
+    for (field in names(transform_summary)) {
       cat(sprintf("\n- %s", field))
-      if(transform_summary[[field]]$nulls_transformed > 0) {
-        cat(sprintf(" (%d nulls transformed)", 
-                    transform_summary[[field]]$nulls_transformed))
+      if (transform_summary[[field]]$nulls_transformed > 0) {
+        cat(sprintf(" (%d nulls transformed)", transform_summary[[field]]$nulls_transformed))
       }
     }
     cat("\n")
@@ -1856,3 +2124,52 @@ apply_null_transformations <- function(df, elements, verbose = FALSE) {
   
   return(df)
 }
+
+# Simple utility to check the actual dataset values directly
+# Fixed check_special_values function without the environment argument error
+check_special_values <- function(measure_name, verbose = TRUE) {
+  # Check if the object exists first
+  if (!exists(measure_name)) {
+    if (verbose) message(sprintf("Dataset %s not found", measure_name))
+    return(NULL)
+  }
+  
+  # Get the dataset (without specifying environment)
+  df <- base::get(measure_name)
+  
+  if (verbose) message(sprintf("\nChecking values in %s dataset...", measure_name))
+  
+  # Check for -99 values in integer columns
+  special_value_cols <- c()
+  
+  for (col in names(df)) {
+    # Skip non-numeric columns
+    if (!is.numeric(df[[col]])) next
+    
+    # Check for special values
+    has_minus_99 <- any(df[[col]] == -99, na.rm = TRUE)
+    has_na <- any(is.na(df[[col]]))
+    
+    if (has_minus_99) {
+      special_value_cols <- c(special_value_cols, col)
+      if (verbose) {
+        message(sprintf("Column %s contains %d values of -99 and %d NA values", 
+                        col, sum(df[[col]] == -99, na.rm = TRUE), sum(is.na(df[[col]]))))
+      }
+    } else if (has_na && verbose) {
+      message(sprintf("Column %s contains %d NA values but no -99 values", 
+                      col, sum(is.na(df[[col]]))))
+    }
+  }
+  
+  if (length(special_value_cols) > 0 && verbose) {
+    message(sprintf("\nFound -99 values in %d columns:", length(special_value_cols)))
+    message(paste(special_value_cols, collapse=", "))
+  } else if (verbose) {
+    message("\nNo -99 values found in any columns. Check for NAs instead.")
+  }
+  
+  return(invisible(special_value_cols))
+}
+
+
