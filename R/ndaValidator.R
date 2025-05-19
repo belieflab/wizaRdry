@@ -174,203 +174,6 @@ get_mapping_rules <- function(notes) {
   return(rules)
 }
 
-# Modified apply_null_transformations to use the config
-apply_null_transformations <- function(df, elements, verbose = TRUE, config_file = NULL) {
-  if(verbose) cat("\nApplying null value transformations...")
-  transform_summary <- list()
-
-  # Load missing value codes from config if available
-  missing_codes <- NULL
-  if (!is.null(config_file)) {
-    tryCatch({
-      config_env <- ConfigEnv$new(config_file)
-      missing_codes <- config_env$get_missing_values()
-    }, error = function(e) {
-      if(verbose) {
-        message("Note: Could not load missing value codes from config: ", e$message)
-        message("Using NDA data dictionary values only.")
-      }
-    })
-  }
-
-  for (i in 1:nrow(elements)) {
-    field_name <- elements$name[i]
-    type <- elements$type[i]
-    notes <- elements$notes[i]
-    value_range <- elements$valueRange[i]
-
-    if (field_name %in% names(df)) {
-      tryCatch({
-        # Extract rules for context and to determine missing value meanings
-        rules <- get_mapping_rules(notes)
-
-        # Extract missing value codes directly from ValueRange
-        na_code <- NULL
-        missing_code <- NULL
-        refused_code <- NULL
-        skipped_code <- NULL
-
-        # Parse valueRange for special codes
-        if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
-          range_parts <- trimws(strsplit(value_range, ";")[[1]])
-
-          # Extract the special codes by examining both valueRange and rules
-          # This dynamically identifies the meaning of codes
-          for (code in range_parts) {
-            # Skip range notation (like "0::4")
-            if (grepl("::", code)) next
-
-            # Check if this code exists in the rules
-            if (code %in% names(rules)) {
-              value_meaning <- tolower(rules[[code]])
-              code_value <- as.numeric(code)  # Convert to numeric value
-
-              # Determine what this code represents based on NDA descriptions
-              if (grepl("n/?a|no answer|missing", value_meaning, ignore.case = TRUE)) {
-                if(is.null(na_code) || is.null(missing_code)) {
-                  # Map to 'unknown' category
-                  na_code <- code_value
-                  missing_code <- code_value
-                }
-              } else if (grepl("wish|refuse|decline|999$|777$", value_meaning, ignore.case = TRUE)) {
-                # Map to 'refused' category
-                refused_code <- code_value
-              } else if (grepl("skip|condition|branch", value_meaning, ignore.case = TRUE)) {
-                # Map to 'skipped' category
-                skipped_code <- code_value
-              }
-            }
-          }
-        }
-
-        # Override with config values if available
-        if (!is.null(missing_codes)) {
-          # For 'unknown' category
-          if (!is.null(missing_codes$unknown) && length(missing_codes$unknown) > 0) {
-            for (code in missing_codes$unknown) {
-              code_num <- as.numeric(code)
-              if (!is.na(code_num)) {
-                missing_code <- code_num
-                na_code <- code_num
-                break
-              }
-            }
-          }
-
-          # For 'refused' category
-          if (!is.null(missing_codes$refused) && length(missing_codes$refused) > 0) {
-            for (code in missing_codes$refused) {
-              code_num <- as.numeric(code)
-              if (!is.na(code_num)) {
-                refused_code <- code_num
-                break
-              }
-            }
-          }
-
-          # For 'skipped' category
-          if (!is.null(missing_codes$skipped) && length(missing_codes$skipped) > 0) {
-            for (code in missing_codes$skipped) {
-              code_num <- as.numeric(code)
-              if (!is.na(code_num)) {
-                skipped_code <- code_num
-                break
-              }
-            }
-          }
-        }
-
-        # Display what we found
-        if (verbose && (!is.null(na_code) || !is.null(missing_code) ||
-                        !is.null(refused_code) || !is.null(skipped_code))) {
-          cat(sprintf("\n\nField: %s", field_name))
-
-          if (!is.null(na_code)) cat(sprintf("\n  NA/Unknown code: %d", na_code))
-          if (!is.null(missing_code) && missing_code != na_code)
-            cat(sprintf("\n  Missing code: %d", missing_code))
-          if (!is.null(refused_code)) cat(sprintf("\n  Refused code: %d", refused_code))
-          if (!is.null(skipped_code)) cat(sprintf("\n  Skipped code: %d", skipped_code))
-
-          if (!is.null(rules) && length(rules) > 0) {
-            cat("\n  Rules found:")
-            for (rule_code in names(rules)) {
-              cat(sprintf("\n    %s -> %s", rule_code, rules[[rule_code]]))
-            }
-          }
-        }
-
-        # Store original values for comparison
-        orig_values <- head(unique(df[[field_name]]))
-
-        # Prepare the column by converting to numeric if needed
-        if (type %in% c("Integer", "Float") &&
-            (!is.null(na_code) || !is.null(missing_code) ||
-             !is.null(refused_code) || !is.null(skipped_code))) {
-          if (is.character(df[[field_name]])) {
-            df[[field_name]] <- as.numeric(df[[field_name]])
-          }
-        }
-
-        # Count transformations
-        transform_count <- 0
-
-        # Apply NA code replacement
-        if (!is.null(na_code)) {
-          na_mask <- is.na(df[[field_name]])
-          na_count <- sum(na_mask)
-
-          if (na_count > 0) {
-            df[[field_name]][na_mask] <- na_code
-            transform_count <- transform_count + na_count
-            if (verbose) cat(sprintf("\n  Replaced %d NA values with %d", na_count, na_code))
-          }
-        }
-
-        # Apply type conversion after replacements
-        if (type %in% c("Integer", "Float") && transform_count > 0) {
-          if (type == "Integer") {
-            df[[field_name]] <- as.integer(df[[field_name]])
-          }
-          # Float type is already handled by as.numeric above
-        }
-
-        # Store transformation summary
-        transform_summary[[field_name]] <- list(
-          type = type,
-          nulls_transformed = transform_count,
-          values_before = orig_values,
-          values_after = head(unique(df[[field_name]]))
-        )
-
-        # Display transformation results
-        if (verbose && transform_count > 0) {
-          cat("\n  Value comparison:")
-          cat(sprintf("\n    Before: %s", paste(orig_values, collapse=", ")))
-          cat(sprintf("\n    After:  %s", paste(head(unique(df[[field_name]])), collapse=", ")))
-        }
-      }, error = function(e) {
-        if (verbose) {
-          cat(sprintf("\n\nError processing field %s:", field_name))
-          cat(sprintf("\n  %s", e$message))
-        }
-      })
-    }
-  }
-
-  # Print summary
-  if (verbose && length(transform_summary) > 0) {
-    cat("\n\nNull transformation summary:")
-    for (field in names(transform_summary)) {
-      cat(sprintf("\n- %s", field))
-      if (transform_summary[[field]]$nulls_transformed > 0) {
-        cat(sprintf(" (%d nulls transformed)", transform_summary[[field]]$nulls_transformed))
-      }
-    }
-    cat("\n")
-  }
-
-  return(df)
-}
 
 # Modified fix_na_values to use the config
 fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config.yml") {
@@ -393,20 +196,6 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
     })
   } else if(verbose) {
     message("Note: Config file not found. Using NDA data dictionary values only.")
-  }
-
-  # Load missing value codes from config if available
-  missing_codes <- NULL
-  if (!is.null(config_file)) {
-    tryCatch({
-      config_env <- ConfigEnv$new(config_file)
-      missing_codes <- config_env$get_missing_values()
-    }, error = function(e) {
-      if(verbose) {
-        message("Note: Could not load missing value codes from config: ", e$message)
-        message("Using NDA data dictionary values only.")
-      }
-    })
   }
 
   # Identify numeric columns with NA values
@@ -911,218 +700,109 @@ fetch_structure_elements <- function(structure_name, nda_base_url) {
   return(elements)
 }
 
-# Calculate similarity with more accurate prefix handling
-# Calculate similarity with more accurate prefix handling
-# Modified find_and_rename_fields function with automatic unknown field handling
-# Modified find_and_rename_fields function - fixed to NOT drop renamed fields
+# Completely refactored find_and_rename_fields function
+# Modified find_and_rename_fields function that works properly in package context
 find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
                                    auto_drop_unknown = FALSE,
                                    interactive_mode = TRUE) {
-  renamed <- list(
-    df = df,
-    renames = character(),
-    columns_to_drop = character(),
-    renamed_fields = character(), # NEW: Track which fields were renamed
-    similarity_scores = list()
-  )
+  if(verbose) cat("\nAnalyzing field name similarities...\n")
 
-  # Get dataframe column names
-  df_cols <- names(df)
+  # Track renamed fields and fields to drop
+  renamed_map <- list()  # Will store mapping of old names to new names
+  to_drop <- character()  # Names of fields to drop
+
+  # Get the valid field names from the elements
   valid_fields <- elements$name
 
-  # Get structure short name by taking last 2 digits of structure_name
-  structure_prefix <- substr(structure_name, nchar(structure_name) - 1, nchar(structure_name))
-
-  # Find unknown fields
+  # Identify unknown fields
+  df_cols <- names(df)
   unknown_fields <- setdiff(df_cols, valid_fields)
 
-  if (length(unknown_fields) > 0) {
-    if(verbose) cat("\nAnalyzing field name similarities...\n")
+  # Process each unknown field
+  for (field in unknown_fields) {
+    # Calculate similarity scores
+    similarities <- sapply(valid_fields, function(name) {
+      calculate_similarity(field, name)
+    })
 
-    for (field in unknown_fields) {
-      # Check if this is a hierarchical field (contains multiple underscores with numbers)
-      parts <- strsplit(field, "_")[[1]]
-      num_parts <- sum(grepl("^\\d+$", parts))
+    # Display information
+    if(verbose) {
+      cat(sprintf("\nField: %s\n", field))
+      cat("Top matches:\n")
+      top_matches <- head(sort(similarities, decreasing = TRUE), 3)
+      for(i in seq_along(top_matches)) {
+        cat(sprintf("%d. %s (%.2f%% match)\n",
+                    i,
+                    names(top_matches)[i],
+                    top_matches[i] * 100))
+      }
+    }
 
-      # If field has more than 2 numeric parts, it's hierarchical - skip renaming
-      if (num_parts > 2) {
+    # Auto-rename high confidence matches (>90%)
+    if (length(similarities) > 0) {
+      best_match <- names(similarities)[which.max(similarities)]
+      best_score <- max(similarities)
+
+      if (best_score > 0.9) {
         if(verbose) {
-          cat(sprintf("\nField: %s\n", field))
-          cat("Skipping rename - hierarchical field structure detected\n")
+          message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
+                          field, best_match, best_score * 100))
         }
-        next
-      }
-
-      # For non-hierarchical fields, proceed with similarity matching
-      base_field <- sub(paste0("^", structure_prefix, "_"), "", field)
-
-      # Calculate similarity scores
-      similarities <- sapply(valid_fields, function(name) {
-        # Remove prefix from target field if it exists
-        target_base <- sub(paste0("^", structure_prefix, "_"), "", name)
-
-        # Calculate direct similarity
-        calculate_similarity(field, name)
-      })
-
-      # Store all similarity scores
-      renamed$similarity_scores[[field]] <- sort(similarities, decreasing = TRUE)
-
-      if(verbose) {
-        cat(sprintf("\nField: %s\n", field))
-        cat("Top matches:\n")
-        top_matches <- head(sort(similarities, decreasing = TRUE), 3)
-        for(i in seq_along(top_matches)) {
-          cat(sprintf("%d. %s (%.2f%% match)\n",
-                      i,
-                      names(top_matches)[i],
-                      top_matches[i] * 100))
-        }
-      }
-
-      # Remove any NA values
-      similarities <- similarities[!is.na(similarities)]
-
-      if (length(similarities) > 0) {
-        best_match <- names(similarities)[which.max(similarities)]
-        best_score <- max(similarities)
-
-        if (best_score > 0.9) {  # High confidence automatic match
-          # Present option to rename in interactive mode
-          rename_field <- TRUE
-
-          if(interactive_mode) {
-            rename_input <- safe_readline(prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ",
-                                                           field, best_match, best_score * 100), default = "y")
-            rename_field <- tolower(rename_input) %in% c("y", "yes")
-          }
-
-          if(rename_field) {
-            if(verbose) {
-              message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
-                              field, best_match, best_score * 100))
-            }
-
-            # Add the new column with renamed data
-            renamed$df[[best_match]] <- df[[field]]
-
-            # Mark original column for dropping
-            renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-
-            # Track renamed fields
-            renamed$renamed_fields <- c(renamed$renamed_fields, field)
-
-            # Store the rename operation
-            renamed$renames <- c(renamed$renames,
-                                 sprintf("%s -> %s (%.2f%%)",
-                                         field, best_match, best_score * 100))
-          }
-        } else {
-          # Lower confidence match - allow user to select from top matches
-          if(verbose) {
-            cat(sprintf("No automatic rename - best match below 90%% threshold\n"))
-          }
-
-          # Present top 3 matches as options
-          top_matches <- head(sort(similarities, decreasing = TRUE), 3)
-          selected_match <- NULL
-
-          if(interactive_mode) {
-            # Modified to allow selection from numbers
-            rename_input <- safe_readline(
-              prompt = sprintf("Select match for '%s' (1-3 to select, 0 to skip): ", field),
-              default = "0"
-            )
-
-            # Check if input is a number between 1-3
-            if(grepl("^[1-3]$", rename_input)) {
-              match_idx <- as.integer(rename_input)
-              if(match_idx <= length(top_matches)) {
-                selected_match <- names(top_matches)[match_idx]
-              }
-            }
-
-            # If user selected a match
-            if(!is.null(selected_match)) {
-              if(verbose) {
-                message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
-                                field, selected_match, top_matches[match_idx] * 100))
-              }
-
-              # Add the new column with renamed data
-              renamed$df[[selected_match]] <- df[[field]]
-
-              # Mark original column for dropping
-              renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-
-              # Track renamed fields
-              renamed$renamed_fields <- c(renamed$renamed_fields, field)
-
-              # Store the rename operation
-              renamed$renames <- c(renamed$renames,
-                                   sprintf("%s -> %s (%.2f%%)",
-                                           field, selected_match, top_matches[match_idx] * 100))
-            } else {
-              # Ask if we should drop the field
-              drop_input <- safe_readline(prompt = sprintf("Drop field '%s'? (y/n): ", field),
-                                          default = if(auto_drop_unknown) "y" else "n")
-              drop_field <- tolower(drop_input) %in% c("y", "yes")
-
-              if(drop_field) {
-                renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-                if(verbose) cat(sprintf("Will drop field '%s'\n", field))
-              } else if(verbose) {
-                cat(sprintf("Keeping field '%s'\n", field))
-              }
-            }
-          } else {
-            # Non-interactive mode - use auto_drop_unknown setting
-            drop_field <- auto_drop_unknown
-
-            if(drop_field) {
-              renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-              if(verbose) cat(sprintf("Will drop field '%s'\n", field))
-            } else if(verbose) {
-              cat(sprintf("Keeping field '%s'\n", field))
-            }
-          }
-        }
+        renamed_map[[field]] <- best_match
       } else {
-        # No matches found
-        drop_field <- auto_drop_unknown
-
-        if(interactive_mode) {
-          drop_input <- safe_readline(prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field),
-                                      default = if(auto_drop_unknown) "y" else "n")
-          drop_field <- tolower(drop_input) %in% c("y", "yes")
-        }
-
-        if(drop_field) {
-          renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-          if(verbose) cat(sprintf("Will drop field '%s'\n", field))
-        } else if(verbose) {
-          cat(sprintf("Keeping field '%s'\n", field))
-        }
+        # Auto-drop fields with low similarity
+        to_drop <- c(to_drop, field)
+        if(verbose) cat(sprintf("Auto-dropping field '%s'\n", field))
       }
-    }
-
-    # Drop original columns after all renames
-    if(length(renamed$columns_to_drop) > 0) {
-      if(verbose) {
-        cat("\nDropping columns:")
-        cat(sprintf("\n  %s", paste(renamed$columns_to_drop, collapse=", ")))
-      }
-      renamed$df <- renamed$df[, !names(renamed$df) %in% renamed$columns_to_drop]
-    }
-
-    if(verbose && length(renamed$renames) > 0) {
-      cat("\n\nRename operations completed:")
-      cat(paste("\n-", renamed$renames), sep = "")
-      cat("\n")
+    } else {
+      # No matches found - auto drop
+      to_drop <- c(to_drop, field)
+      if(verbose) cat(sprintf("Auto-dropping field '%s' (no matches)\n", field))
     }
   }
 
-  return(renamed)
+  # Now apply the renamings DIRECTLY on the input df
+  old_names <- names(df)
+  new_names <- old_names
+
+  # Apply all the renamings
+  for (old_name in names(renamed_map)) {
+    new_name <- renamed_map[[old_name]]
+    new_names[new_names == old_name] <- new_name
+  }
+
+  # Apply the new names
+  names(df) <- new_names
+
+  # Drop fields DIRECTLY from the input df
+  if (length(to_drop) > 0) {
+    if(verbose) {
+      cat("\nDropping columns:")
+      cat(sprintf("\n  %s", paste(to_drop, collapse=", ")))
+    }
+    df <- df[, !names(df) %in% to_drop, drop = FALSE]
+  }
+
+  # Print summary
+  if(verbose && length(renamed_map) > 0) {
+    cat("\n\nRename operations completed:")
+    for (old_name in names(renamed_map)) {
+      new_name <- renamed_map[[old_name]]
+      similarity <- calculate_similarity(old_name, new_name) * 100
+      cat(sprintf("\n- %s -> %s (%.2f%%)", old_name, new_name, similarity))
+    }
+    cat("\n")
+  }
+
+  # Create the results list with all tracking information
+  results <- list(
+    df = df,  # Return the MODIFIED df
+    renames = renamed_map,
+    columns_to_drop = to_drop,
+    renamed_fields = names(renamed_map)
+  )
+
+  return(results)
 }
 
 # Helper function to get violating values with type conversion
@@ -1878,6 +1558,8 @@ ndaValidator <- function(measure_name,
       df <- handle_missing_fields(df, elements, missing_required, verbose = verbose)
     }
 
+    # Replace ndaValidator's middle processing section with this simplified version
+    # Use this in the ndaValidator function where find_and_rename_fields is called
     # PHASE 2: Column Standardization
     if(verbose) message("\n\n--- PHASE 2: Column Standardization ---")
 
@@ -1885,19 +1567,23 @@ ndaValidator <- function(measure_name,
     df <- standardize_column_names(df, structure_name, verbose = verbose)
     df <- standardize_field_names(df, measure_name, verbose = verbose)
 
-    # Rename fields with close matches - track columns to drop
+    # Direct renaming approach - this is the key fix
     renamed_results <- find_and_rename_fields(df, elements, structure_name,
                                               verbose = verbose,
                                               auto_drop_unknown = auto_drop_unknown,
                                               interactive_mode = interactive_mode)
+
+    # The df is modified directly in the function
     df <- renamed_results$df
 
-    # Get the list of fields that were renamed (not to be dropped at the end)
+    # Store which fields were renamed for later reference
     renamed_fields <- renamed_results$renamed_fields
 
-    # Collect columns that were dropped during renaming
-    all_columns_to_drop <- c(all_columns_to_drop,
-                             setdiff(renamed_results$columns_to_drop, renamed_fields))
+    # Collect columns marked for dropping
+    all_columns_to_drop <- renamed_results$columns_to_drop
+
+    # CRITICAL: Ensure the dataframe in the wizaRdry environment reflects these changes
+    assign(measure_name, df, envir = .wizaRdry_env)
 
     # PHASE 3: Value Transformation
     if(verbose) message("\n\n--- PHASE 3: Value Transformation ---")
@@ -2037,6 +1723,13 @@ ndaValidator <- function(measure_name,
         }
       }
     }
+
+    # HERE IS THE FIX: Make sure the changes affect the actual dataframe in the global environment
+    # Return the modified data in a way that can be used by the calling function
+    validation_results$modified_data <- df
+
+    # Add a note in the validation results about the modifications
+    if(verbose) message("\nModifications have been applied to the data structure")
 
     return(validation_results)
   }, error = function(e) {
