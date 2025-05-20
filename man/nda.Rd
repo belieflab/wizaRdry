@@ -40,7 +40,7 @@ unit tests to verify that the data quality standards are met.
 \dontrun{
   nda("prl", csv=TRUE)
   nda("rgpts", "kamin", rdata=TRUE)
-
+  
   # Skip confirmation prompts
   nda("prl", csv=TRUE, skip_prompt=TRUE)
 }

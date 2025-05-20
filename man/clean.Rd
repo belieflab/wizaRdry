@@ -31,7 +31,7 @@ unit tests to verify that the data quality standards are met.
 \dontrun{
   clean("prl", csv=TRUE)
   clean("rgpts", "kamin", rdata=TRUE)
-
+  
   # Skip confirmation prompts
   clean("prl", csv=TRUE, skip_prompt=TRUE)
 }
