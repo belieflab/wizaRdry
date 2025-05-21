@@ -950,6 +950,12 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
 
     # Process each field
     for (field in unknown_fields) {
+      # Check if this field has special characters
+      has_special_chars <- grepl("[#\\$%&\\*\\+/:<=>\\?@\\[\\\\\\]\\^\\{\\|\\}~]", field)
+      if (has_special_chars && verbose) {
+        cat(sprintf("Note: Field '%s' contains special characters\n", field))
+      }
+
       # Check if this is a hierarchical field (contains multiple underscores with numbers)
       parts <- strsplit(field, "_")[[1]]
       num_parts <- sum(grepl("^\\d+$", parts))
@@ -1010,8 +1016,9 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
                               field, best_match, best_score * 100))
             }
 
-            # Add the new column with renamed data
-            df[[best_match]] <- df[[field]]
+            # Use [[ ]] to safely handle special characters in field names
+            field_data <- df[[field]]
+            df[[best_match]] <- field_data
 
             # Track rename
             renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
@@ -1051,8 +1058,9 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
                                 field, selected_match, top_matches[match_idx] * 100))
               }
 
-              # Add the new column with renamed data
-              df[[selected_match]] <- df[[field]]
+              # Use [[ ]] to safely handle special characters in field names
+              field_data <- df[[field]]
+              df[[selected_match]] <- field_data
 
               # Track rename
               renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
