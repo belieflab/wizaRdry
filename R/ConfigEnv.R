@@ -1,10 +1,6 @@
-# First, install R6 if you don't have it
-# Install config package if needed
+# This is the updated version of the ConfigEnv class with the get_missing_values method
+# properly incorporated as a class method rather than a standalone function
 
-#' Configuration Environment Class
-#'
-#' @importFrom R6 R6Class
-#' @noRd
 ConfigEnv <- R6::R6Class("ConfigEnv",
                          public = list(
                            # Store configuration
@@ -261,7 +257,8 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
 
                              return(values)
                            }
-                         ))
+                         )
+)
 
 # Create a function to validate configuration and return the config
 validate_config <- function(api_type = NULL, config_file = "config.yml") {
