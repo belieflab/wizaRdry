@@ -28,7 +28,7 @@ safe_readline <- function(prompt, default = "") {
 # Function to handle missing required fields
 handle_missing_fields <- function(df, elements, missing_required, verbose = FALSE) {
   if(verbose) {
-    message("\nAuto-adding missing required fields with missing value codes:")
+    message("\nAuto-adding missing required fields with missing data codes:")
   }
 
   for (field in missing_required) {
@@ -204,36 +204,40 @@ get_mapping_rules <- function(notes) {
 
 # This is the corrected fix_na_values function that translates existing missing codes
 # rather than inserting them for NA values
+# This is the enhanced fix_na_values function that handles more flexible missing value categories
 fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config.yml") {
-  if(verbose) cat("\n\nTranslating missing value codes to NDA standards...")
+  if(verbose) cat("\n\nTranslating missing data codes to NDA standards...")
 
   # Initialize change tracking
   changes_made <- list()
 
-  # Load missing value codes from config if available
+  # Load missing data codes from config if available
   custom_missing_codes <- NULL
   if (!is.null(config_file) && file.exists(config_file)) {
     tryCatch({
       config_env <- ConfigEnv$new(config_file)
-      custom_missing_codes <- config_env$get_missing_values()
+      custom_missing_codes <- config_env$get_missing_data_codes()
       if(verbose && !is.null(custom_missing_codes)) {
-        message("Found custom missing value codes in ", config_file)
+        message("Found custom missing data codes in ", config_file)
         print(custom_missing_codes)
       }
     }, error = function(e) {
       if(verbose) {
-        message("Note: Could not load missing value codes from config: ", e$message)
+        message("Note: Could not load missing data codes from config: ", e$message)
       }
     })
   } else if(verbose) {
-    message("Note: Config file not found. No custom missing value codes to translate.")
+    message("Note: Config file not found. No custom missing data codes to translate.")
   }
 
   # If no custom codes are defined, nothing to translate
   if (is.null(custom_missing_codes) || length(custom_missing_codes) == 0) {
-    if(verbose) message("No custom missing value codes defined for translation.")
+    if(verbose) message("No custom missing data codes defined for translation.")
     return(df)
   }
+
+  # Define standard missing value categories and their mapping to NDA codes
+  standard_categories <- c("skipped", "refused", "unknown", "missing")
 
   # Process each column in the dataframe
   for (i in 1:nrow(elements)) {
@@ -256,17 +260,17 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
       }
     }
 
-    # Extract NDA missing value codes from value range and notes
+    # Extract NDA missing data codes from value range and notes
     nda_codes <- list(
       skipped = NULL,
       refused = NULL,
-      unknown = NULL
+      unknown = NULL,
+      missing = NULL  # Added 'missing' as a standard category
     )
 
-    # Parse value range to find NDA missing value codes
+    # Parse value range to find NDA missing data codes
     if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
       range_parts <- trimws(strsplit(value_range, ";")[[1]])
-
       # Get rules for interpreting codes
       rules <- get_mapping_rules(notes)
 
@@ -290,31 +294,35 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
             nda_codes$refused <- code_value
             if(verbose) cat(sprintf("\n  NDA refused code: %d (%s)", code_value, meaning))
           }
-          else if (grepl("missing|unknown|not collect|n/?a|null|-999|-99|-9", meaning, ignore.case = TRUE)) {
+          else if (grepl("missing|undefined|unknown|not collect|n/?a|null|-999|-99|-9", meaning, ignore.case = TRUE)) {
+            # Assign to both 'unknown' and 'missing' categories for compatibility
             nda_codes$unknown <- code_value
-            if(verbose) cat(sprintf("\n  NDA unknown/NA code: %d (%s)", code_value, meaning))
+            nda_codes$missing <- code_value
+            if(verbose) cat(sprintf("\n  NDA unknown/missing code: %d (%s)", code_value, meaning))
           }
         }
         # If no explicit meaning but looks like a special code, make an educated guess
         else if (code_value < 0 || code_value > 990) {
-          # Typical missing value codes are negative or large numbers (999, 9999)
+          # Typical missing data codes are negative or large numbers (999, 9999)
           nda_codes$unknown <- code_value
-          if(verbose) cat(sprintf("\n  Guessing NDA unknown code: %d (based on value)", code_value))
+          nda_codes$missing <- code_value  # Also assign to 'missing' for compatibility
+          if(verbose) cat(sprintf("\n  Guessing NDA unknown/missing code: %d (based on value)", code_value))
         }
       }
     }
 
     # If we couldn't find explicit meanings, try common patterns
-    if (is.null(nda_codes$unknown) && !is.null(value_range) && !is.na(value_range)) {
+    if ((is.null(nda_codes$unknown) || is.null(nda_codes$missing)) &&
+        !is.null(value_range) && !is.na(value_range)) {
       range_parts <- trimws(strsplit(value_range, ";")[[1]])
-
       # Look for typical codes in value range
       for (code in range_parts) {
         code_num <- suppressWarnings(as.numeric(code))
         if (!is.na(code_num)) {
           if (code_num %in% c(-99, -999, 999, 9999) || code_num < -50) {
             nda_codes$unknown <- code_num
-            if(verbose) cat(sprintf("\n  Detected likely NDA unknown code: %d", code_num))
+            nda_codes$missing <- code_num  # Also assign to 'missing' for compatibility
+            if(verbose) cat(sprintf("\n  Detected likely NDA unknown/missing code: %d", code_num))
             break
           }
         }
@@ -326,65 +334,75 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
       field_column <- df[[field_name]]
       changes <- list()
 
-      # Process values for skipped codes
-      if (!is.null(custom_missing_codes$skipped) && !is.null(nda_codes$skipped)) {
-        for (skip_code in custom_missing_codes$skipped) {
-          skip_code_num <- as.numeric(skip_code)
+      # Process all categories in the custom_missing_codes
+      for (category_name in names(custom_missing_codes)) {
+        # Get corresponding NDA code based on category
+        nda_code <- NULL
 
-          # Find values in this column that match our custom skip code
-          matches <- which(field_column == skip_code_num)
-
-          if (length(matches) > 0) {
-            df[[field_name]][matches] <- nda_codes$skipped
-            changes$skipped <- list(
-              from = skip_code_num,
-              to = nda_codes$skipped,
-              count = length(matches)
-            )
-            if(verbose) cat(sprintf("\n  Translated %d values from %d to NDA skip code %d",
-                                    length(matches), skip_code_num, nda_codes$skipped))
+        # Map the category to a standard category if possible
+        std_category <- category_name
+        if (!category_name %in% standard_categories) {
+          # Try to normalize using aliases
+          if (category_name %in% c("undefined", "na", "null")) {
+            std_category <- "missing"
+          } else if (category_name %in% c("not_applicable", "na", "skip")) {
+            std_category <- "skipped"
+          } else if (category_name %in% c("declined", "no_answer")) {
+            std_category <- "refused"
           }
         }
-      }
 
-      # Process values for refused codes
-      if (!is.null(custom_missing_codes$refused) && !is.null(nda_codes$refused)) {
-        for (refused_code in custom_missing_codes$refused) {
-          refused_code_num <- as.numeric(refused_code)
-
-          # Find values in this column that match our custom refused code
-          matches <- which(field_column == refused_code_num)
-
-          if (length(matches) > 0) {
-            df[[field_name]][matches] <- nda_codes$refused
-            changes$refused <- list(
-              from = refused_code_num,
-              to = nda_codes$refused,
-              count = length(matches)
-            )
-            if(verbose) cat(sprintf("\n  Translated %d values from %d to NDA refused code %d",
-                                    length(matches), refused_code_num, nda_codes$refused))
-          }
+        # Get the NDA code based on the standard category
+        if (std_category == "skipped" && !is.null(nda_codes$skipped)) {
+          nda_code <- nda_codes$skipped
+        } else if (std_category == "refused" && !is.null(nda_codes$refused)) {
+          nda_code <- nda_codes$refused
+        } else if (std_category == "unknown" && !is.null(nda_codes$unknown)) {
+          nda_code <- nda_codes$unknown
+        } else if (std_category == "missing" && !is.null(nda_codes$missing)) {
+          nda_code <- nda_codes$missing
+        } else if (!is.null(nda_codes$unknown)) {
+          # Fallback: if category is not recognized, use unknown code
+          nda_code <- nda_codes$unknown
+          if(verbose) cat(sprintf("\n  Using unknown code %d for custom category '%s'",
+                                  nda_codes$unknown, category_name))
         }
-      }
 
-      # Process values for unknown codes
-      if (!is.null(custom_missing_codes$unknown) && !is.null(nda_codes$unknown)) {
-        for (unknown_code in custom_missing_codes$unknown) {
-          unknown_code_num <- as.numeric(unknown_code)
+        # If we found an NDA code, process the values
+        if (!is.null(nda_code)) {
+          category_values <- custom_missing_codes[[category_name]]
 
-          # Find values in this column that match our custom unknown code
-          matches <- which(field_column == unknown_code_num)
+          for (custom_code in category_values) {
+            # Convert to numeric for comparison
+            custom_code_num <- as.numeric(custom_code)
 
-          if (length(matches) > 0) {
-            df[[field_name]][matches] <- nda_codes$unknown
-            changes$unknown <- list(
-              from = unknown_code_num,
-              to = nda_codes$unknown,
-              count = length(matches)
-            )
-            if(verbose) cat(sprintf("\n  Translated %d values from %d to NDA unknown code %d",
-                                    length(matches), unknown_code_num, nda_codes$unknown))
+            # Skip if conversion failed (non-numeric values)
+            if (is.na(custom_code_num)) {
+              if(verbose) cat(sprintf("\n  Warning: Skipping non-numeric code '%s' in category '%s'",
+                                      custom_code, category_name))
+              next
+            }
+
+            # Find values in this column that match our custom code
+            matches <- which(field_column == custom_code_num)
+            if (length(matches) > 0) {
+              df[[field_name]][matches] <- nda_code
+
+              # Track changes
+              if (!category_name %in% names(changes)) {
+                changes[[category_name]] <- list(
+                  from = c(),
+                  to = nda_code,
+                  count = 0
+                )
+              }
+
+              changes[[category_name]]$from <- c(changes[[category_name]]$from, custom_code_num)
+              changes[[category_name]]$count <- changes[[category_name]]$count + length(matches)
+
+              if(verbose) cat(sprintf("\n  Translated %d values from %d to NDA %s code %d",
+                                      length(matches), custom_code_num, std_category, nda_code))
+            }
           }
         }
       }
@@ -403,30 +421,17 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
       cat(sprintf("\n- %s:", field))
       field_changes <- changes_made[[field]]
 
-      if (!is.null(field_changes$skipped)) {
-        cat(sprintf("\n  Skipped: %d values from %d to %d",
-                    field_changes$skipped$count,
-                    field_changes$skipped$from,
-                    field_changes$skipped$to))
-      }
-
-      if (!is.null(field_changes$refused)) {
-        cat(sprintf("\n  Refused: %d values from %d to %d",
-                    field_changes$refused$count,
-                    field_changes$refused$from,
-                    field_changes$refused$to))
-      }
-
-      if (!is.null(field_changes$unknown)) {
-        cat(sprintf("\n  Unknown: %d values from %d to %d",
-                    field_changes$unknown$count,
-                    field_changes$unknown$from,
-                    field_changes$unknown$to))
+      for (category in names(field_changes)) {
+        cat(sprintf("\n  %s: %d values from %s to %d",
+                    category,
+                    field_changes[[category]]$count,
+                    paste(field_changes[[category]]$from, collapse=", "),
+                    field_changes[[category]]$to))
       }
     }
     cat("\n")
   } else if (verbose) {
-    cat("\nNo missing value codes needed translation.\n")
+    cat("\nNo missing data codes needed translation.\n")
   }
 
   return(df)
@@ -1792,12 +1797,12 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
   for(field in required_fields) {
     if(field %in% names(df)) {
       if(is.character(df[[field]])) {
-        missing_values <- is.na(df[[field]]) | df[[field]] == ""
+        missing_data_codes <- is.na(df[[field]]) | df[[field]] == ""
       } else {
-        missing_values <- is.na(df[[field]])
+        missing_data_codes <- is.na(df[[field]])
       }
 
-      if(any(missing_values)) {
+      if(any(missing_data_codes)) {
         missing_required <- TRUE
         missing_fields <- c(missing_fields, field)
       }
