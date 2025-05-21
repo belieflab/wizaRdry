@@ -1,21 +1,27 @@
 
 # Safe readline function that works in non-interactive environments too
 safe_readline <- function(prompt = "", default = "y") {
-  tryCatch({
-    if (interactive()) {
-      result <- suppressWarnings(readline(prompt))
-      if (result == "") return(default)
-      return(result)
-    } else {
-      # In non-interactive mode, just return the default
-      message(paste0(prompt, " (Using default: ", default, ")"))
-      return(default)
-    }
-  }, error = function(e) {
-    # If there's any error, return the default
-    message(paste0("Error in readline: ", e$message, " (Using default: ", default, ")"))
+  # First check if R is running in interactive mode
+  if (!interactive()) {
+    message(paste0(prompt, " (Using default: ", default, ")"))
     return(default)
-  })
+  }
+
+  # Try to use readline with minimal error handling
+  result <- try({
+    suppressWarnings(readline(prompt))
+  }, silent = TRUE)
+
+  # If there was an error or empty result, return the default
+  if (inherits(result, "try-error") || result == "") {
+    if (inherits(result, "try-error")) {
+      message(paste0("Error in readline. Using default: ", default))
+    }
+    return(default)
+  }
+
+  # Return the result
+  return(result)
 }
 
 # Function to handle missing required fields
@@ -915,14 +921,17 @@ fetch_structure_elements <- function(structure_name, nda_base_url) {
 # Calculate similarity with more accurate prefix handling
 # Modified find_and_rename_fields function with automatic unknown field handling
 # Modified find_and_rename_fields function - fixed to NOT drop renamed fields
-find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
+find_and_rename_fields <- function(df, elements, structure_name, measure_name, verbose = TRUE,
                                    auto_drop_unknown = FALSE,
                                    interactive_mode = TRUE) {
+  # Store the origin environment (as processNda does)
+  origin_env <- parent.frame()
+
   renamed <- list(
     df = df,
     renames = character(),
     columns_to_drop = character(),
-    renamed_fields = character(), # NEW: Track which fields were renamed
+    renamed_fields = character(),
     similarity_scores = list()
   )
 
@@ -930,7 +939,7 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
   df_cols <- names(df)
   valid_fields <- elements$name
 
-  # Get structure short name by taking last 2 digits of structure_name
+  # Get structure short name
   structure_prefix <- substr(structure_name, nchar(structure_name) - 1, nchar(structure_name))
 
   # Find unknown fields
@@ -939,11 +948,11 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
   if (length(unknown_fields) > 0) {
     if(verbose) cat("\nAnalyzing field name similarities...\n")
 
+    # Process each field
     for (field in unknown_fields) {
       # Check if this is a hierarchical field (contains multiple underscores with numbers)
       parts <- strsplit(field, "_")[[1]]
       num_parts <- sum(grepl("^\\d+$", parts))
-
       # If field has more than 2 numeric parts, it's hierarchical - skip renaming
       if (num_parts > 2) {
         if(verbose) {
@@ -955,12 +964,8 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
 
       # For non-hierarchical fields, proceed with similarity matching
       base_field <- sub(paste0("^", structure_prefix, "_"), "", field)
-
       # Calculate similarity scores
       similarities <- sapply(valid_fields, function(name) {
-        # Remove prefix from target field if it exists
-        target_base <- sub(paste0("^", structure_prefix, "_"), "", name)
-
         # Calculate direct similarity
         calculate_similarity(field, name)
       })
@@ -971,7 +976,7 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
       if(verbose) {
         cat(sprintf("\nField: %s\n", field))
         cat("Top matches:\n")
-        top_matches <- head(sort(similarities, decreasing = TRUE), 3)
+        top_matches <- head(sort(similarities, decreasing = TRUE), 5)
         for(i in seq_along(top_matches)) {
           cat(sprintf("%d. %s (%.2f%% match)\n",
                       i,
@@ -990,10 +995,12 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
         if (best_score > 0.9) {  # High confidence automatic match
           # Present option to rename in interactive mode
           rename_field <- TRUE
-
           if(interactive_mode) {
-            rename_input <- safe_readline(prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ",
-                                                           field, best_match, best_score * 100), default = "y")
+            rename_input <- safe_readline(
+              prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ",
+                               field, best_match, best_score * 100),
+              default = "y"
+            )
             rename_field <- tolower(rename_input) %in% c("y", "yes")
           }
 
@@ -1004,15 +1011,11 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
             }
 
             # Add the new column with renamed data
-            renamed$df[[best_match]] <- df[[field]]
+            df[[best_match]] <- df[[field]]
 
-            # Mark original column for dropping
+            # Track rename
             renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-
-            # Track renamed fields
             renamed$renamed_fields <- c(renamed$renamed_fields, field)
-
-            # Store the rename operation
             renamed$renames <- c(renamed$renames,
                                  sprintf("%s -> %s (%.2f%%)",
                                          field, best_match, best_score * 100))
@@ -1023,19 +1026,18 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
             cat(sprintf("No automatic rename - best match below 90%% threshold\n"))
           }
 
-          # Present top 3 matches as options
-          top_matches <- head(sort(similarities, decreasing = TRUE), 3)
+          # Present top 5 matches as options
+          top_matches <- head(sort(similarities, decreasing = TRUE), 5)
           selected_match <- NULL
 
           if(interactive_mode) {
-            # Modified to allow selection from numbers
             rename_input <- safe_readline(
-              prompt = sprintf("Select match for '%s' (1-3 to select, 0 to skip): ", field),
+              prompt = sprintf("Select match for '%s' (1-5 to select, 0 to skip): ", field),
               default = "0"
             )
 
-            # Check if input is a number between 1-3
-            if(grepl("^[1-3]$", rename_input)) {
+            # Check if input is a number between 1-5
+            if(grepl("^[1-5]$", rename_input)) {
               match_idx <- as.integer(rename_input)
               if(match_idx <= length(top_matches)) {
                 selected_match <- names(top_matches)[match_idx]
@@ -1050,24 +1052,21 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
               }
 
               # Add the new column with renamed data
-              renamed$df[[selected_match]] <- df[[field]]
+              df[[selected_match]] <- df[[field]]
 
-              # Mark original column for dropping
+              # Track rename
               renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
-
-              # Track renamed fields
               renamed$renamed_fields <- c(renamed$renamed_fields, field)
-
-              # Store the rename operation
               renamed$renames <- c(renamed$renames,
                                    sprintf("%s -> %s (%.2f%%)",
                                            field, selected_match, top_matches[match_idx] * 100))
             } else {
               # Ask if we should drop the field
-              drop_input <- safe_readline(prompt = sprintf("Drop field '%s'? (y/n): ", field),
-                                          default = if(auto_drop_unknown) "y" else "n")
+              drop_input <- safe_readline(
+                prompt = sprintf("Drop field '%s'? (y/n): ", field),
+                default = if(auto_drop_unknown) "y" else "n"
+              )
               drop_field <- tolower(drop_input) %in% c("y", "yes")
-
               if(drop_field) {
                 renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
                 if(verbose) cat(sprintf("Will drop field '%s'\n", field))
@@ -1078,7 +1077,6 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
           } else {
             # Non-interactive mode - use auto_drop_unknown setting
             drop_field <- auto_drop_unknown
-
             if(drop_field) {
               renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
               if(verbose) cat(sprintf("Will drop field '%s'\n", field))
@@ -1090,13 +1088,13 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
       } else {
         # No matches found
         drop_field <- auto_drop_unknown
-
         if(interactive_mode) {
-          drop_input <- safe_readline(prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field),
-                                      default = if(auto_drop_unknown) "y" else "n")
+          drop_input <- safe_readline(
+            prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field),
+            default = if(auto_drop_unknown) "y" else "n"
+          )
           drop_field <- tolower(drop_input) %in% c("y", "yes")
         }
-
         if(drop_field) {
           renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
           if(verbose) cat(sprintf("Will drop field '%s'\n", field))
@@ -1106,15 +1104,33 @@ find_and_rename_fields <- function(df, elements, structure_name, verbose = TRUE,
       }
     }
 
-    # Drop original columns after all renames
-    if(length(renamed$columns_to_drop) > 0) {
+    # After all renames, remove the original columns
+    if (length(renamed$columns_to_drop) > 0) {
       if(verbose) {
         cat("\nDropping columns:")
         cat(sprintf("\n  %s", paste(renamed$columns_to_drop, collapse=", ")))
       }
-      renamed$df <- renamed$df[, !names(renamed$df) %in% renamed$columns_to_drop]
+
+      # EXACTLY like processNda:
+      cols_to_keep <- setdiff(names(df), renamed$columns_to_drop)
+      df_new <- df[, cols_to_keep, drop = FALSE]
+
+      # Update all environments EXACTLY like processNda
+      # Update in globalenv
+      base::assign(measure_name, df_new, envir = globalenv())
+      # Update in origin_env
+      base::assign(measure_name, df_new, envir = origin_env)
+      # Update in .wizaRdry_env if it exists
+      if (exists(".wizaRdry_env")) {
+        base::assign(measure_name, df_new, envir = .wizaRdry_env)
+      }
+
+      # Update local variable
+      df <- df_new
+      renamed$df <- df_new
     }
 
+    # Output summary
     if(verbose && length(renamed$renames) > 0) {
       cat("\n\nRename operations completed:")
       cat(paste("\n-", renamed$renames), sep = "")
@@ -1885,11 +1901,12 @@ ndaValidator <- function(measure_name,
     df <- standardize_column_names(df, structure_name, verbose = verbose)
     df <- standardize_field_names(df, measure_name, verbose = verbose)
 
-    # Rename fields with close matches - track columns to drop
-    renamed_results <- find_and_rename_fields(df, elements, structure_name,
+    # Rename fields with close matches - track columns rename
+    renamed_results <- find_and_rename_fields(df, elements, structure_name, measure_name,
                                               verbose = verbose,
                                               auto_drop_unknown = auto_drop_unknown,
                                               interactive_mode = interactive_mode)
+
     df <- renamed_results$df
 
     # Get the list of fields that were renamed (not to be dropped at the end)

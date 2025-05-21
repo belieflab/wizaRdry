@@ -677,9 +677,37 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       View(missing_data)
     }
 
-    # Run validation - uncomment if needed
-    # if (DEBUG) message("[DEBUG] Running validation")
-    # validation_results <- ndaValidator(measure, api, limited_dataset)
+    # Re-integrate ndaValidator with proper environment management
+    if (DEBUG) message("[DEBUG] Running validation")
+    validation_results <- ndaValidator(measure, api, limited_dataset)
+
+    # CRITICAL: Update all environments with validated dataframe
+    if (is.list(validation_results) && !is.null(validation_results$df)) {
+      if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
+      # Update globalenv
+      base::assign(measure, validation_results$df, envir = globalenv())
+      if (DEBUG) message("[DEBUG] Updated globalenv()")
+
+      # Update origin_env
+      base::assign(measure, validation_results$df, envir = origin_env)
+      if (DEBUG) message("[DEBUG] Updated origin_env")
+
+      # Update wizaRdry_env
+      if (exists(".wizaRdry_env")) {
+        base::assign(measure, validation_results$df, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
+      }
+
+      # Update our local df variable
+      df <- validation_results$df
+      if (DEBUG) message("[DEBUG] Updated local df variable")
+    }
+
+    # Also re-enable the validation sound alert
+    if (exists("validation_results") && is.list(validation_results)) {
+      if (DEBUG) message("[DEBUG] Playing validation sound")
+      ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
+    }
 
     # Now apply date format preservation AFTER validation
     if (DEBUG) message("[DEBUG] Get latest dataframe version")
@@ -689,9 +717,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     if (limited_dataset == FALSE) {
       message("\nDataset has been de-identified using date-shifting and age-capping.")
     }
-
-    # audio alert of validation - uncomment if needed
-    # ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
 
     # Create data upload template regardless of if test passes
     if (DEBUG) message("[DEBUG] Creating NDA template")
