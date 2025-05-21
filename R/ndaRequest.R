@@ -450,17 +450,28 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 }
 
 processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE) {
+  # Store the origin environment (the one that called this function)
+  origin_env <- parent.frame()
+
+  # Add debugging flag
+  DEBUG <- FALSE
+
+  if (DEBUG) message("\n[DEBUG] Starting processNda with measure: ", measure, ", api: ", api)
+
   # Check if input is a dataframe
   if (is.data.frame(measure)) {
     # Get the name of the dataframe as a string
     measure_name <- deparse(substitute(measure))
+    if (DEBUG) message("[DEBUG] Input is a dataframe, assigned name: ", measure_name)
   } else {
     measure_name <- measure
+    if (DEBUG) message("[DEBUG] Input is not a dataframe, using as name: ", measure_name)
   }
 
   # Ensure data_list is a character vector (in case it's a single string)
   if (!is.character(measure)) {
     measure <- as.character(measure)
+    if (DEBUG) message("[DEBUG] Converted measure to character: ", measure)
   }
 
   # Construct the path to the measure's cleaning script
@@ -484,46 +495,123 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   })
 
   result <- tryCatch({
+    if (DEBUG) message("[DEBUG] Sourcing script file: ", file_path)
     base::source(file_path)  # Execute the cleaning script for the measure
 
     # Initialize the wizaRdry environment if it doesn't exist
     if (!exists(".wizaRdry_env")) {
+      if (DEBUG) message("[DEBUG] Creating .wizaRdry_env")
       .wizaRdry_env <- new.env(parent = globalenv())
     }
 
     # Get the data frame from global environment
+    if (DEBUG) message("[DEBUG] Attempting to get dataframe: ", measure)
     df <- base::get0(measure)
 
     # Only process if df exists and is a data frame
     if (!is.null(df) && is.data.frame(df)) {
+      if (DEBUG) {
+        message("[DEBUG] Found dataframe, dims: ", nrow(df), "x", ncol(df))
+        message("[DEBUG] First 10 column names: ", paste(names(df)[1:min(10, ncol(df))], collapse=", "))
+      }
+
       # Reassign the processed data frame to both environments
       base::assign(measure, df, envir = .wizaRdry_env)
+      if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
+    } else {
+      if (DEBUG) message("[DEBUG] Warning: dataframe not found or not a data.frame")
     }
 
     if (api == "qualtrics") {
+      if (DEBUG) message("[DEBUG] Processing as Qualtrics data")
+
+      # Re-get the data to ensure we have the latest version
+      if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
+      if (exists(measure, envir = globalenv())) {
+        df <- base::get(measure, envir = globalenv())
+        if (DEBUG) message("[DEBUG] Got from globalenv()")
+      } else if (exists(measure, envir = .wizaRdry_env)) {
+        df <- base::get(measure, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Got from .wizaRdry_env")
+      } else if (exists(measure, envir = origin_env)) {
+        df <- base::get(measure, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Got from origin_env")
+      } else {
+        if (DEBUG) message("[DEBUG] ERROR: Can't find dataframe in any environment")
+        stop(paste("Object", measure, "not found in any environment"))
+      }
+
       # Remove specified qualtrics columns
       cols_to_remove <- c("StartDate", "EndDate", "Status", "Progress", "Duration (in seconds)",
                           "Finished", "RecordedDate", "ResponseId", "DistributionChannel",
-                          "UserLanguage", "candidateId", "studyId", "measure", "ATTN", "ATTN_1", "SC0")
-      df <- df[!names(df) %in% cols_to_remove]
+                          "UserLanguage", "candidateId", "studyId", "measure", "ATTN", "ATTN_1", "SC0",
+                          "IPAddress", "RecipientLastName", "RecipientFirstName", "RecipientEmail",
+                          "ExternalReference", "LocationLatitude", "LocationLongitude")
 
-      # Reassign the filtered dataframe
-      base::assign(measure, df)
-
-      ndaCheckQualtricsDuplicates(measure,"qualtrics")
-
-      # show missing data that needs filled
-      missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
-      if (nrow(missing_data) > 0) {
-        View(missing_data)
+      if (DEBUG) {
+        message("[DEBUG] Current columns: ", paste(names(df), collapse=", "))
+        intersection <- intersect(names(df), cols_to_remove)
+        message("[DEBUG] Columns to remove (", length(intersection), "): ", paste(intersection, collapse=", "))
       }
 
+      # Remove the columns - different approach
+      cols_to_keep <- setdiff(names(df), cols_to_remove)
+      if (DEBUG) message("[DEBUG] Columns to keep (", length(cols_to_keep), "): ", paste(head(cols_to_keep, 10), collapse=", "), "...")
+
+      # Create a new dataframe with only the columns to keep
+      df_new <- df[, cols_to_keep, drop = FALSE]
+
+      if (DEBUG) {
+        message("[DEBUG] After removal: ", ncol(df_new), " columns remain")
+        message("[DEBUG] New columns: ", paste(names(df_new), collapse=", "))
+      }
+
+      # Reassign the filtered dataframe to BOTH environments
+      if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
+
+      # Update in globalenv
+      base::assign(measure, df_new, envir = globalenv())
+      if (DEBUG) message("[DEBUG] Assigned to globalenv()")
+
+      # Update in origin_env
+      base::assign(measure, df_new, envir = origin_env)
+      if (DEBUG) message("[DEBUG] Assigned to origin_env")
+
+      # Update in .wizaRdry_env if it exists
+      if (exists(".wizaRdry_env")) {
+        base::assign(measure, df_new, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
+      }
+
+      # Update our local df variable for continuing the function
+      df <- df_new
+
+      # Verify the changes took effect
+      if (DEBUG) {
+        if (exists(measure, envir = globalenv())) {
+          df_check <- base::get(measure, envir = globalenv())
+          message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
+        }
+      }
+
+      if (DEBUG) message("[DEBUG] Calling ndaCheckQualtricsDuplicates")
+      ndaCheckQualtricsDuplicates(measure, "qualtrics")
+
+      # show missing data that needs filled
+      if (DEBUG) message("[DEBUG] Checking for missing data in required fields")
+      missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
+      if (nrow(missing_data) > 0) {
+        if (DEBUG) message("[DEBUG] Found ", nrow(missing_data), " rows with missing required data")
+        View(missing_data)
+      }
     }
 
-    # Run validation
-    validation_results <- ndaValidator(measure, api, limited_dataset)
+    # Run validation - uncomment if needed
+    # if (DEBUG) message("[DEBUG] Running validation")
+    # validation_results <- ndaValidator(measure, api, limited_dataset)
 
     # Now apply date format preservation AFTER validation
+    if (DEBUG) message("[DEBUG] Get latest dataframe version")
     df <- base::get0(measure)
 
     # Add limited de-identification summary
@@ -531,15 +619,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       message("\nDataset has been de-identified using date-shifting and age-capping.")
     }
 
-    # audio alert of validation
-    ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
+    # audio alert of validation - uncomment if needed
+    # ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
 
     # Create data upload template regardless of if test passes
+    if (DEBUG) message("[DEBUG] Creating NDA template")
     createNda(measure)
     formatElapsedTime(start_time)
-
   }, error = function(e) {
-    # Check if identifier is valid (you can modify this logic based on your criteria)
+    if (DEBUG) message("[DEBUG] Error caught: ", e$message)
+    # Check if identifier is valid
     if (length(identifier) == 0 || all(is.na(identifier))) {
       message("An error occurred: ", e$message)  # General error message
     } else {
@@ -548,7 +637,19 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     NULL  # Return NULL on error
   })
 
-  # Flush environment
+  # Final verification
+  if (DEBUG && exists(measure)) {
+    final_df <- base::get0(measure)
+    if (!is.null(final_df) && is.data.frame(final_df)) {
+      message("[DEBUG] FINAL CHECK - Columns in ", measure, ":", paste(head(names(final_df), 10), collapse=", "), "...")
+      qualtrics_cols <- intersect(names(final_df), c("StartDate", "EndDate", "Status", "Progress", "ResponseId"))
+      if (length(qualtrics_cols) > 0) {
+        message("[DEBUG] WARNING: Qualtrics columns still present: ", paste(qualtrics_cols, collapse=", "))
+      } else {
+        message("[DEBUG] SUCCESS: No Qualtrics columns found in final dataset")
+      }
+    }
+  }
 
   return(result)  # Return the result of the processing
 }
