@@ -597,13 +597,84 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (DEBUG) message("[DEBUG] Calling ndaCheckQualtricsDuplicates")
       ndaCheckQualtricsDuplicates(measure, "qualtrics")
 
-      # show missing data that needs filled
-      if (DEBUG) message("[DEBUG] Checking for missing data in required fields")
-      missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
-      if (nrow(missing_data) > 0) {
-        if (DEBUG) message("[DEBUG] Found ", nrow(missing_data), " rows with missing required data")
-        View(missing_data)
+    }
+
+    if (api == "mongo") {
+      if (DEBUG) message("[DEBUG] Processing as Mongo data")
+
+      # Re-get the data to ensure we have the latest version
+      if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
+      if (exists(measure, envir = globalenv())) {
+        df <- base::get(measure, envir = globalenv())
+        if (DEBUG) message("[DEBUG] Got from globalenv()")
+      } else if (exists(measure, envir = .wizaRdry_env)) {
+        df <- base::get(measure, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Got from .wizaRdry_env")
+      } else if (exists(measure, envir = origin_env)) {
+        df <- base::get(measure, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Got from origin_env")
+      } else {
+        if (DEBUG) message("[DEBUG] ERROR: Can't find dataframe in any environment")
+        stop(paste("Object", measure, "not found in any environment"))
       }
+
+      # Remove specified qualtrics columns
+      cols_to_remove <- c("internal_node_id", "trial_type", "trial_index", "stimulus", "time_elapsed")
+
+      if (DEBUG) {
+        message("[DEBUG] Current columns: ", paste(names(df), collapse=", "))
+        intersection <- intersect(names(df), cols_to_remove)
+        message("[DEBUG] Columns to remove (", length(intersection), "): ", paste(intersection, collapse=", "))
+      }
+
+      # Remove the columns - different approach
+      cols_to_keep <- setdiff(names(df), cols_to_remove)
+      if (DEBUG) message("[DEBUG] Columns to keep (", length(cols_to_keep), "): ", paste(head(cols_to_keep, 10), collapse=", "), "...")
+
+      # Create a new dataframe with only the columns to keep
+      df_new <- df[, cols_to_keep, drop = FALSE]
+
+      if (DEBUG) {
+        message("[DEBUG] After removal: ", ncol(df_new), " columns remain")
+        message("[DEBUG] New columns: ", paste(names(df_new), collapse=", "))
+      }
+
+      # Reassign the filtered dataframe to BOTH environments
+      if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
+
+      # Update in globalenv
+      base::assign(measure, df_new, envir = globalenv())
+      if (DEBUG) message("[DEBUG] Assigned to globalenv()")
+
+      # Update in origin_env
+      base::assign(measure, df_new, envir = origin_env)
+      if (DEBUG) message("[DEBUG] Assigned to origin_env")
+
+      # Update in .wizaRdry_env if it exists
+      if (exists(".wizaRdry_env")) {
+        base::assign(measure, df_new, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
+      }
+
+      # Update our local df variable for continuing the function
+      df <- df_new
+
+      # Verify the changes took effect
+      if (DEBUG) {
+        if (exists(measure, envir = globalenv())) {
+          df_check <- base::get(measure, envir = globalenv())
+          message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
+        }
+      }
+
+    }
+
+    # show missing data that needs filled
+    if (DEBUG) message("[DEBUG] Checking for missing data in required fields")
+    missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
+    if (nrow(missing_data) > 0) {
+      if (DEBUG) message("[DEBUG] Found ", nrow(missing_data), " rows with missing required data")
+      View(missing_data)
     }
 
     # Run validation - uncomment if needed
