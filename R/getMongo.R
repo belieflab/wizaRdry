@@ -217,6 +217,9 @@ formatDuration <- function(duration) {
 #' Fetch data from MongoDB to be stored in a data frame
 #'
 #' @param collection_name The name of the MongoDB collection
+#' @param ... Optional column names to filter for. Only rows with non-missing values
+#'        in ALL specified columns will be returned. This is useful for filtering
+#'        data to only include complete cases for specific variables of interest.
 #' @param db_name The database name (optional)
 #' @param identifier Field to use as identifier (optional)
 #' @param chunk_size Number of records per chunk (optional)
@@ -224,6 +227,7 @@ formatDuration <- function(duration) {
 #' @param interview_date Optional; can be either:
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
+#'
 #' @importFrom mongolite mongo ssl_options
 #' @importFrom parallel detectCores
 #' @importFrom future plan multisession
@@ -240,7 +244,7 @@ formatDuration <- function(duration) {
 #' # Get data from MongoDB collection
 #' data <- mongo("collection_name")
 #' }
-mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE, interview_date = NULL) {
+mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE, interview_date = NULL) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
 
@@ -468,6 +472,56 @@ mongo <- function(collection_name, db_name = NULL, identifier = NULL, chunk_size
 
       # Reorder the dataframe
       clean_df <- clean_df[, new_order, drop = FALSE]
+    }
+  }
+
+  # Check if any column requests were passed via ...
+  dots_args <- list(...)
+  if (length(dots_args) > 0) {
+    # Convert the dots arguments to a character vector
+    requested_cols <- as.character(unlist(dots_args))
+
+    # Find which of the requested columns actually exist in the data
+    existing_cols <- intersect(requested_cols, names(clean_df))
+
+    if (length(existing_cols) > 0) {
+      # Display the names of the columns that were found
+      message(sprintf("Found %d of %d requested columns: %s",
+                      length(existing_cols),
+                      length(requested_cols),
+                      paste(existing_cols, collapse = ", ")))
+
+      # Create a filter to keep only rows where ALL requested columns have data
+      rows_to_keep <- rep(TRUE, nrow(clean_df))
+
+      for (col in existing_cols) {
+        # Check if column values are not NA
+        not_na <- !is.na(df[[col]])
+
+        # For non-NA values, check if they're not empty strings (if character type)
+        not_empty <- rep(TRUE, nrow(clean_df))
+        if (is.character(clean_df[[col]])) {
+          not_empty <- clean_df[[col]] != ""
+        }
+
+        # Combine the conditions - both not NA and not empty (if applicable)
+        has_data <- not_na & not_empty
+
+        # Update the rows_to_keep vector
+        rows_to_keep <- rows_to_keep & has_data
+      }
+
+      # Apply the filter to keep only rows with data in all requested columns
+      original_rows <- nrow(clean_df)
+      clean_df <- clean_df[rows_to_keep, ]
+      kept_rows <- nrow(clean_df)
+
+      message(sprintf("Kept %d of %d rows where all requested columns have values.",
+                      kept_rows, original_rows))
+    } else {
+      if (length(requested_cols) > 0) {
+        warning("None of the requested columns were found in the dataset.")
+      }
     }
   }
 

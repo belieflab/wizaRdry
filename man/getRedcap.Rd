@@ -6,6 +6,7 @@
 \usage{
 getRedcap(
   instrument_name = NULL,
+  ...,
   raw_or_label = "raw",
   redcap_event_name = NULL,
   batch_size = 1000,
@@ -19,6 +20,10 @@ getRedcap(
 }
 \arguments{
 \item{instrument_name}{Name of the REDCap instrument}
+
+\item{...}{Optional column names to filter for. Only rows with non-missing values
+in ALL specified columns will be returned. This is useful for filtering
+data to only include complete cases for specific variables of interest.}
 
 \item{raw_or_label}{Whether to return raw or labeled values}
 

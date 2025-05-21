@@ -1,11 +1,15 @@
 #' Retrieve Survey Data from Qualtrics
 #'
 #' @param qualtrics_alias The alias for the Qualtrics survey to be retrieved.
+#' @param ... Optional column names to filter for. Only rows with non-missing values
+#'        in ALL specified columns will be returned. This is useful for filtering
+#'        data to only include complete cases for specific variables of interest.
 #' @param institution Optional. The institution name (e.g., "temple" or "nu"). If NULL, all institutions will be searched.
 #' @param label Logical indicating whether to return coded values or their associated labels (default is FALSE).
 #' @param interview_date Optional; can be either:
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
+#'
 #' @return A cleaned and harmonized data frame containing the survey data with superkeys first.
 #' @importFrom dplyr %>% select mutate
 #' @export
@@ -14,7 +18,7 @@
 #' # Get survey by alias (will search all institutions)
 #' survey_data <- qualtrics("rgpts")
 #' }
-qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interview_date = NULL) {
+qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, interview_date = NULL) {
   # Load necessary source files
 
   # Validate config
@@ -213,6 +217,56 @@ qualtrics <- function(qualtrics_alias, institution = NULL, label = FALSE, interv
 
       # Reorder the dataframe
       clean_df <- clean_df[, new_order, drop = FALSE]
+    }
+  }
+
+  # Check if any column requests were passed via ...
+  dots_args <- list(...)
+  if (length(dots_args) > 0) {
+    # Convert the dots arguments to a character vector
+    requested_cols <- as.character(unlist(dots_args))
+
+    # Find which of the requested columns actually exist in the data
+    existing_cols <- intersect(requested_cols, names(clean_df))
+
+    if (length(existing_cols) > 0) {
+      # Display the names of the columns that were found
+      message(sprintf("Found %d of %d requested columns: %s",
+                      length(existing_cols),
+                      length(requested_cols),
+                      paste(existing_cols, collapse = ", ")))
+
+      # Create a filter to keep only rows where ALL requested columns have data
+      rows_to_keep <- rep(TRUE, nrow(clean_df))
+
+      for (col in existing_cols) {
+        # Check if column values are not NA
+        not_na <- !is.na(df[[col]])
+
+        # For non-NA values, check if they're not empty strings (if character type)
+        not_empty <- rep(TRUE, nrow(clean_df))
+        if (is.character(clean_df[[col]])) {
+          not_empty <- clean_df[[col]] != ""
+        }
+
+        # Combine the conditions - both not NA and not empty (if applicable)
+        has_data <- not_na & not_empty
+
+        # Update the rows_to_keep vector
+        rows_to_keep <- rows_to_keep & has_data
+      }
+
+      # Apply the filter to keep only rows with data in all requested columns
+      original_rows <- nrow(clean_df)
+      clean_df <- clean_df[rows_to_keep, ]
+      kept_rows <- nrow(clean_df)
+
+      message(sprintf("Kept %d of %d rows where all requested columns have values.",
+                      kept_rows, original_rows))
+    } else {
+      if (length(requested_cols) > 0) {
+        warning("None of the requested columns were found in the dataset.")
+      }
     }
   }
 

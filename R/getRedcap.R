@@ -72,6 +72,9 @@ formatDuration <- function(duration) {
 #' are propagated across all events
 #'
 #' @param instrument_name Name of the REDCap instrument
+#' @param ... Optional column names to filter for. Only rows with non-missing values
+#'        in ALL specified columns will be returned. This is useful for filtering
+#'        data to only include complete cases for specific variables of interest.
 #' @param raw_or_label Whether to return raw or labeled values
 #' @param redcap_event_name Optional event name filter
 #' @param batch_size Number of records to retrieve per batch
@@ -91,7 +94,7 @@ formatDuration <- function(duration) {
 #' # Get data from a specific instrument
 #' data <- redcap("demographics")
 #' }
-redcap <- function(instrument_name = NULL, raw_or_label = "raw",
+redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
                    redcap_event_name = NULL, batch_size = 1000,
                    records = NULL, fields = NULL, exclude_pii = TRUE,
                    interview_date = NULL, date_format = "ymd", complete = NULL) {
@@ -663,6 +666,56 @@ redcap <- function(instrument_name = NULL, raw_or_label = "raw",
       }
     } else {
       warning(paste0("Complete variable '", complete_var, "' not found in the dataset. Ignoring filter."))
+    }
+  }
+
+  # Check if any column requests were passed via ...
+  dots_args <- list(...)
+  if (length(dots_args) > 0) {
+    # Convert the dots arguments to a character vector
+    requested_cols <- as.character(unlist(dots_args))
+
+    # Find which of the requested columns actually exist in the data
+    existing_cols <- intersect(requested_cols, names(df))
+
+    if (length(existing_cols) > 0) {
+      # Display the names of the columns that were found
+      message(sprintf("Found %d of %d requested columns: %s",
+                      length(existing_cols),
+                      length(requested_cols),
+                      paste(existing_cols, collapse = ", ")))
+
+      # Create a filter to keep only rows where ALL requested columns have data
+      rows_to_keep <- rep(TRUE, nrow(df))
+
+      for (col in existing_cols) {
+        # Check if column values are not NA
+        not_na <- !is.na(df[[col]])
+
+        # For non-NA values, check if they're not empty strings (if character type)
+        not_empty <- rep(TRUE, nrow(df))
+        if (is.character(df[[col]])) {
+          not_empty <- df[[col]] != ""
+        }
+
+        # Combine the conditions - both not NA and not empty (if applicable)
+        has_data <- not_na & not_empty
+
+        # Update the rows_to_keep vector
+        rows_to_keep <- rows_to_keep & has_data
+      }
+
+      # Apply the filter to keep only rows with data in all requested columns
+      original_rows <- nrow(df)
+      df <- df[rows_to_keep, ]
+      kept_rows <- nrow(df)
+
+      message(sprintf("Kept %d of %d rows where all requested columns have values.",
+                      kept_rows, original_rows))
+    } else {
+      if (length(requested_cols) > 0) {
+        warning("None of the requested columns were found in the dataset.")
+      }
     }
   }
 

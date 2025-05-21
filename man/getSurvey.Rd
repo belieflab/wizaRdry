@@ -6,6 +6,7 @@
 \usage{
 getSurvey(
   qualtrics_alias,
+  ...,
   institution = NULL,
   label = FALSE,
   interview_date = NULL
@@ -13,6 +14,10 @@ getSurvey(
 }
 \arguments{
 \item{qualtrics_alias}{The alias for the Qualtrics survey to be retrieved.}
+
+\item{...}{Optional column names to filter for. Only rows with non-missing values
+in ALL specified columns will be returned. This is useful for filtering
+data to only include complete cases for specific variables of interest.}
 
 \item{institution}{Optional. The institution name (e.g., "temple" or "nu"). If NULL, all institutions will be searched.}
 

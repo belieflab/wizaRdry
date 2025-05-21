@@ -6,6 +6,7 @@
 \usage{
 getTask(
   collection_name,
+  ...,
   db_name = NULL,
   identifier = NULL,
   chunk_size = NULL,
@@ -15,6 +16,10 @@ getTask(
 }
 \arguments{
 \item{collection_name}{The name of the MongoDB collection}
+
+\item{...}{Optional column names to filter for. Only rows with non-missing values
+in ALL specified columns will be returned. This is useful for filtering
+data to only include complete cases for specific variables of interest.}
 
 \item{db_name}{The database name (optional)}
 
