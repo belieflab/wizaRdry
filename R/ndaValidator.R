@@ -1,5 +1,12 @@
 # A safer version of readline that handles errors gracefully
 safe_readline <- function(prompt, default = "") {
+  # Force reset R's internal error state at the beginning of the function
+  options(show.error.messages = FALSE)
+  options(show.error.messages = TRUE)
+
+  # Just reset warnings directly without touching .Last.warning
+  suppressWarnings(warning("Dummy warning to reset warning system"))
+
   result <- tryCatch({
     readline(prompt)
   }, error = function(e) {
