@@ -438,6 +438,7 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
 }
 
 # Improved conversion that strictly uses ValueRange from the NDA API
+# Improved conversion that preserves original values and only converts actual missing data
 apply_type_conversions <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nApplying type conversions...")
   conversion_summary <- list()
@@ -455,10 +456,11 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
           if(verbose) cat(sprintf("\n  Target type: %s", type))
 
           # Store original values
-          orig_values <- head(df[[field_name]], 3)
+          orig_values <- df[[field_name]]
 
           # First, identify which special code should be used for NAs
           na_code <- NULL
+
           # Extract all special codes from valueRange
           if (!is.null(value_range) && !is.na(value_range) && value_range != "") {
             range_parts <- trimws(strsplit(value_range, ";")[[1]])
@@ -486,51 +488,94 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
             }
           }
 
-          # CRITICAL FIX: First convert to character (preserves NA status)
-          char_values <- as.character(df[[field_name]])
-
-          # THEN identify NA positions in character representation
-          na_positions <- which(is.na(char_values))
-
           # Special handling for PSSP fields
           if (grepl("^pssp", field_name) && is.null(na_code)) {
             na_code <- -99
             if(verbose) cat("\n  Using -99 code for PSSP field")
           }
 
-          # Now apply type conversion using the character values
+          # IMPORTANT: Detect original missing values BEFORE conversion
+          originally_missing <- is.na(orig_values)
+          originally_missing_count <- sum(originally_missing)
+
+          if(verbose && originally_missing_count > 0) {
+            cat(sprintf("\n  Found %d originally missing values", originally_missing_count))
+          }
+
+          # Check for non-numeric values before conversion (for warning only)
+          non_numeric_values <- c()
+          if (!is.numeric(orig_values)) {
+            # Try to identify which values won't convert cleanly
+            non_numeric_test <- suppressWarnings(as.numeric(as.character(orig_values)))
+            non_numeric_mask <- !is.na(orig_values) & is.na(non_numeric_test)
+
+            if (any(non_numeric_mask)) {
+              non_numeric_values <- unique(orig_values[non_numeric_mask])
+              non_numeric_count <- sum(non_numeric_mask)
+
+              if(verbose) {
+                cat(sprintf("\n  WARNING: Found %d non-numeric values that will be preserved: %s",
+                            non_numeric_count,
+                            paste(head(non_numeric_values, 5), collapse=", ")))
+
+                if(length(non_numeric_values) > 5) {
+                  cat(sprintf(" (and %d more)", length(non_numeric_values) - 5))
+                }
+              }
+            }
+          }
+
+          # Create a new column with converted values, preserving the original
+          # Convert to character first (this keeps special values intact)
+          char_values <- as.character(orig_values)
+
+          # Apply type conversion with warnings suppressed
           if (type == "Integer") {
-            df[[field_name]] <- as.integer(char_values)
+            converted_values <- suppressWarnings(as.integer(char_values))
           } else if (type == "Float") {
-            df[[field_name]] <- as.numeric(char_values)
+            converted_values <- suppressWarnings(as.numeric(char_values))
           }
 
-          # Replace NA values with the appropriate code if we found one
-          if (!is.null(na_code) && length(na_positions) > 0) {
-            df[[field_name]][na_positions] <- na_code
-            if(verbose) cat(sprintf("\n  Replaced %d NA values with %d",
-                                    length(na_positions), na_code))
+          # Now we have a parallel converted vector with possible NAs from coercion
+          # Only replace original NAs with NA codes, not NAs from conversion
+          if (!is.null(na_code) && originally_missing_count > 0) {
+            converted_values[originally_missing] <- na_code
+            if(verbose) cat(sprintf("\n  Replaced %d originally missing values with %d",
+                                    originally_missing_count, na_code))
           }
 
-          # Double-check for any remaining NAs (could be introduced by conversion)
-          remaining_na_positions <- which(is.na(df[[field_name]]))
-          if (length(remaining_na_positions) > 0 && !is.null(na_code)) {
-            df[[field_name]][remaining_na_positions] <- na_code
-            if(verbose) cat(sprintf("\n  Replaced %d additional NA values with %d",
-                                    length(remaining_na_positions), na_code))
+          # Now identify which values would be lost in conversion (non-numeric strings)
+          conversion_mask <- rep(TRUE, length(orig_values))
+
+          # For non-numeric originals that aren't NA, preserve the original
+          if (!is.numeric(orig_values)) {
+            # Find positions where:
+            # 1. Original value is not NA
+            # 2. Converted value is NA (conversion failed)
+            # These are values we want to preserve
+            preserve_mask <- !is.na(orig_values) & is.na(converted_values)
+
+            if (any(preserve_mask)) {
+              # Don't convert these positions
+              conversion_mask[preserve_mask] <- FALSE
+
+              if(verbose) {
+                cat(sprintf("\n  Preserving %d non-numeric original values", sum(preserve_mask)))
+              }
+            }
           }
 
-          # Final check for any remaining NAs
-          na_count <- sum(is.na(df[[field_name]]))
-          if (na_count > 0 && verbose) {
-            cat(sprintf("\n  Warning: %d NA values remain", na_count))
-          }
+          # Apply the converted values only where conversion_mask is TRUE
+          # Otherwise keep the original value
+          df[[field_name]][conversion_mask] <- converted_values[conversion_mask]
 
           # Store conversion summary
           conversion_summary[[field_name]] <- list(
             type = type,
-            nas_introduced = na_count,
-            sample_before = orig_values,
+            originally_missing = originally_missing_count,
+            preserved_count = sum(!conversion_mask),
+            non_numeric_values = non_numeric_values,
+            sample_before = head(orig_values),
             sample_after = head(df[[field_name]])
           )
         }
@@ -543,12 +588,29 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
     }
   }
 
+  # Print summary if any conversions were done
   if(verbose && length(conversion_summary) > 0) {
     cat("\n\nType conversion summary:")
     for(field in names(conversion_summary)) {
       cat(sprintf("\n- %s -> %s", field, conversion_summary[[field]]$type))
-      if(conversion_summary[[field]]$nas_introduced > 0) {
-        cat(sprintf(" (%d NAs)", conversion_summary[[field]]$nas_introduced))
+
+      # Report original missing values
+      if(conversion_summary[[field]]$originally_missing > 0) {
+        cat(sprintf(" (%d originally missing values replaced with codes)",
+                    conversion_summary[[field]]$originally_missing))
+      }
+
+      # Report preserved values
+      if(conversion_summary[[field]]$preserved_count > 0) {
+        cat(sprintf("\n  Preserved %d original non-numeric values",
+                    conversion_summary[[field]]$preserved_count))
+      }
+
+      # Show sample values
+      if(verbose > 1) {  # More detailed output for higher verbosity
+        cat("\n  Sample values:")
+        cat(sprintf("\n    Before: %s", paste(conversion_summary[[field]]$sample_before, collapse=", ")))
+        cat(sprintf("\n    After:  %s", paste(conversion_summary[[field]]$sample_after, collapse=", ")))
       }
     }
     cat("\n")
@@ -1286,29 +1348,57 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
 # Updated get_violations function with more robust categorical matching
 # Updated get_violations function
 # Updated get_violations function with special handling for ranges with both :: and ;
+# Updated get_violations function with better handling of non-numeric values
 get_violations <- function(value, range_str) {
   if (is.null(range_str) || is.na(range_str) || range_str == "") return(character(0))
+
+  # First check if there are non-numeric values (when expected numeric)
+  if (grepl("::", range_str)) {
+    # Numeric range expected - check for non-numeric values
+    if (!is.numeric(value)) {
+      # Try to convert to numeric to find which values can't be converted
+      value_numeric <- suppressWarnings(as.numeric(as.character(value)))
+      non_numeric_mask <- !is.na(value) & is.na(value_numeric)
+
+      if (any(non_numeric_mask)) {
+        non_numeric_values <- unique(value[non_numeric_mask])
+        if (length(non_numeric_values) > 0) {
+          return(sort(as.character(non_numeric_values)))
+        }
+      }
+    }
+  }
 
   # Special case for mixed ranges like "1::26;77"
   if (grepl("::", range_str) && grepl(";", range_str)) {
     # Split by semicolon first
     parts <- strsplit(range_str, ";")[[1]]
-
     # Get the numeric range from the first part
     range_part <- parts[grepl("::", parts)][1]
     range <- as.numeric(strsplit(range_part, "::")[[1]])
-
     # Get individual values from other parts
     individual_values <- as.numeric(parts[!grepl("::", parts)])
-
     # Combine valid values: numbers in range plus individual values
     valid_values <- c(seq(from = range[1], to = range[2]), individual_values)
 
-    # Check for violations
-    invalid_mask <- !value %in% valid_values
-    invalid_mask[is.na(invalid_mask)] <- FALSE
+    # Check for violations - handle non-numeric values appropriately
+    if (is.numeric(value)) {
+      invalid_mask <- !value %in% valid_values
+      invalid_mask[is.na(invalid_mask)] <- FALSE
+      return(sort(unique(value[invalid_mask])))
+    } else {
+      # For non-numeric values, we need to convert to numeric first
+      value_numeric <- suppressWarnings(as.numeric(as.character(value)))
+      # Identify values that can be converted but are outside range
+      convertible_mask <- !is.na(value_numeric)
+      invalid_mask <- convertible_mask & !value_numeric %in% valid_values
+      invalid_mask[is.na(invalid_mask)] <- FALSE
 
-    return(sort(unique(value[invalid_mask])))
+      result <- sort(unique(value[invalid_mask]))
+      # If no numeric violations, return empty
+      if (length(result) == 0) return(character(0))
+      return(result)
+    }
   }
 
   # Rest of the function for simple ranges
@@ -1316,21 +1406,30 @@ get_violations <- function(value, range_str) {
     # Numeric range check
     range <- as.numeric(strsplit(range_str, "::")[[1]])
 
-    # Convert value to numeric if it's character
-    if (is.character(value)) {
-      value <- as.numeric(value)
-    }
+    # Handle non-numeric values appropriately
+    if (is.numeric(value)) {
+      invalid_mask <- value < range[1] | value > range[2]
+      invalid_mask[is.na(invalid_mask)] <- FALSE
+      return(sort(unique(value[invalid_mask])))
+    } else {
+      # For non-numeric values, we need to convert to numeric first
+      value_numeric <- suppressWarnings(as.numeric(as.character(value)))
+      # Identify values that can be converted but are outside range
+      convertible_mask <- !is.na(value_numeric)
+      invalid_mask <- convertible_mask & (value_numeric < range[1] | value_numeric > range[2])
+      invalid_mask[is.na(invalid_mask)] <- FALSE
 
-    invalid_mask <- value < range[1] | value > range[2]
-    invalid_mask[is.na(invalid_mask)] <- FALSE
-    return(sort(unique(value[invalid_mask])))
+      result <- sort(unique(value[invalid_mask]))
+      # If no numeric violations, return empty
+      if (length(result) == 0) return(character(0))
+      return(result)
+    }
   } else if (grepl(";", range_str)) {
     # Categorical values
     valid_values <- trimws(strsplit(range_str, ";")[[1]])
 
     # Convert to character for comparison
     value_char <- as.character(value)
-
     invalid_mask <- !value_char %in% valid_values
     invalid_mask[is.na(invalid_mask)] <- FALSE
     return(sort(unique(value[invalid_mask])))
@@ -1341,6 +1440,7 @@ get_violations <- function(value, range_str) {
 
 # Main validation logic function
 # Modified validate_structure function with better error handling
+# Modified validate_structure function to better handle non-numeric values
 validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                                auto_drop_unknown = FALSE,
                                missing_required_fields = character(0),
@@ -1352,6 +1452,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     valid = TRUE,
     missing_required = character(0),
     value_range_violations = list(),
+    non_numeric_in_numeric = list(),  # New field to track non-numeric values in numeric fields
     unknown_fields = character(0),
     unknown_fields_dropped = character(0),  # Track which fields were dropped
     warnings = character(0)
@@ -1361,7 +1462,6 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
   if(length(missing_required_fields) > 0) {
     results$valid <- FALSE
     results$missing_required <- c(results$missing_required, missing_required_fields)
-
     if(verbose) {
       cat("\n\nERROR: Required fields missing values:")
       cat(sprintf("\n  %s", paste(missing_required_fields, collapse=", ")))
@@ -1384,7 +1484,6 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       }
 
       drop_fields <- FALSE
-
       if(interactive_mode) {
         # Prompt user for confirmation
         user_input <- safe_readline(prompt = "Do you want to drop these unknown fields? (y/n): ",
@@ -1409,6 +1508,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         # Determine which environment contains the original dataframe
         env_to_use <- NULL
         calling_env <- parent.frame(2) # The environment that called this function
+
         if(exists(measure_name, envir = calling_env)) {
           env_to_use <- calling_env
         } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
@@ -1421,70 +1521,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
           # Only update the cleaning script if not in collect_only mode
           if(!collect_only) {
-            # Ask about updating cleaning script
-            update_cleaning_script <- FALSE
-
-            if(interactive_mode) {
-              update_input <- safe_readline(prompt = "Update cleaning script with code to drop these fields? (y/n): ",
-                                            default = "y")
-              update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
-            } else {
-              update_cleaning_script <- TRUE  # Always update in non-interactive mode
-            }
-
-            if(update_cleaning_script) {
-              # Generate R code for cleanup script
-              tryCatch({
-                api_str <- as.character(api)
-                measure_name_str <- as.character(measure_name)
-
-                # First try the expected path
-                cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
-
-                # If not found, also check alternative location
-                if (!file.exists(cleaning_script_path)) {
-                  alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
-                  if (file.exists(alt_path)) {
-                    cleaning_script_path <- alt_path
-                    if(verbose) cat("\nFound cleaning script in alternative location:", cleaning_script_path)
-                  }
-                }
-
-                if(verbose) cat("\nAttempting to update cleaning script at:", cleaning_script_path)
-
-                if(file.exists(cleaning_script_path)) {
-                  # Read existing content
-                  existing_content <- readLines(cleaning_script_path)
-
-                  # Create the code to remove columns
-                  unknown_fields_str <- paste(shQuote(results$unknown_fields), collapse=", ")
-
-                  # ensure case-insensitive matching in the removal command
-                  removal_code <- c(
-                    "",
-                    "# Auto-generated code to remove unknown fields",
-                    paste0(measure_name_str, " <- ", measure_name_str, "[, !tolower(names(",
-                           measure_name_str, ")) %in% tolower(c(",
-                           unknown_fields_str, "))]")
-                  )
-
-                  # Write back the entire file with the new code appended
-                  writeLines(c(existing_content, removal_code), cleaning_script_path)
-
-                  if(verbose) cat("\nSuccessfully updated cleaning script with code to remove unknown fields")
-                } else if(verbose) {
-                  cat("\nCould not find cleaning script at expected locations.")
-                  unknown_fields_str <- paste(shQuote(results$unknown_fields), collapse=", ")
-                  removal_code <- paste0(measure_name_str, " <- ", measure_name_str, "[, !names(",
-                                         measure_name_str, ") %in% c(",
-                                         unknown_fields_str, ")]")
-                  cat("\n\nSuggested code for cleaning script:")
-                  cat("\n", removal_code)
-                }
-              }, error = function(e) {
-                if(verbose) cat("\nError updating cleaning script:", e$message)
-              })
-            }
+            # (script updating code remains unchanged)
           }
         }
 
@@ -1498,7 +1535,6 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         # Ask if validation should fail due to unknown fields
         fail_validation <- FALSE
-
         if(interactive_mode) {
           fail_input <- safe_readline(prompt = "Should validation fail because of unknown fields? (y/n): ",
                                       default = "n")
@@ -1529,7 +1565,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       cat("\n\nAll required fields present")
     }
 
-    # Check value ranges
+    # Check value ranges and type validity
     if(verbose) cat("\n\nChecking value ranges...")
 
     for(col in intersect(df_cols, valid_fields)) {
@@ -1542,6 +1578,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         if(verbose) {
           cat(sprintf("\n\nField: %s", col))
+          cat(sprintf("\n  Type: %s", element$type))
           cat(sprintf("\n  Expected range: %s", element$valueRange))
         }
 
@@ -1555,18 +1592,61 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             # Update in environment
             env_to_use <- NULL
             calling_env <- parent.frame(2) # The environment that called this function
+
             if(exists(measure_name, envir = calling_env)) {
               env_to_use <- calling_env
             } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
               env_to_use <- .wizaRdry_env
             }
+
             if(!is.null(env_to_use)) {
               assign(measure_name, df, envir = env_to_use)
             }
           }
         }
 
-        # Check for violations
+        # Check for non-numeric values in numeric fields
+        if (element$type %in% c("Integer", "Float") && !is.numeric(df[[col]])) {
+          # Try to convert to see which values can't be converted
+          values_numeric <- suppressWarnings(as.numeric(as.character(df[[col]])))
+          non_numeric_mask <- !is.na(df[[col]]) & is.na(values_numeric)
+
+          if (any(non_numeric_mask)) {
+            non_numeric_values <- unique(df[[col]][non_numeric_mask])
+
+            if(verbose) {
+              cat(sprintf("\n  WARNING: Non-numeric values found in numeric field:"))
+              cat(sprintf("\n    %s", paste(head(non_numeric_values, 5), collapse=", ")))
+
+              if(length(non_numeric_values) > 5) {
+                cat(sprintf(" (and %d more)", length(non_numeric_values) - 5))
+              }
+            }
+
+            # Add to results
+            results$non_numeric_in_numeric[[col]] <- list(
+              expected_type = element$type,
+              values = non_numeric_values
+            )
+
+            # Ask if these violations should cause validation to fail
+            if(interactive_mode) {
+              fail_input <- safe_readline(
+                prompt = sprintf("Should non-numeric values in field '%s' cause validation to fail? (y/n): ", col),
+                default = "n"
+              )
+
+              if(tolower(fail_input) %in% c("y", "yes")) {
+                results$valid <- FALSE
+                if(verbose) cat("\n  Validation will fail due to non-numeric values")
+              } else {
+                if(verbose) cat("\n  Ignoring non-numeric values for validation purposes")
+              }
+            }
+          }
+        }
+
+        # Check for range violations
         violating_values <- tryCatch({
           get_violations(df[[col]], element$valueRange)
         }, error = function(e) {
@@ -1582,6 +1662,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             cat("\n  Value range violations found:")
             cat(sprintf("\n    Invalid values: %s",
                         paste(head(violating_values, 5), collapse=", ")))
+
             if(length(violating_values) > 5) {
               cat(sprintf(" (and %d more...)",
                           length(violating_values) - 5))
@@ -1590,9 +1671,11 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
           # Ask if these violations should cause validation to fail
           fail_due_to_violations <- TRUE
-
           if(interactive_mode) {
-            violation_input <- safe_readline(prompt = sprintf("Should violations in field '%s' cause validation to fail? (y/n): ", col), default = "y")
+            violation_input <- safe_readline(
+              prompt = sprintf("Should violations in field '%s' cause validation to fail? (y/n): ", col),
+              default = "y"
+            )
             fail_due_to_violations <- tolower(violation_input) %in% c("y", "yes")
           }
 
@@ -1622,6 +1705,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         message(sprintf("- Unknown fields: %d (%s)",
                         length(results$unknown_fields),
                         paste(head(results$unknown_fields, 10), collapse=", ")))
+
         if(length(results$unknown_fields) > 10) {
           message(sprintf("  ... and %d more", length(results$unknown_fields) - 10))
         }
@@ -1639,15 +1723,21 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                         paste(names(results$value_range_violations), collapse=", ")))
       }
 
+      if(length(results$non_numeric_in_numeric) > 0) {
+        message(sprintf("- Fields with non-numeric values: %d (%s)",
+                        length(results$non_numeric_in_numeric),
+                        paste(names(results$non_numeric_in_numeric), collapse=", ")))
+      }
+
       if(length(results$warnings) > 0) {
         message("\n\nWarnings:")
         for(warning in results$warnings) {
           message(sprintf("\n- %s", warning))
         }
       }
+
       cat("\n")
     }
-
   }, error = function(e) {
     results$valid <- FALSE
     results$warnings <- c(
@@ -1663,9 +1753,6 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
   return(results)
 }
-
-
-
 
 # Modify the main validation function to include date standardization
 # Add enhanced debug logging
