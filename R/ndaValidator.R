@@ -1441,6 +1441,8 @@ get_violations <- function(value, range_str) {
 # Main validation logic function
 # Modified validate_structure function with better error handling
 # Modified validate_structure function to better handle non-numeric values
+# Modified validate_structure function to automatically fail on non-numeric values
+# Fully automated validate_structure function with no user prompts for violations
 validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                                auto_drop_unknown = FALSE,
                                missing_required_fields = character(0),
@@ -1452,9 +1454,9 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     valid = TRUE,
     missing_required = character(0),
     value_range_violations = list(),
-    non_numeric_in_numeric = list(),  # New field to track non-numeric values in numeric fields
+    non_numeric_in_numeric = list(),
     unknown_fields = character(0),
-    unknown_fields_dropped = character(0),  # Track which fields were dropped
+    unknown_fields_dropped = character(0),
     warnings = character(0)
   )
 
@@ -1521,7 +1523,68 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
           # Only update the cleaning script if not in collect_only mode
           if(!collect_only) {
-            # (script updating code remains unchanged)
+            # Ask about updating cleaning script
+            update_cleaning_script <- FALSE
+            if(interactive_mode) {
+              update_input <- safe_readline(prompt = "Update cleaning script with code to drop these fields? (y/n): ",
+                                            default = "y")
+              update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
+            } else {
+              update_cleaning_script <- TRUE  # Always update in non-interactive mode
+            }
+
+            if(update_cleaning_script) {
+              # Generate R code for cleanup script
+              tryCatch({
+                api_str <- as.character(api)
+                measure_name_str <- as.character(measure_name)
+
+                # First try the expected path
+                cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
+
+                # If not found, also check alternative location
+                if (!file.exists(cleaning_script_path)) {
+                  alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
+                  if (file.exists(alt_path)) {
+                    cleaning_script_path <- alt_path
+                    if(verbose) cat("\nFound cleaning script in alternative location:", cleaning_script_path)
+                  }
+                }
+
+                if(verbose) cat("\nAttempting to update cleaning script at:", cleaning_script_path)
+
+                if(file.exists(cleaning_script_path)) {
+                  # Read existing content
+                  existing_content <- readLines(cleaning_script_path)
+
+                  # Create the code to remove columns
+                  unknown_fields_str <- paste(shQuote(results$unknown_fields), collapse=", ")
+
+                  # ensure case-insensitive matching in the removal command
+                  removal_code <- c(
+                    "",
+                    "# Auto-generated code to remove unknown fields",
+                    paste0(measure_name_str, " <- ", measure_name_str, "[, !tolower(names(",
+                           measure_name_str, ")) %in% tolower(c(",
+                           unknown_fields_str, "))]")
+                  )
+
+                  # Write back the entire file with the new code appended
+                  writeLines(c(existing_content, removal_code), cleaning_script_path)
+                  if(verbose) cat("\nSuccessfully updated cleaning script with code to remove unknown fields")
+                } else if(verbose) {
+                  cat("\nCould not find cleaning script at expected locations.")
+                  unknown_fields_str <- paste(shQuote(results$unknown_fields), collapse=", ")
+                  removal_code <- paste0(measure_name_str, " <- ", measure_name_str, "[, !names(",
+                                         measure_name_str, ") %in% c(",
+                                         unknown_fields_str, ")]")
+                  cat("\n\nSuggested code for cleaning script:")
+                  cat("\n", removal_code)
+                }
+              }, error = function(e) {
+                if(verbose) cat("\nError updating cleaning script:", e$message)
+              })
+            }
           }
         }
 
@@ -1533,22 +1596,9 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       } else {
         if(verbose) cat("\nKeeping unknown fields in the dataset")
 
-        # Ask if validation should fail due to unknown fields
-        fail_validation <- FALSE
-        if(interactive_mode) {
-          fail_input <- safe_readline(prompt = "Should validation fail because of unknown fields? (y/n): ",
-                                      default = "n")
-          fail_validation <- tolower(fail_input) %in% c("y", "yes")
-        } else {
-          fail_validation <- TRUE  # Always fail in non-interactive mode when fields aren't dropped
-        }
-
-        if(fail_validation) {
-          results$valid <- FALSE
-          if(verbose) cat("\nValidation will fail due to unknown fields")
-        } else {
-          if(verbose) cat("\nValidation will proceed despite unknown fields")
-        }
+        # Automatically fail validation if unknown fields are kept
+        results$valid <- FALSE
+        if(verbose) cat("\nValidation will fail due to unknown fields")
       }
     }
 
@@ -1615,12 +1665,14 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             non_numeric_values <- unique(df[[col]][non_numeric_mask])
 
             if(verbose) {
-              cat(sprintf("\n  WARNING: Non-numeric values found in numeric field:"))
+              cat(sprintf("\n  ERROR: Non-numeric values found in numeric field:"))
               cat(sprintf("\n    %s", paste(head(non_numeric_values, 5), collapse=", ")))
 
               if(length(non_numeric_values) > 5) {
                 cat(sprintf(" (and %d more)", length(non_numeric_values) - 5))
               }
+
+              cat("\n  Validation will fail due to non-numeric values in numeric field")
             }
 
             # Add to results
@@ -1629,20 +1681,8 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
               values = non_numeric_values
             )
 
-            # Ask if these violations should cause validation to fail
-            if(interactive_mode) {
-              fail_input <- safe_readline(
-                prompt = sprintf("Should non-numeric values in field '%s' cause validation to fail? (y/n): ", col),
-                default = "n"
-              )
-
-              if(tolower(fail_input) %in% c("y", "yes")) {
-                results$valid <- FALSE
-                if(verbose) cat("\n  Validation will fail due to non-numeric values")
-              } else {
-                if(verbose) cat("\n  Ignoring non-numeric values for validation purposes")
-              }
-            }
+            # Automatically fail validation - no user prompt
+            results$valid <- FALSE
           }
         }
 
@@ -1659,7 +1699,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         if(length(violating_values) > 0) {
           if(verbose) {
-            cat("\n  Value range violations found:")
+            cat("\n  ERROR: Value range violations found:")
             cat(sprintf("\n    Invalid values: %s",
                         paste(head(violating_values, 5), collapse=", ")))
 
@@ -1667,28 +1707,16 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
               cat(sprintf(" (and %d more...)",
                           length(violating_values) - 5))
             }
+
+            cat(sprintf("\n  Validation will fail due to violations in %s", col))
           }
 
-          # Ask if these violations should cause validation to fail
-          fail_due_to_violations <- TRUE
-          if(interactive_mode) {
-            violation_input <- safe_readline(
-              prompt = sprintf("Should violations in field '%s' cause validation to fail? (y/n): ", col),
-              default = "y"
-            )
-            fail_due_to_violations <- tolower(violation_input) %in% c("y", "yes")
-          }
-
-          if(fail_due_to_violations) {
-            results$valid <- FALSE
-            results$value_range_violations[[col]] <- list(
-              expected = element$valueRange,
-              actual = violating_values
-            )
-            if(verbose) cat(sprintf("\n  Validation will fail due to violations in %s", col))
-          } else {
-            if(verbose) cat(sprintf("\n  Ignoring violations in %s for validation purposes", col))
-          }
+          # Automatically fail validation - no user prompt
+          results$valid <- FALSE
+          results$value_range_violations[[col]] <- list(
+            expected = element$valueRange,
+            actual = violating_values
+          )
         } else if(verbose) {
           cat("\n  All values within expected range")
         }
@@ -1724,7 +1752,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       }
 
       if(length(results$non_numeric_in_numeric) > 0) {
-        message(sprintf("- Fields with non-numeric values: %d (%s)",
+        message(sprintf("- Fields with non-numeric values in numeric fields: %d (%s)",
                         length(results$non_numeric_in_numeric),
                         paste(names(results$non_numeric_in_numeric), collapse=", ")))
       }
