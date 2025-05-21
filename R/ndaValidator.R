@@ -1,26 +1,20 @@
+# A safer version of readline that handles errors gracefully
+safe_readline <- function(prompt, default = "") {
+  result <- tryCatch({
+    readline(prompt)
+  }, error = function(e) {
+    message(sprintf("Error in readline. Using default: %s", default))
+    return(default)
+  }, warning = function(w) {
+    message(sprintf("Warning in readline. Using default: %s", default))
+    return(default)
+  })
 
-# Safe readline function that works in non-interactive environments too
-safe_readline <- function(prompt = "", default = "y") {
-  # First check if R is running in interactive mode
-  if (!interactive()) {
-    message(paste0(prompt, " (Using default: ", default, ")"))
+  # If empty, return default
+  if (is.null(result) || result == "") {
     return(default)
   }
 
-  # Try to use readline with minimal error handling
-  result <- try({
-    suppressWarnings(readline(prompt))
-  }, silent = TRUE)
-
-  # If there was an error or empty result, return the default
-  if (inherits(result, "try-error") || result == "") {
-    if (inherits(result, "try-error")) {
-      message(paste0("Error in readline. Using default: ", default))
-    }
-    return(default)
-  }
-
-  # Return the result
   return(result)
 }
 
@@ -921,18 +915,19 @@ fetch_structure_elements <- function(structure_name, nda_base_url) {
 # Calculate similarity with more accurate prefix handling
 # Modified find_and_rename_fields function with automatic unknown field handling
 # Modified find_and_rename_fields function - fixed to NOT drop renamed fields
-find_and_rename_fields <- function(df, elements, structure_name, measure_name, verbose = TRUE,
+find_and_rename_fields <- function(df, elements, structure_name, measure_name, api, verbose = TRUE,
                                    auto_drop_unknown = FALSE,
                                    interactive_mode = TRUE) {
   # Store the origin environment (as processNda does)
   origin_env <- parent.frame()
-
   renamed <- list(
     df = df,
     renames = character(),
     columns_to_drop = character(),
     renamed_fields = character(),
-    similarity_scores = list()
+    similarity_scores = list(),
+    script_updated_renames = FALSE,  # Track if we updated the script for renames
+    script_updated_drops = FALSE     # Track if we updated the script for drops
   )
 
   # Get dataframe column names
@@ -944,10 +939,8 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
 
   # Find unknown fields
   unknown_fields <- setdiff(df_cols, valid_fields)
-
   if (length(unknown_fields) > 0) {
     if(verbose) cat("\nAnalyzing field name similarities...\n")
-
     # Process each field
     for (field in unknown_fields) {
       # Check if this field has special characters
@@ -959,6 +952,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
       # Check if this is a hierarchical field (contains multiple underscores with numbers)
       parts <- strsplit(field, "_")[[1]]
       num_parts <- sum(grepl("^\\d+$", parts))
+
       # If field has more than 2 numeric parts, it's hierarchical - skip renaming
       if (num_parts > 2) {
         if(verbose) {
@@ -970,6 +964,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
 
       # For non-hierarchical fields, proceed with similarity matching
       base_field <- sub(paste0("^", structure_prefix, "_"), "", field)
+
       # Calculate similarity scores
       similarities <- sapply(valid_fields, function(name) {
         # Calculate direct similarity
@@ -993,11 +988,9 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
 
       # Remove any NA values
       similarities <- similarities[!is.na(similarities)]
-
       if (length(similarities) > 0) {
         best_match <- names(similarities)[which.max(similarities)]
         best_score <- max(similarities)
-
         if (best_score > 0.9) {  # High confidence automatic match
           # Present option to rename in interactive mode
           rename_field <- TRUE
@@ -1015,34 +1008,44 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
               message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
                               field, best_match, best_score * 100))
             }
-
             # Use [[ ]] to safely handle special characters in field names
             field_data <- df[[field]]
             df[[best_match]] <- field_data
-
             # Track rename
-            renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
             renamed$renamed_fields <- c(renamed$renamed_fields, field)
             renamed$renames <- c(renamed$renames,
                                  sprintf("%s -> %s (%.2f%%)",
                                          field, best_match, best_score * 100))
+          } else {
+            # If not renaming, check if we should drop
+            drop_field <- auto_drop_unknown
+            if(interactive_mode) {
+              drop_input <- safe_readline(
+                prompt = sprintf("Drop field '%s'? (y/n): ", field),
+                default = if(auto_drop_unknown) "y" else "n"
+              )
+              drop_field <- tolower(drop_input) %in% c("y", "yes")
+            }
+            if(drop_field) {
+              renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
+              if(verbose) cat(sprintf("Will drop field '%s'\n", field))
+            } else if(verbose) {
+              cat(sprintf("Keeping field '%s'\n", field))
+            }
           }
         } else {
           # Lower confidence match - allow user to select from top matches
           if(verbose) {
             cat(sprintf("No automatic rename - best match below 90%% threshold\n"))
           }
-
           # Present top 5 matches as options
           top_matches <- head(sort(similarities, decreasing = TRUE), 5)
           selected_match <- NULL
-
           if(interactive_mode) {
             rename_input <- safe_readline(
               prompt = sprintf("Select match for '%s' (1-5 to select, 0 to skip): ", field),
               default = "0"
             )
-
             # Check if input is a number between 1-5
             if(grepl("^[1-5]$", rename_input)) {
               match_idx <- as.integer(rename_input)
@@ -1057,13 +1060,10 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
                 message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
                                 field, selected_match, top_matches[match_idx] * 100))
               }
-
               # Use [[ ]] to safely handle special characters in field names
               field_data <- df[[field]]
               df[[selected_match]] <- field_data
-
               # Track rename
-              renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
               renamed$renamed_fields <- c(renamed$renamed_fields, field)
               renamed$renames <- c(renamed$renames,
                                    sprintf("%s -> %s (%.2f%%)",
@@ -1112,38 +1112,240 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, v
       }
     }
 
-    # After all renames, remove the original columns
-    if (length(renamed$columns_to_drop) > 0) {
-      if(verbose) {
-        cat("\nDropping columns:")
-        cat(sprintf("\n  %s", paste(renamed$columns_to_drop, collapse=", ")))
+    # After all renames, we need to process the final dataframe
+    # First, handle renamed fields - these should be kept in the new dataframe with their new names
+
+    # Create new dataframe - first get the list of columns to keep
+    all_cols <- names(df)
+    cols_to_keep <- setdiff(all_cols, union(renamed$columns_to_drop, renamed$renamed_fields))
+
+    # Add the new columns created from renames
+    renamed_targets <- c()
+    for (rename_str in renamed$renames) {
+      match_result <- regexec("^([^ ]+) -> ([^ ]+)", rename_str)
+      if (match_result[[1]][1] != -1) {
+        parts <- regmatches(rename_str, match_result)[[1]]
+        if (length(parts) >= 3) {
+          new_name <- parts[3]
+          new_name <- sub(" \\(.*\\)$", "", new_name) # Remove percentage part if present
+          renamed_targets <- c(renamed_targets, new_name)
+        }
       }
-
-      # EXACTLY like processNda:
-      cols_to_keep <- setdiff(names(df), renamed$columns_to_drop)
-      df_new <- df[, cols_to_keep, drop = FALSE]
-
-      # Update all environments EXACTLY like processNda
-      # Update in globalenv
-      base::assign(measure_name, df_new, envir = globalenv())
-      # Update in origin_env
-      base::assign(measure_name, df_new, envir = origin_env)
-      # Update in .wizaRdry_env if it exists
-      if (exists(".wizaRdry_env")) {
-        base::assign(measure_name, df_new, envir = .wizaRdry_env)
-      }
-
-      # Update local variable
-      df <- df_new
-      renamed$df <- df_new
     }
 
-    # Output summary
-    if(verbose && length(renamed$renames) > 0) {
-      cat("\n\nRename operations completed:")
-      cat(paste("\n-", renamed$renames), sep = "")
+    # Combine original kept columns and renamed columns
+    cols_to_keep <- c(cols_to_keep, renamed_targets)
+
+    # Create the new dataframe
+    df_new <- df[, cols_to_keep, drop = FALSE]
+
+    # Update all environments EXACTLY like processNda
+    base::assign(measure_name, df_new, envir = globalenv())
+    base::assign(measure_name, df_new, envir = origin_env)
+    if (exists(".wizaRdry_env")) {
+      base::assign(measure_name, df_new, envir = .wizaRdry_env)
+    }
+
+    # Update local variable
+    df <- df_new
+    renamed$df <- df_new
+
+    # Now handle renaming operations display and script updates
+    has_renames <- length(renamed$renames) > 0
+    has_drops <- length(renamed$columns_to_drop) > 0
+
+    # First display rename operations if any
+    if (has_renames && verbose) {
+      cat("\n\nRenaming columns:\n")
+      renamed_fields_str <- paste(renamed$renamed_fields, collapse = ", ")
+      cat(paste(" ", renamed_fields_str))
       cat("\n")
+
+      # Ask if we should update the cleaning script with rename operations
+      update_rename_script <- FALSE
+      if (interactive_mode) {
+        update_input <- safe_readline(
+          prompt = sprintf("Update cleaning script with rename operations? (y/n): "),
+          default = "y"
+        )
+        update_rename_script <- tolower(update_input) %in% c("y", "yes")
+      } else {
+        update_rename_script <- TRUE
+      }
+
+      if (update_rename_script) {
+        if(verbose) {
+          cat("Will add renaming operations to cleaning script\n")
+        }
+
+        # Update the cleaning script with rename operations
+        tryCatch({
+          api_str <- as.character(api)
+          measure_name_str <- as.character(measure_name)
+
+          # First try the expected path
+          cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
+
+          # If not found, also check alternative location
+          if (!file.exists(cleaning_script_path)) {
+            alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
+            if (file.exists(alt_path)) {
+              cleaning_script_path <- alt_path
+              if(verbose) cat("Found cleaning script in alternative location:", cleaning_script_path, "\n")
+            }
+          }
+
+          if(verbose) cat("Attempting to update cleaning script at:", cleaning_script_path, "\n")
+
+          if(file.exists(cleaning_script_path)) {
+            # Read existing content
+            existing_content <- readLines(cleaning_script_path)
+
+            # Generate rename code
+            rename_code <- c("")
+
+            # Extract field pairs from renames
+            rename_pairs <- c()
+            for (rename_str in renamed$renames) {
+              # Extract original and new field names from the rename string
+              match_result <- regexec("^([^ ]+) -> ([^ ]+)", rename_str)
+              if (match_result[[1]][1] != -1) {
+                parts <- regmatches(rename_str, match_result)[[1]]
+                if (length(parts) >= 3) {
+                  old_name <- parts[2]
+                  new_name <- parts[3]
+                  new_name <- sub(" \\(.*\\)$", "", new_name) # Remove percentage part if present
+                  rename_pairs <- c(rename_pairs, paste0('"', old_name, '" = "', new_name, '"'))
+                }
+              }
+            }
+
+            # Generate a single clean rename block
+            if (length(rename_pairs) > 0) {
+              rename_pairs_str <- paste(rename_pairs, collapse = ", ")
+              rename_code <- c(
+                rename_code,
+                "# Auto-generated code to rename fields",
+                paste0("rename_map <- c(", rename_pairs_str, ")"),
+                paste0("for (old_name in names(rename_map)) {"),
+                paste0("  if (old_name %in% names(", measure_name_str, ")) {"),
+                paste0("    ", measure_name_str, "[[rename_map[old_name]]] <- ", measure_name_str, "[[old_name]]"),
+                paste0("    # Remove original column after renaming"),
+                paste0("    ", measure_name_str, " <- ", measure_name_str, "[, !names(", measure_name_str, ") %in% c(old_name)]"),
+                paste0("  }"),
+                paste0("}")
+              )
+            }
+
+            # Write back the entire file with the new code appended
+            writeLines(c(existing_content, rename_code), cleaning_script_path)
+            if(verbose) cat("Successfully updated cleaning script with rename operations\n")
+
+            # Mark that we've updated the script for renames
+            renamed$script_updated_renames <- TRUE
+          } else if(verbose) {
+            cat("Could not find cleaning script at expected locations.\n")
+            cat("\nSuggested code for cleaning script:\n")
+            cat("# Auto-generated code to rename fields\n")
+            rename_pairs_str <- paste(rename_pairs, collapse = ", ")
+            cat(sprintf("rename_map <- c(%s)\n", rename_pairs_str))
+            cat(sprintf("for (old_name in names(rename_map)) {\n"))
+            cat(sprintf("  if (old_name %%in%% names(%s)) {\n", measure_name_str))
+            cat(sprintf("    %s[[rename_map[old_name]]] <- %s[[old_name]]\n", measure_name_str, measure_name_str))
+            cat(sprintf("    # Remove original column after renaming\n"))
+            cat(sprintf("    %s <- %s[, !names(%s) %%in%% c(old_name)]\n", measure_name_str, measure_name_str, measure_name_str))
+            cat(sprintf("  }\n"))
+            cat(sprintf("}\n"))
+          }
+        }, error = function(e) {
+          if(verbose) cat("Error updating cleaning script with rename operations:", e$message, "\n")
+        })
+      }
     }
+
+    # Separately handle drop operations
+    if (has_drops && verbose) {
+      # Get columns that were only dropped (not renamed)
+      non_renamed_drops <- setdiff(renamed$columns_to_drop, renamed$renamed_fields)
+
+      if (length(non_renamed_drops) > 0) {
+        cat("\nDropping columns:\n")
+        drop_fields_str <- paste(non_renamed_drops, collapse = ", ")
+        cat(paste(" ", drop_fields_str))
+        cat("\n")
+
+        # Ask if we should update the cleaning script with drop operations
+        update_drop_script <- FALSE
+        if (interactive_mode) {
+          update_input <- safe_readline(
+            prompt = sprintf("Update cleaning script with drop operations? (y/n): "),
+            default = "y"
+          )
+          update_drop_script <- tolower(update_input) %in% c("y", "yes")
+        } else {
+          update_drop_script <- TRUE
+        }
+
+        if (update_drop_script) {
+          if(verbose) {
+            cat("Will add drop operations to cleaning script\n")
+          }
+
+          # Update the cleaning script with drop operations
+          tryCatch({
+            api_str <- as.character(api)
+            measure_name_str <- as.character(measure_name)
+
+            # First try the expected path
+            cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
+
+            # If not found, also check alternative location
+            if (!file.exists(cleaning_script_path)) {
+              alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
+              if (file.exists(alt_path)) {
+                cleaning_script_path <- alt_path
+                if(verbose) cat("Found cleaning script in alternative location:", cleaning_script_path, "\n")
+              }
+            }
+
+            if(verbose) cat("Attempting to update cleaning script at:", cleaning_script_path, "\n")
+
+            if(file.exists(cleaning_script_path)) {
+              # Read existing content
+              existing_content <- readLines(cleaning_script_path)
+
+              # Generate drop code
+              drop_fields_str <- paste(shQuote(unique(non_renamed_drops)), collapse=", ")
+              drop_code <- c(
+                "",
+                "# Auto-generated code to remove additional fields",
+                paste0(measure_name_str, " <- ", measure_name_str, "[, !names(",
+                       measure_name_str, ") %in% c(",
+                       drop_fields_str, ")]")
+              )
+
+              # Write back the entire file with the new code appended
+              writeLines(c(existing_content, drop_code), cleaning_script_path)
+              if(verbose) cat("Successfully updated cleaning script with drop operations\n")
+
+              # Mark that we've updated the script for drops
+              renamed$script_updated_drops <- TRUE
+            } else if(verbose) {
+              cat("Could not find cleaning script at expected locations.\n")
+              cat("\nSuggested code for cleaning script:\n")
+              cat("# Auto-generated code to remove additional fields\n")
+              cat(sprintf("%s <- %s[, !names(%s) %%in%% c(%s)]\n",
+                          measure_name_str, measure_name_str, measure_name_str, drop_fields_str))
+            }
+          }, error = function(e) {
+            if(verbose) cat("Error updating cleaning script with drop operations:", e$message, "\n")
+          })
+        }
+      }
+    }
+
+    # Set overall script updated flag if either operation happened
+    renamed$script_updated <- renamed$script_updated_renames || renamed$script_updated_drops
   }
 
   return(renamed)
@@ -1910,7 +2112,7 @@ ndaValidator <- function(measure_name,
     df <- standardize_field_names(df, measure_name, verbose = verbose)
 
     # Rename fields with close matches - track columns rename
-    renamed_results <- find_and_rename_fields(df, elements, structure_name, measure_name,
+    renamed_results <- find_and_rename_fields(df, elements, structure_name, measure_name, api,
                                               verbose = verbose,
                                               auto_drop_unknown = auto_drop_unknown,
                                               interactive_mode = interactive_mode)
@@ -1976,91 +2178,6 @@ ndaValidator <- function(measure_name,
     # Final check for missing required values
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
       if(verbose) message("\nValidation FAILED: Required fields are missing or contain NA values")
-    }
-
-    # Now update the cleaning script with ALL columns to drop in one operation
-    # BUT EXCLUDE renamed fields
-    all_columns_to_drop <- setdiff(all_columns_to_drop, renamed_fields)
-
-    if(length(all_columns_to_drop) > 0) {
-      update_cleaning_script <- FALSE
-
-      if(interactive_mode) {
-        update_input <- safe_readline(
-          prompt = sprintf("Update cleaning script with code to drop %d fields? (y/n): ",
-                           length(all_columns_to_drop)),
-          default = "y")
-        update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
-      } else {
-        update_cleaning_script <- TRUE
-      }
-
-      if(update_cleaning_script) {
-        if(verbose) {
-          cat("\nUpdating cleaning script with fields to drop (excluding renamed fields):")
-          cat(sprintf("\n  %s", paste(all_columns_to_drop, collapse=", ")))
-        }
-
-        # Update the cleaning script
-        update_result <- tryCatch({
-          api_str <- as.character(api)
-          measure_name_str <- as.character(measure_name)
-
-          # First try the expected path
-          cleaning_script_path <- file.path(".", "nda", api_str, paste0(measure_name_str, ".R"))
-
-          # If not found, also check alternative location
-          if (!file.exists(cleaning_script_path)) {
-            alt_path <- file.path(".", "clean", api_str, paste0(measure_name_str, ".R"))
-            if (file.exists(alt_path)) {
-              cleaning_script_path <- alt_path
-              if(verbose) cat("\nFound cleaning script in alternative location:", cleaning_script_path)
-            }
-          }
-
-          if(verbose) cat("\nAttempting to update cleaning script at:", cleaning_script_path)
-
-          if(file.exists(cleaning_script_path)) {
-            # Read existing content
-            existing_content <- readLines(cleaning_script_path)
-
-            # Create the code to remove columns
-            unknown_fields_str <- paste(shQuote(unique(all_columns_to_drop)), collapse=", ")
-
-            removal_code <- c(
-              "",
-              "# Auto-generated code to remove unknown fields",
-              paste0(measure_name_str, " <- ", measure_name_str, "[, !names(",
-                     measure_name_str, ") %in% c(",
-                     unknown_fields_str, ")]")
-            )
-
-            # Write back the entire file with the new code appended
-            writeLines(c(existing_content, removal_code), cleaning_script_path)
-
-            if(verbose) cat("\nSuccessfully updated cleaning script with code to remove unknown fields")
-            TRUE
-          } else {
-            if(verbose) {
-              cat("\nCould not find cleaning script at expected locations.")
-              unknown_fields_str <- paste(shQuote(unique(all_columns_to_drop)), collapse=", ")
-              removal_code <- paste0(measure_name_str, " <- ", measure_name_str, "[, !names(",
-                                     measure_name_str, ") %in% c(",
-                                     unknown_fields_str, ")]")
-              cat("\n\nSuggested code for cleaning script:")
-              cat("\n", removal_code)
-            }
-            FALSE
-          }
-        }, error = function(e) {
-          if(verbose) cat("\nError updating cleaning script:", e$message)
-          FALSE
-        })
-
-        if(verbose && update_result) {
-          cat("\nCleaning script updated with", length(all_columns_to_drop), "fields to drop")
-        }
-      }
     }
 
     return(validation_results)
