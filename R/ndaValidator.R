@@ -993,6 +993,10 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                                field, best_match, best_score * 100),
               default = "y"
             )
+            # Check to make sure the input is a valid response
+            while (!tolower(rename_input) %in% c("y", "n")){
+              rename_input <- readline(prompt = "Please enter either y or n: ")
+            }
             rename_field <- tolower(rename_input) %in% c("y", "yes")
           }
 
@@ -1017,6 +1021,10 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                 prompt = sprintf("Drop field '%s'? (y/n): ", field),
                 default = if(auto_drop_unknown) "y" else "n"
               )
+              # Check that the input is a valid response
+              while (!tolower(drop_input) %in% c("y", "n")){
+                drop_input <- readline(prompt = "Please enter either y or n: ")
+              }
               drop_field <- tolower(drop_input) %in% c("y", "yes")
             }
             if(drop_field) {
@@ -1036,9 +1044,13 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
           selected_match <- NULL
           if(interactive_mode) {
             rename_input <- safe_readline(
-              prompt = sprintf("Select match for '%s' (1-5 to select, 0 to skip): ", field),
+              prompt = sprintf("Select match for '%s' (1-5 to select, or press Enter to skip): ", field),
               default = "0"
             )
+            # First check that the input is valid
+            while (!grepl("^[0-5]$",rename_input)){
+              rename_input <- safe_readline(prompt = 'Please enter a number 1-5 or press Enter to skip: ', default='0')
+            }
             # Check if input is a number between 1-5
             if(grepl("^[1-5]$", rename_input)) {
               match_idx <- as.integer(rename_input)
@@ -1067,6 +1079,10 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                 prompt = sprintf("Drop field '%s'? (y/n): ", field),
                 default = if(auto_drop_unknown) "y" else "n"
               )
+              # Check that input is a valid response
+              while (!tolower(drop_input) %in% c("y", "n")){
+                drop_input <- readline(prompt = 'Please enter either y or n: ')
+              }
               drop_field <- tolower(drop_input) %in% c("y", "yes")
               if(drop_field) {
                 renamed$columns_to_drop <- c(renamed$columns_to_drop, field)
@@ -1094,6 +1110,10 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
             prompt = sprintf("No matches found for '%s'. Drop this field? (y/n): ", field),
             default = if(auto_drop_unknown) "y" else "n"
           )
+          # Check that the input is a valid response
+          while (!tolower(drop_input) %in% c("y", "n")){
+            drop_input <- readline(prompt = 'Please enter either y or n: ')
+          }
           drop_field <- tolower(drop_input) %in% c("y", "yes")
         }
         if(drop_field) {
@@ -1158,9 +1178,13 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
       update_rename_script <- FALSE
       if (interactive_mode) {
         update_input <- safe_readline(
-          prompt = sprintf("Update cleaning script with rename operations? (y/n): "),
+          prompt = sprintf("Update the cleaning script to include rename operations? (y/n): "),
           default = "y"
         )
+        # Check that the input is a valid response
+        while (!tolower(update_input) %in% c("y", "n")){
+          update_input <- readline(prompt = 'Please enter either y or n: ')
+        }
         update_rename_script <- tolower(update_input) %in% c("y", "yes")
       } else {
         update_rename_script <- TRUE
@@ -1271,9 +1295,13 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
         update_drop_script <- FALSE
         if (interactive_mode) {
           update_input <- safe_readline(
-            prompt = sprintf("Update cleaning script with drop operations? (y/n): "),
+            prompt = sprintf("Update the cleaning script to include drop operations? (y/n): "),
             default = "y"
           )
+          # Check that the input is a valid response
+          while (!tolower(update_input) %in% c("y", "n")){
+            update_input <- readline(prompt = 'Please enter either y or n: ')
+          }
           update_drop_script <- tolower(update_input) %in% c("y", "yes")
         } else {
           update_drop_script <- TRUE
@@ -1490,6 +1518,10 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         # Prompt user for confirmation
         user_input <- safe_readline(prompt = "Do you want to drop these unknown fields? (y/n): ",
                                     default = if(auto_drop_unknown) "y" else "n")
+        # Check that the input is a valid response
+        while (!tolower(user_input) %in% c("y", "n")){
+          user_input <- readline(prompt = 'Please enter either y or n: ')
+        }
         drop_fields <- tolower(user_input) %in% c("y", "yes")
       } else {
         # Use the auto_drop_unknown setting
@@ -1528,6 +1560,10 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             if(interactive_mode) {
               update_input <- safe_readline(prompt = "Update cleaning script with code to drop these fields? (y/n): ",
                                             default = "y")
+              # Check that the input is a valid response
+              while (!tolower(update_input) %in% c("y", "n")){
+                update_input <- readline(prompt = 'Please enter either y or n: ')
+              }
               update_cleaning_script <- tolower(update_input) %in% c("y", "yes")
             } else {
               update_cleaning_script <- TRUE  # Always update in non-interactive mode
