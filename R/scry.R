@@ -268,6 +268,16 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     "        bar: \"SV_\"",
     "  redcap:",
     "    #superkey: ndar_subject01",
+    "  missing_data_codes:",
+    "    #skipped:",
+    "      #- -888   # Skip pattern/branching logic",
+    "    #refused:",
+    "      #- -9999  # Explicitly declined to answer",
+    "      #- -1",
+    "    #missing:",
+    "      #- 777    # Missing for unknown reasons",
+    "    #undefined:",
+    "      #- -555   # Otherwise undefined value",
     sep = "\n"
   )
 
