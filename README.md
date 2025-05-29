@@ -104,7 +104,7 @@ default:
 
 ### 4. Configure Missing Data Codes
 
-Additionally, edit the generated `config.yml` file to specify missing data codes used in your data.
+Additionally, edit the generated `config.yml` file to specify missing data codes if they are used in your data.
 
 You may use multiple types of codes (skipped, refused, missing, undefined) and multiple codes for each.
 
