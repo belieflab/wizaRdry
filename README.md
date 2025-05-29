@@ -119,7 +119,7 @@ default:
       - -9999  # Explicitly declined to answer (radio buttons)
       - -1     # Explicitly declined to answer (text boxes)
     missing:
-      - -69    # Missing for unknown reasons
+      - -777    # Missing for unknown reasons
     undefined:
       - -555   # Otherwise undefined value
 ```
