@@ -102,6 +102,26 @@ default:
     superkey: ndar_subject01
 ```
 
+### 4. Configure Missing Data Codes
+
+Additionally, edit the generated `config.yml` file to specify your missing data codes.
+
+You may use multiple types of codes (skipped, refused, missing, undefined) and multiple codes for each:
+
+```yaml
+default:
+    missing_data_codes:
+    skipped:
+      - -888   # Skip pattern/branching logic
+    refused:
+      - -9999  # Explicitly declined to answer
+      - -1
+    missing:
+      - -69    # Missing for unknown reasons
+    undefined:
+      - -555   # Otherwise undefined value
+```
+
 ## Features
 
 - **Project scaffolding**: Creates standard directory structures with `scry()`
