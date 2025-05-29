@@ -104,13 +104,15 @@ default:
 
 ### 4. Configure Missing Data Codes
 
-Additionally, edit the generated `config.yml` file to specify your missing data codes.
+Additionally, edit the generated `config.yml` file to specify missing data codes used in your data.
 
-You may use multiple types of codes (skipped, refused, missing, undefined) and multiple codes for each:
+You may use multiple types of codes (skipped, refused, missing, undefined) and multiple codes for each.
+
+These values will be **replaced** by the missing data codes associated with each NDA Data Structure automatically when using `nda()`
 
 ```yaml
 default:
-    missing_data_codes:
+  missing_data_codes:
     skipped:
       - -888   # Skip pattern/branching logic
     refused:
