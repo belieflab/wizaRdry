@@ -116,8 +116,8 @@ default:
     skipped:
       - -888   # Skip pattern/branching logic
     refused:
-      - -9999  # Explicitly declined to answer
-      - -1
+      - -9999  # Explicitly declined to answer (radio buttons)
+      - -1     # Explicitly declined to answer (text boxes)
     missing:
       - -69    # Missing for unknown reasons
     undefined:
