@@ -1,5 +1,5 @@
 # A safer version of readline that handles errors gracefully
-safe_readline <- function(prompt, default = "") {
+safe_readline <- function(prompt, default = "", allow_exit = TRUE) {
   # Force reset R's internal error state at the beginning of the function
   options(show.error.messages = FALSE)
   options(show.error.messages = TRUE)
@@ -9,6 +9,14 @@ safe_readline <- function(prompt, default = "") {
 
   result <- tryCatch({
     readline(prompt)
+  }, interrupt = function(i) { # Interrupt handling. This part only gets called if Ctrl + C is pressed
+    if (allow_exit) {
+      message("\nOperation cancelled by user. Exiting...")
+      invokeRestart("abort") # At this point, the abort should cause nda() to exit at the highest level
+    } else {
+      message("\nInterrupt received. Using default value.")
+      return(default)
+    }
   }, error = function(e) {
     message(sprintf("Error in readline. Using default: %s", default))
     return(default)
