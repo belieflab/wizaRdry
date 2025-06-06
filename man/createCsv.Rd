@@ -4,7 +4,7 @@
 \alias{createCsv}
 \title{Alias for 'to.csv'}
 \usage{
-createCsv(df, df_name = NULL, path = ".", skip_prompt = FALSE)
+createCsv(df, df_name = NULL, path = ".", skip_prompt = TRUE)
 }
 \arguments{
 \item{df}{Data frame to be exported to CSV format.}
@@ -16,7 +16,7 @@ The function adds the ".csv" extension automatically.}
 \item{path}{Character string specifying the directory path where the "tmp" folder
 and CSV file should be created. Defaults to the current working directory.}
 
-\item{skip_prompt}{Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+\item{skip_prompt}{Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 will prompt for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{

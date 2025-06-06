@@ -10,7 +10,7 @@
 #' @param rdata Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.
 #' @param spss Optional; Boolean, if TRUE creates a .sav extract in ./tmp.
 #' @param limited_dataset Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age
-#' @param skip_prompt Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+#' @param skip_prompt Logical. If TRUE (default), skips confirmation prompts unless preferences aren't set yet. If FALSE,
 #'   prompts for confirmation unless the user has previously chosen to remember their preference.
 #' @return Prints the time taken for the data request process.
 #' @export
@@ -24,7 +24,7 @@
 #' }
 #'
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = FALSE) {
+nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE) {
   start_time <- Sys.time()
 
   # Define base path
@@ -91,7 +91,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     # If we have structures to create and need to prompt
     if (length(invalid_structures) > 0) {
       # If skip_prompt is TRUE or user has previously set auto_nda to TRUE, bypass the prompt
-      if (!skip_prompt && !user_prefs$auto_nda) {
+      if (!skip_prompt | !user_prefs$auto_nda) {
 
         template_word <- ifelse(length(invalid_structures) > 1, "templates", "template")
         response <- readline(prompt = sprintf("Would you like to create NDA submission %s for %s now? y/n ",
@@ -103,19 +103,10 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
           response <- readline(prompt = "Please enter either y or n: ")
         }
 
-        # Ask if they want to remember this choice
+        # If response is 'y', update auto_nda to TRUE in user preferences
         if (tolower(response) == "y") {
-          remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
-
-          while (!tolower(remember) %in% c("y", "n")) {
-            remember <- readline(prompt = "Please enter either y or n: ")
-          }
-
-          if (tolower(remember) == "y") {
-            user_prefs$auto_nda <- TRUE
-            saveRDS(user_prefs, user_prefs_file)
-            message("Your preference has been saved. Use nda(skip_prompt = FALSE) to show this prompt again.")
-          }
+          user_prefs$auto_nda <- TRUE
+          saveRDS(user_prefs, user_prefs_file)
         }
 
         if (tolower(response) == "n") {
@@ -128,7 +119,6 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
       for (script_name in invalid_structures) {
         message(sprintf("\nProcessing script: %s", script_name))
 
-        # Improved validation function for NDA data structure names
         # Improved validation function for NDA data structure names
         validate_script_name <- function(script_name, nda_base_url = "https://nda.nih.gov/api/datadictionary/v2") {
 

@@ -12,7 +12,7 @@ scry(
   show_tree = NULL,
   create_project = FALSE,
   examples = FALSE,
-  skip_prompt = FALSE
+  skip_prompt = TRUE
 )
 }
 \arguments{
@@ -36,7 +36,7 @@ If FALSE (default), will not create an R project.}
 \item{examples}{Logical. If TRUE (default when not repairing), will create example script templates.
 If FALSE (default when repairing), will skip creating example scripts.}
 
-\item{skip_prompt}{Logical. If TRUE, will skip the initial confirmation prompt. Defaults to FALSE.}
+\item{skip_prompt}{Logical. If TRUE (default), will skip the initial confirmation prompt if y/n preferences are not set yet. FALSE if specified.}
 }
 \value{
 Invisible TRUE if successful.

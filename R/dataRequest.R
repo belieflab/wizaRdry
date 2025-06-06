@@ -9,7 +9,7 @@
 #' @param csv Optional; Boolean, if TRUE creates a .csv extract in ./tmp.
 #' @param rdata Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.
 #' @param spss Optional; Boolean, if TRUE creates a .sav extract in ./tmp.
-#' @param skip_prompt Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+#' @param skip_prompt Logical. If TRUE (default), skips confirmation prompts. If FALSE,
 #'   prompts for confirmation unless the user has previously chosen to remember their preference.
 #' @return Prints the time taken for the data request process.
 #' @export
@@ -23,7 +23,7 @@
 #' }
 #'
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = FALSE) {
+clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = TRUE) { #skip_prompt to true so preferences can be set on first run
 
   # Define base path
   path <- "." # Or whatever directory you're working from
@@ -91,7 +91,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = F
     # If we have invalid scripts to create and need to prompt
     if (length(invalid_scripts) > 0) {
       # If skip_prompt is TRUE or user has previously set auto_clean to TRUE, bypass the prompt
-      if (!skip_prompt && !user_prefs$auto_clean) {
+      if (!skip_prompt | !user_prefs$auto_clean) {
         script_word <- ifelse(length(invalid_scripts) > 1, "scripts", "script")
         response <- readline(prompt = sprintf("Would you like to create cleaning %s for %s now? y/n ",
                                               script_word,
@@ -101,19 +101,10 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = F
           response <- readline(prompt = "Please enter either y or n: ")
         }
 
-        # Ask if they want to remember this choice
+        # If user selects y, set auto_clean to TRUE and update preferences
         if (tolower(response) == "y") {
-          remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
-
-          while (!tolower(remember) %in% c("y", "n")) {
-            remember <- readline(prompt = "Please enter either y or n: ")
-          }
-
-          if (tolower(remember) == "y") {
-            user_prefs$auto_clean <- TRUE
-            saveRDS(user_prefs, user_prefs_file)
-            message("Your preference has been saved. Use clean(skip_prompt = FALSE) to show this prompt again.")
-          }
+          user_prefs$auto_clean <- TRUE
+          saveRDS(user_prefs, user_prefs_file)
         }
 
         if (tolower(response) == "n") {

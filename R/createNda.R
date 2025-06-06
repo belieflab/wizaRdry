@@ -10,13 +10,13 @@
 #'        in the global environment.
 #' @param path Character string specifying the directory path where the "tmp" folder
 #'        and template file should be created. Defaults to the current working directory.
-#' @param skip_prompt Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+#' @param skip_prompt Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 #'        will prompt for confirmation unless the user has previously chosen to remember their preference.
 #'
 #' @return Invisible TRUE if successful. Creates a CSV file at the specified path
 #'         and prints a message with the file location.
 #'
-#' @details 
+#' @details
 #' The function will:
 #' 1. Create a 'tmp' directory if it doesn't exist
 #' 2. Parse the structure name into base and suffix components (e.g., "eefrt01" → "eefrt" and "01")
@@ -33,23 +33,23 @@
 #'     interview_date = c("01/01/2023", "02/15/2023"),
 #'     response_time = c(450, 520)
 #'   )
-#'   
+#'
 #'   # Create the NDA template using the data frame directly
 #'   to.nda(eefrt01)
-#'   
+#'
 #'   # Or using the name as a string
 #'   to.nda("eefrt01")
-#'   
+#'
 #'   # Skip the confirmation prompt
 #'   to.nda(eefrt01, skip_prompt = TRUE)
 #' }
 #'
 #' @export
-to.nda <- function(df, path = ".", skip_prompt = FALSE) {
+to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRUE so users need to specify to see prompt after prefs are set
   # Check for user preferences file
   user_prefs_file <- file.path(path, "..wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_nda_template = FALSE)
-  
+
   if (file.exists(user_prefs_file)) {
     tryCatch({
       user_prefs <- readRDS(user_prefs_file)
@@ -62,7 +62,7 @@ to.nda <- function(df, path = ".", skip_prompt = FALSE) {
       user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_nda_template = FALSE)
     })
   }
-  
+
   # Determine whether df is a data frame or a string
   if (is.character(df)) {
     df_name <- df
@@ -72,59 +72,50 @@ to.nda <- function(df, path = ".", skip_prompt = FALSE) {
   } else {
     df_name <- deparse(substitute(df))
   }
-  
+
   # If skip_prompt is TRUE or user has previously set auto_nda_template to TRUE, bypass the prompt
-  if (!skip_prompt && !user_prefs$auto_nda_template) {
+  if (!skip_prompt | !user_prefs$auto_nda_template) {
     response <- readline(prompt = sprintf("Would you like to create the NDA submission template for %s now? y/n ",
                                           df_name))
-    
+
     while (!tolower(response) %in% c("y", "n")) {
       response <- readline(prompt = "Please enter either y or n: ")
     }
-    
-    # Ask if they want to remember this choice
+
+    # If user selects y, save their preference automatically and set auto_nda_template to TRUE.
     if (tolower(response) == "y") {
-      remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
-      
-      while (!tolower(remember) %in% c("y", "n")) {
-        remember <- readline(prompt = "Please enter either y or n: ")
-      }
-      
-      if (tolower(remember) == "y") {
-        user_prefs$auto_nda_template <- TRUE
-        saveRDS(user_prefs, user_prefs_file)
-        message("Your preference has been saved. Use to.nda(skip_prompt = FALSE) to show this prompt again.")
-      }
+      user_prefs$auto_nda_template <- TRUE
+      saveRDS(user_prefs, user_prefs_file)
     }
-    
+
     if (tolower(response) == "n") {
       message("NDA submission template creation cancelled.")
       invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
-  
+
   # Create directory structure if it doesn't exist
   tmp_path <- file.path(path, "tmp")
   if (!dir.exists(tmp_path)) {
     dir.create(tmp_path)
   }
-  
-  # Define structure_name 
+
+  # Define structure_name
   structure_name <- df_name
-  
+
   # Create the file path
   file_path <- file.path(tmp_path, paste0(structure_name, '_template.csv'))
-  
+
   # Get the data frame
   if (is.character(df)) {
     template <- base::get(df, envir = .GlobalEnv)
   } else {
     template <- df
   }
-  
+
   # Open a connection to overwrite the file
   con <- file(file_path, "w")
-  
+
   # Split structure name into base name and suffix
   # Check if the name ends with 2 digits
   if (grepl("\\d{2}$", structure_name)) {
@@ -135,22 +126,22 @@ to.nda <- function(df, path = ".", skip_prompt = FALSE) {
     structure_short_name <- structure_name
     structure_suffix <- "01"
   }
-  
+
   # Write the line with separated components
   writeLines(paste0(structure_short_name, ",", structure_suffix), con)
-  
+
   # Write column headers manually
   writeLines(paste(names(template), collapse = ","), con)
-  
+
   # Close the connection to save changes
   close(con)
-  
+
   # Append the data without column headers
-  write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE, 
+  write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE,
               quote = TRUE, sep = ",", na = "")
-  
+
   message(sprintf("\nSubmission Template created at: %s \n", file_path))
-  
+
   return(invisible(TRUE))
 }
 

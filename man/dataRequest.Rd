@@ -4,7 +4,7 @@
 \alias{dataRequest}
 \title{Alias for 'clean'}
 \usage{
-dataRequest(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = FALSE)
+dataRequest(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = TRUE)
 }
 \arguments{
 \item{...}{Strings, specifying the measures to process, which can be a Mongo collection, REDCap instrument, or Qualtrics survey.}
@@ -15,7 +15,7 @@ dataRequest(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = FALSE)
 
 \item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp.}
 
-\item{skip_prompt}{Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+\item{skip_prompt}{Logical. If TRUE (default), skips confirmation prompts. If FALSE,
 prompts for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{

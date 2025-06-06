@@ -13,7 +13,7 @@
 #'   The function adds the ".csv" extension automatically.
 #' @param path Character string specifying the directory path where the "tmp" folder
 #'   and CSV file should be created. Defaults to the current working directory.
-#' @param skip_prompt Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+#' @param skip_prompt Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 #'   will prompt for confirmation unless the user has previously chosen to remember their preference.
 #'
 #' @return Invisible TRUE if successful. The function writes a CSV file to the specified path
@@ -42,18 +42,18 @@
 #'
 #' @export
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-to.csv <- function(df, df_name = NULL, path = ".", skip_prompt = FALSE) {
+to.csv <- function(df, df_name = NULL, path = ".", skip_prompt = TRUE) { # set default skip_prompt behavior to TRUE
   # Get the name of the dataframe for display
   df_display_name <- if (!is.null(df_name)) {
     df_name
   } else {
     deparse(substitute(df))
   }
-  
+
   # Check for user preferences file
   user_prefs_file <- file.path(path, "..wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_csv = FALSE)
-  
+
   if (file.exists(user_prefs_file)) {
     tryCatch({
       user_prefs <- readRDS(user_prefs_file)
@@ -66,59 +66,50 @@ to.csv <- function(df, df_name = NULL, path = ".", skip_prompt = FALSE) {
       user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_csv = FALSE)
     })
   }
-  
+
   # If skip_prompt is TRUE or user has previously set auto_csv to TRUE, bypass the prompt
-  if (!skip_prompt && !user_prefs$auto_csv) {
+  if (!skip_prompt | !user_prefs$auto_csv) {
     response <- readline(prompt = sprintf("Would you like to create the csv for %s now? y/n ",
                                           df_display_name))
-    
+
     while (!tolower(response) %in% c("y", "n")) {
       response <- readline(prompt = "Please enter either y or n: ")
     }
-    
-    # Ask if they want to remember this choice
+
+    # Set preference to TRUE/yes if they answer yes to creating a csv
     if (tolower(response) == "y") {
-      remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
-      
-      while (!tolower(remember) %in% c("y", "n")) {
-        remember <- readline(prompt = "Please enter either y or n: ")
-      }
-      
-      if (tolower(remember) == "y") {
-        user_prefs$auto_csv <- TRUE
-        saveRDS(user_prefs, user_prefs_file)
-        message("Your preference has been saved. Use to.csv(skip_prompt = FALSE) to show this prompt again.")
-      }
+         user_prefs$auto_csv <- TRUE
+         saveRDS(user_prefs, user_prefs_file)
     }
-    
+
     if (tolower(response) == "n") {
       message(".csv creation cancelled.")
       invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
-  
+
   # Use df_name if provided, otherwise derive from df variable name
   filename <- if (!is.null(df_name)) {
     df_name
   } else {
     deparse(substitute(df))
   }
-  
+
   # Create tmp directory if it doesn't exist
   tmp_path <- file.path(path, "tmp")
   if (!dir.exists(tmp_path)) {
     dir.create(tmp_path)
   }
-  
+
   # Construct the file path
   file_path <- file.path(tmp_path, paste0(filename, '.csv'))
-  
+
   # Write the DataFrame to a CSV file
   write.csv(df, file_path, row.names = FALSE, quote = TRUE)
-  
+
   # Notify user of file creation
   message(paste0("Extract created at ", file_path, "\n"))
-  
+
   return(invisible(TRUE))
 }
 

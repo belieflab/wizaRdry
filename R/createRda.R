@@ -13,7 +13,7 @@
 #'   The function adds the ".rds" extension automatically.
 #' @param path Character string specifying the directory path where the "tmp" folder
 #'   and RDS file should be created. Defaults to the current working directory.
-#' @param skip_prompt Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+#' @param skip_prompt Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 #'   will prompt for confirmation unless the user has previously chosen to remember their preference.
 #'
 #' @return Invisible TRUE if successful. The function writes an RDS file to the specified path
@@ -41,19 +41,19 @@
 #' }
 #'
 #' @export
-to.rds <- function(df, df_name = NULL, path = ".", skip_prompt = FALSE) {
+to.rds <- function(df, df_name = NULL, path = ".", skip_prompt = TRUE) { #default skip_prompt set to true so user can flag FALSE if needed
   # Get the name of the data frame for display
   df_display_name <- if (!is.null(df_name)) {
     df_name
   } else {
     deparse(substitute(df))
   }
-  
+
   # Check for user preferences file
   user_prefs_file <- file.path(path, "..wizaRdry_prefs")
-  user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, 
+  user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE,
                      auto_nda_template = FALSE, auto_csv = FALSE, auto_rds = FALSE)
-  
+
   if (file.exists(user_prefs_file)) {
     tryCatch({
       user_prefs <- readRDS(user_prefs_file)
@@ -63,68 +63,59 @@ to.rds <- function(df, df_name = NULL, path = ".", skip_prompt = FALSE) {
       }
     }, error = function(e) {
       # If file exists but can't be read, create a new one
-      user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, 
+      user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE,
                          auto_nda_template = FALSE, auto_csv = FALSE, auto_rds = FALSE)
     })
   }
-  
+
   # If skip_prompt is TRUE or user has previously set auto_rds to TRUE, bypass the prompt
-  if (!skip_prompt && !user_prefs$auto_rds) {
+  if (!skip_prompt | !user_prefs$auto_rds) {
     response <- readline(prompt = sprintf("Would you like to create the R data file for %s now? y/n ",
                                           df_display_name))
-    
+
     while (!tolower(response) %in% c("y", "n")) {
       response <- readline(prompt = "Please enter either y or n: ")
     }
-    
-    # Ask if they want to remember this choice
+
+    # Save preference to yes/TRUE in auto_rds if response is 'y'
     if (tolower(response) == "y") {
-      remember <- readline(prompt = "Would you like to remember this choice and skip this prompt in the future? y/n ")
-      
-      while (!tolower(remember) %in% c("y", "n")) {
-        remember <- readline(prompt = "Please enter either y or n: ")
-      }
-      
-      if (tolower(remember) == "y") {
-        user_prefs$auto_rds <- TRUE
-        saveRDS(user_prefs, user_prefs_file)
-        message("Your preference has been saved. Use to.rds(skip_prompt = FALSE) to show this prompt again.")
-      }
+      user_prefs$auto_rds <- TRUE
+      saveRDS(user_prefs, user_prefs_file)
     }
-    
+
     if (tolower(response) == "n") {
       message(".rds creation cancelled.")
       invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
-  
+
   # Validate the data frame
   if(is.null(df) || nrow(df) == 0) {
     stop("Data frame is empty or NULL. Cannot save to RDS.")
   }
-  
+
   # Use df_name if provided, otherwise derive from df variable name
   filename <- if (!is.null(df_name)) {
     df_name
   } else {
     deparse(substitute(df))
   }
-  
+
   # Create tmp directory if it doesn't exist
   tmp_path <- file.path(path, "tmp")
   if (!dir.exists(tmp_path)) {
     dir.create(tmp_path)
   }
-  
+
   # Construct the file path
   file_path <- file.path(tmp_path, paste0(filename, '.rds'))
-  
+
   # Save the data frame to an RDS file
   saveRDS(df, file = file_path)
-  
+
   # Notify user of file creation
   message(paste0("Extract created at ", file_path, "\n"))
-  
+
   return(invisible(TRUE))
 }
 

@@ -4,7 +4,7 @@
 \alias{to.nda}
 \title{Create NDA Submission Template}
 \usage{
-to.nda(df, path = ".", skip_prompt = FALSE)
+to.nda(df, path = ".", skip_prompt = TRUE)
 }
 \arguments{
 \item{df}{Data frame to be used as template or character string naming a data frame
@@ -13,7 +13,7 @@ in the global environment.}
 \item{path}{Character string specifying the directory path where the "tmp" folder
 and template file should be created. Defaults to the current working directory.}
 
-\item{skip_prompt}{Logical. If TRUE, skips the confirmation prompt. If FALSE (default),
+\item{skip_prompt}{Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 will prompt for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
@@ -46,13 +46,13 @@ The function will:
     interview_date = c("01/01/2023", "02/15/2023"),
     response_time = c(450, 520)
   )
-  
+
   # Create the NDA template using the data frame directly
   to.nda(eefrt01)
-  
+
   # Or using the name as a string
   to.nda("eefrt01")
-  
+
   # Skip the confirmation prompt
   to.nda(eefrt01, skip_prompt = TRUE)
 }

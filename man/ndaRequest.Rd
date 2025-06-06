@@ -10,7 +10,7 @@ ndaRequest(
   rdata = FALSE,
   spss = FALSE,
   limited_dataset = FALSE,
-  skip_prompt = FALSE
+  skip_prompt = TRUE
 )
 }
 \arguments{
@@ -24,7 +24,7 @@ ndaRequest(
 
 \item{limited_dataset}{Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age}
 
-\item{skip_prompt}{Logical. If TRUE, skips confirmation prompts. If FALSE (default),
+\item{skip_prompt}{Logical. If TRUE (default), skips confirmation prompts unless preferences aren't set yet. If FALSE,
 prompts for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
