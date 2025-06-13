@@ -48,11 +48,13 @@ This will create a standard directory structure that looks like this:
 ├── clean
 │   ├── mongo
 │   ├── qualtrics
-│   └── redcap
+│   ├── redcap
+│   └── sql
 ├── nda
 │   ├── mongo
 │   ├── qualtrics
-│   └── redcap
+│   ├── redcap
+│   └── sql
 ├── tmp
 ├── .gitignore
 ├── config.yml
@@ -128,7 +130,7 @@ default:
 ## Features
 
 - **Project scaffolding**: Creates standard directory structures with `scry()`
-- **Cross-modal data access**: Unified interface to REDCap, MongoDB, and Qualtrics
+- **Cross-modal data access**: Unified interface to REDCap, MongoDB, Qualtrics and SQL (beta)
 - **Memory-aware parallel processing**: Automatically scales to available resources
 - **Field harmonization**: Standardizes data fields across platforms
 - **NIH Data Archive integration**: Prepares submissions for NDA compliance
