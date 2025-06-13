@@ -14,7 +14,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                required = c("survey_ids")
                              ),
                              redcap = list(
-                               required = c("superkey")
+                               required = c("superkey", "primary_key")
                              ),
                              sql = list(
                                required = c()  # Add required fields for SQL as needed
@@ -164,6 +164,12 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                }
                              } else if (api_type == "redcap") {
                                # Any redcap-specific validations
+                               if (self$has_value("redcap.superkey") && nchar(self$get_value("redcap.superkey")) == 0) {
+                                 all_errors <- c(all_errors, "The 'superkey' setting cannot be empty")
+                               }
+                               if (self$has_value("redcap.primary_key") && nchar(self$get_value("redcap.primary_key")) == 0) {
+                                 all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
+                               }
                              } else if (api_type == "sql") {
                                # Any sql-specific validations
                              } else if (api_type == "missing_data_codes") {

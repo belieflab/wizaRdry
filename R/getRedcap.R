@@ -102,7 +102,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
 
   # Define the allowed superkey columns explicitly
   allowed_superkey_cols <- c(
-    "record_id",
+    config$redcap$primary_key,
     "src_subject_id",
     "subjectkey",
     "site",
@@ -301,22 +301,24 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
 
   # 3. Process superkey data to ensure it's available for all subjects regardless of event
   # First, create a consolidated superkey dataset with one row per subject
+  # First, create a consolidated superkey dataset with one row per subject
   if ("redcap_event_name" %in% names(superkey_response$data)) {
     # For each subject, collect all non-NA values across events
-    subjects <- unique(superkey_response$data$record_id)
-    consolidated_superkey <- data.frame(record_id = subjects)
+    subjects <- unique(superkey_response$data[[config$redcap$primary_key]])
+
+    # Fix: Create data frame with dynamic column name properly
+    consolidated_superkey <- data.frame(subjects)
+    names(consolidated_superkey) <- config$redcap$primary_key
 
     for (col in super_key_cols) {
-      if (col != "record_id" && col != "redcap_event_name") {
+      if (col != config$redcap$primary_key && col != "redcap_event_name") {
         consolidated_superkey[[col]] <- NA
-
         for (subject_id in subjects) {
           # Get all values for this subject across all events
-          subject_rows <- superkey_response$data[superkey_response$data$record_id == subject_id, ]
+          subject_rows <- superkey_response$data[superkey_response$data[[config$redcap$primary_key]] == subject_id, ]
           non_na_values <- subject_rows[[col]][!is.na(subject_rows[[col]])]
-
           if (length(non_na_values) > 0) {
-            consolidated_superkey[consolidated_superkey$record_id == subject_id, col] <- non_na_values[1]
+            consolidated_superkey[consolidated_superkey[[config$redcap$primary_key]] == subject_id, col] <- non_na_values[1]
           }
         }
       }
@@ -333,19 +335,19 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     df <- instrument_response$data
 
     # Merge in the consolidated superkey data (excluding event_name)
-    for (subject_id in unique(df$record_id)) {
+    for (subject_id in unique(df[[config$redcap$primary_key]])) {
       # Get the superkey data for this subject
-      superkey_data <- consolidated_superkey[consolidated_superkey$record_id == subject_id,
+      superkey_data <- consolidated_superkey[consolidated_superkey[[config$redcap$primary_key]] == subject_id,
                                              !(names(consolidated_superkey) %in% c("redcap_event_name")), drop = FALSE]
 
       # Apply the superkey data to all rows for this subject
       for (col in names(superkey_data)) {
-        if (col != "record_id" && col %in% names(df)) {
-          df[df$record_id == subject_id, col] <- superkey_data[[col]][1]
-        } else if (col != "record_id" && !(col %in% names(df))) {
+        if (col != config$redcap$primary_key && col %in% names(df)) {
+          df[df[[config$redcap$primary_key]] == subject_id, col] <- superkey_data[[col]][1]
+        } else if (col != config$redcap$primary_key && !(col %in% names(df))) {
           # Add the column if it doesn't exist in the instrument data
           df[[col]] <- NA
-          df[df$record_id == subject_id, col] <- superkey_data[[col]][1]
+          df[df[[config$redcap$primary_key]] == subject_id, col] <- superkey_data[[col]][1]
         }
       }
     }
@@ -354,13 +356,13 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     df <- merge(
       consolidated_superkey,
       instrument_response$data,
-      by = "record_id",
+      by = config$redcap$primary_key,
       all.y = TRUE
     )
   }
 
   # Continue with the existing propagation logic
-  if ("record_id" %in% names(df) && "redcap_event_name" %in% names(df)) {
+  if (config$redcap$primary_key %in% names(df) && "redcap_event_name" %in% names(df)) {
     # Keep only fields that exist in our dataframe
     super_key_cols <- super_key_cols[super_key_cols %in% names(df)]
 
@@ -368,9 +370,9 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
       message("\nPropagating superkey across all events for each subject...")
 
       # For each subject
-      for (subject_id in unique(df$record_id)) {
+      for (subject_id in unique(df[[config$redcap$primary_key]])) {
         # Get all rows for this subject
-        subject_rows <- which(df$record_id == subject_id)
+        subject_rows <- which(df[[config$redcap$primary_key]] == subject_id)
 
         # For each super key field, find a non-NA value across all events
         for (key_field in super_key_cols) {
@@ -611,7 +613,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   if (ncol(df) > 0) {
     # Get names of all superkey columns that are in the dataset
     superkey_cols_in_data <- intersect(
-      c("record_id", "redcap_event_name", super_key_cols),
+      c(config$redcap$primary_key, "redcap_event_name", super_key_cols),
       names(df)
     )
 

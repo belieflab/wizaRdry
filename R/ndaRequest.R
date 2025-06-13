@@ -37,6 +37,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   redcap_list <- tools::file_path_sans_ext(list.files("./nda/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./nda/qualtrics"))
   mongo_list <- tools::file_path_sans_ext(list.files("./nda/mongo"))
+  sql_list <- tools::file_path_sans_ext(list.files("./nda/sql"))
 
   # Get identifier from config
   config <- validate_config()
@@ -86,7 +87,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
     # Your existing code to determine structures to create
     # For example:
-    invalid_structures <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
+    invalid_structures <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
 
     # If we have structures to create and need to prompt
     if (length(invalid_structures) > 0) {
@@ -277,7 +278,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
         # If script passes validation, allow user to select api:
         api_selection <- function() {
-          options <- c("mongo", "qualtrics", "redcap")
+          options <- c("mongo", "qualtrics", "redcap", "sql")
 
           cat("Select script type (choose only one):\n")
 
@@ -374,6 +375,30 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "",
               sep = "\n"
             )
+          ),
+          sql = list(
+            path = sprintf(file.path(path, "nda", "sql", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# nda/sql/%s.R", script_name),
+              "#",
+              "# config:  not needed yet",
+              "# secrets: not needed yet",
+              "#",
+              "# return a list of the instrument_name(s) from SQL",
+              "# sql.index()",
+              "#",
+              "# get the instrument_name from REDCap",
+              "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
+              #sprintf("%s <- sql(\"%s\")", script_name, script_name),
+              sprintf("%s)", script_name),
+              "",
+              "# nda remediation code...",
+              "",
+              "# IMPORTANT: final df name must still match the NDA data structure alias",
+              "",
+              sep = "\n"
+            )
           )
         )
 
@@ -400,6 +425,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     redcap_list <<- tools::file_path_sans_ext(list.files("./nda/redcap"))
     qualtrics_list <<- tools::file_path_sans_ext(list.files("./nda/qualtrics"))
     mongo_list <<- tools::file_path_sans_ext(list.files("./nda/mongo"))
+    sql_list <<- tools::file_path_sans_ext(list.files("./nda/sql"))
 
     # Return the data_list invisibly instead of stopping execution
     return(invisible(data_list))

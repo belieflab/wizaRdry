@@ -34,6 +34,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
   redcap_list <- tools::file_path_sans_ext(list.files("./clean/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
   mongo_list <- tools::file_path_sans_ext(list.files("./clean/mongo"))
+  sql_list <- tools::file_path_sans_ext(list.files("./clean/sql"))
 
   # Get identifier from config
   config <- validate_config()
@@ -86,7 +87,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     }
 
     # Validate measures against predefined lists
-    invalid_scripts <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list), data_list)
+    invalid_scripts <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
 
     # If we have invalid scripts to create and need to prompt
     if (length(invalid_scripts) > 0) {
@@ -242,6 +243,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     redcap_list <<- tools::file_path_sans_ext(list.files("./clean/redcap"))
     qualtrics_list <<- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
     mongo_list <<- tools::file_path_sans_ext(list.files("./clean/mongo"))
+    sql_list <<- tools::file_path_sans_ext(list.files("./clean/sql"))
 
     # Return the data_list invisibly instead of stopping execution
     return(invisible(data_list))

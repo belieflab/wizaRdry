@@ -115,10 +115,12 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     file.path(path, "clean", "mongo"),
     file.path(path, "clean", "qualtrics"),
     file.path(path, "clean", "redcap"),
+    file.path(path, "clean", "sql"),
     file.path(path, "nda"),
     file.path(path, "nda", "mongo"),
     file.path(path, "nda", "qualtrics"),
     file.path(path, "nda", "redcap"),
+    file.path(path, "nda", "sql"),
     file.path(path, "tmp")
   )
 
@@ -258,6 +260,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     "      Institution2:",
     "        bar: \"SV_\"",
     "  redcap:",
+    "    #primary_key: record_id",
     "    #superkey: ndar_subject01",
     "  missing_data_codes:",
     "    #skipped:",
