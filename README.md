@@ -99,6 +99,7 @@ default:
       Institution1:
         survey_alias: "SV_QUALTRICS_ID"
   redcap:
+    primary_key: record_id
     superkey: ndar_subject01
 ```
 
