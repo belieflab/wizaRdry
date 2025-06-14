@@ -46,11 +46,13 @@ This will create a standard directory structure that looks like this:
 ```
 .
 ├── clean
+│   ├── csv
 │   ├── mongo
 │   ├── qualtrics
 │   ├── redcap
 │   └── sql
 ├── nda
+│   ├── csv
 │   ├── mongo
 │   ├── qualtrics
 │   ├── redcap
