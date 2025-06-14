@@ -31,6 +31,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
   # Required Libraries Setup
 
   # Prepare lists for REDCap, Qualtrics, and MongoDB
+  csv_list <- tools::file_path_sans_ext(list.files("./clean/csv"))
   redcap_list <- tools::file_path_sans_ext(list.files("./clean/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
   mongo_list <- tools::file_path_sans_ext(list.files("./clean/mongo"))
@@ -87,7 +88,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     }
 
     # Validate measures against predefined lists
-    invalid_scripts <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
+    invalid_scripts <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
 
     # If we have invalid scripts to create and need to prompt
     if (length(invalid_scripts) > 0) {
@@ -217,6 +218,46 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
               sprintf("%s_clean <- %s", script_name, script_name),
               sep = "\n"
             )
+          ),
+          sql = list(
+            path = sprintf(file.path(path, "clean", "sql", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# clean/sql/%s.R", script_name),
+              "#",
+              "# config:  coming soon...",
+              "# secrets: coming soon...",
+              "#",
+              "# return a list of tables from SQL",
+              "# sql.index()",
+              "#",
+              "# get the table from SQL",
+              "# IMPORTANT: both variable name and script filename must match",
+              sprintf("%s <- sql(\"%s\")", script_name, script_name),
+              "",
+              "# cleaning script code...",
+              "",
+              "# IMPORTANT: final df must be appended with _clean",
+              sprintf("%s_clean <- %s", script_name, script_name),
+              sep = "\n"
+            )
+          ),
+          csv = list(
+            path = sprintf(file.path(path, "clean", "csv", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# clean/csv/%s.R", script_name),
+              "#",
+              "# get the data from CSV file",
+              "# IMPORTANT: both variable name and script filename must match",
+              sprintf("%s <- read.csv(\"%s\")", script_name, script_name),
+              "",
+              "# cleaning script code...",
+              "",
+              "# IMPORTANT: final df must be appended with _clean",
+              sprintf("%s_clean <- %s", script_name, script_name),
+              sep = "\n"
+            )
           )
         )
 
@@ -240,6 +281,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     }
 
     # After creating new scripts in validateMeasures, update the lists
+    csv_list <<- tools::file_path_sans_ext(list.files("./clean/csv"))
     redcap_list <<- tools::file_path_sans_ext(list.files("./clean/redcap"))
     qualtrics_list <<- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
     mongo_list <<- tools::file_path_sans_ext(list.files("./clean/mongo"))
@@ -272,7 +314,9 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     } else {
       # Otherwise determine the source from updated lists
       sourceCategory <- ifelse(measure %in% redcap_list, "redcap",
-                               ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
+                               ifelse(measure %in% qualtrics_list, "qualtrics",
+                                      ifelse(measure %in% mongo_list, "mongo",
+                                             ifelse(measure %in% sql_list, "sql", "csv"))))
     }
 
     processData(measure, sourceCategory, csv, rdata, spss, identifier)

@@ -34,6 +34,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   # Required Libraries Setup
 
   # Prepare lists for REDCap, Qualtrics, and tasks
+  csv_list <- tools::file_path_sans_ext(list.files("./nda/csv"))
   redcap_list <- tools::file_path_sans_ext(list.files("./nda/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./nda/qualtrics"))
   mongo_list <- tools::file_path_sans_ext(list.files("./nda/mongo"))
@@ -87,7 +88,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
     # Your existing code to determine structures to create
     # For example:
-    invalid_structures <- Filter(function(measure) !measure %in% c(redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
+    invalid_structures <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
 
     # If we have structures to create and need to prompt
     if (length(invalid_structures) > 0) {
@@ -278,7 +279,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
         # If script passes validation, allow user to select api:
         api_selection <- function() {
-          options <- c("mongo", "qualtrics", "redcap", "sql")
+          options <- c("csv", "mongo", "qualtrics", "redcap", "sql")
 
           cat("Select script type (choose only one):\n")
 
@@ -342,7 +343,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "# return a list of the survey(s) from Qualtrics",
               "# qualtrics.index()",
               "#",
-              "# get collection from Qualtrics",
+              "# get survey from Qualtrics",
               "# IMPORTANT: both variable name and script filename must match",
               sprintf("%s <- qualtrics(\"%s\")", script_name, script_name),
               "",
@@ -382,16 +383,32 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               sprintf("# nda/sql/%s.R", script_name),
               "#",
-              "# config:  not needed yet",
-              "# secrets: not needed yet",
+              "# config:  coming soon...",
+              "# secrets: coming soon...",
               "#",
-              "# return a list of the instrument_name(s) from SQL",
+              "# return a list of the table(s) from SQL",
               "# sql.index()",
               "#",
-              "# get the instrument_name from REDCap",
+              "# get the table data from SQL",
               "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
-              #sprintf("%s <- sql(\"%s\")", script_name, script_name),
-              sprintf("%s)", script_name),
+              sprintf("%s <- sql(\"%s\")", script_name, script_name),
+              "",
+              "# nda remediation code...",
+              "",
+              "# IMPORTANT: final df name must still match the NDA data structure alias",
+              "",
+              sep = "\n"
+            )
+          ),
+          csv = list(
+            path = sprintf(file.path(path, "nda", "csv", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# nda/csv/%s.R", script_name),
+              "#",
+              "# get the data from CSV file",
+              "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
+              sprintf("%s <- read.csv(\"%s\")", script_name, script_name),
               "",
               "# nda remediation code...",
               "",
@@ -422,10 +439,12 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     }
 
     # After creating new scripts in validateMeasures, update the lists
+    csv_list <<- tools::file_path_sans_ext(list.files("./nda/csv"))
     redcap_list <<- tools::file_path_sans_ext(list.files("./nda/redcap"))
     qualtrics_list <<- tools::file_path_sans_ext(list.files("./nda/qualtrics"))
     mongo_list <<- tools::file_path_sans_ext(list.files("./nda/mongo"))
     sql_list <<- tools::file_path_sans_ext(list.files("./nda/sql"))
+
 
     # Return the data_list invisibly instead of stopping execution
     return(invisible(data_list))
@@ -454,7 +473,9 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     } else {
       # Otherwise determine the API from updated lists
       api <- ifelse(measure %in% redcap_list, "redcap",
-                    ifelse(measure %in% qualtrics_list, "qualtrics", "mongo"))
+                    ifelse(measure %in% qualtrics_list, "qualtrics",
+                           ifelse(measure %in% mongo_list, "mongo",
+                                  ifelse(measure %in% sql_list, "sql", "csv"))))
     }
 
     processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset)
