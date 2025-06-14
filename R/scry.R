@@ -24,13 +24,17 @@
 #' @details
 #' The function creates the following directory structure:
 #' - clean/
+#'   - csv/
 #'   - mongo/
 #'   - qualtrics/
 #'   - redcap/
+#'   - sql/
 #' - nda/
+#'   - csv/
 #'   - mongo/
 #'   - qualtrics/
 #'   - redcap/
+#'   - sql/
 #' - tmp/
 #'
 #' It also creates template config.yml and secrets.R files, and optionally an R project file.
@@ -112,11 +116,13 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
   # Define directory structure
   expected_dirs <- c(
     file.path(path, "clean"),
+    file.path(path, "clean", "csv"),
     file.path(path, "clean", "mongo"),
     file.path(path, "clean", "qualtrics"),
     file.path(path, "clean", "redcap"),
     file.path(path, "clean", "sql"),
     file.path(path, "nda"),
+    file.path(path, "nda", "csv"),
     file.path(path, "nda", "mongo"),
     file.path(path, "nda", "qualtrics"),
     file.path(path, "nda", "redcap"),
@@ -324,7 +330,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
       "",
       "# Example NDA request:",
       "# Create remediation script in nda/",
-      "# nda(\"cde_dsmcrossad01\")",
+      "# nda(\"cde_dsm5crossad01\")",
       "",
       "# Your analysis code here",
       ""
