@@ -51,15 +51,19 @@ The function creates the following directory structure:
 \itemize{
 \item clean/
 \itemize{
+\item csv/
 \item mongo/
 \item qualtrics/
 \item redcap/
+\item sql/
 }
 \item nda/
 \itemize{
+\item csv/
 \item mongo/
 \item qualtrics/
 \item redcap/
+\item sql/
 }
 \item tmp/
 }

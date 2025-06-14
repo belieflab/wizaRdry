@@ -250,7 +250,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
               "#",
               "# get the data from CSV file",
               "# IMPORTANT: both variable name and script filename must match",
-              sprintf("%s <- read.csv(\"%s\")", script_name, script_name),
+              sprintf("%s <- read.csv(\"%s\".csv)", script_name, script_name),
               "",
               "# cleaning script code...",
               "",

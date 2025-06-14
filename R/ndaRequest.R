@@ -408,7 +408,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               "# get the data from CSV file",
               "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
-              sprintf("%s <- read.csv(\"%s\")", script_name, script_name),
+              sprintf("%s <- read.csv(\"%s\".csv)", script_name, script_name),
               "",
               "# nda remediation code...",
               "",
