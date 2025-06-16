@@ -100,6 +100,10 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
                    interview_date = NULL, date_format = "ymd", complete = NULL) {
   start_time <- Sys.time()
 
+  # Validate secrets and config
+  validate_secrets("redcap")
+  config <- validate_config("redcap")  # Make sure this returns a config object
+
   # Define the allowed superkey columns explicitly
   allowed_superkey_cols <- c(
     config$redcap$primary_key,
@@ -128,11 +132,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   if (!date_format %in% c("mdy", "dmy", "ymd")) {
     stop("date_format must be one of 'mdy', 'dmy', or 'ymd'")
   }
-
-  # Validate secrets and config
-  validate_secrets("redcap")
-
-  config <- validate_config("redcap")
 
   # Get secrets using get_secret() to keep it secret, keep it safe
   uri <- get_secret("uri")
