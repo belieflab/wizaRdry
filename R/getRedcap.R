@@ -100,9 +100,18 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
                    interview_date = NULL, date_format = "ymd", complete = NULL) {
   start_time <- Sys.time()
 
-  # Validate secrets and config
+  # Validate secrets and config - MUST COME FIRST
   validate_secrets("redcap")
-  config <- validate_config("redcap")  # Make sure this returns a config object
+  config <- validate_config("redcap")
+
+  # Validate that the primary key is properly configured
+  if (is.null(config$redcap$primary_key) || !is.character(config$redcap$primary_key)) {
+    message("Warning: Primary key not properly configured. Defaulting to 'record_id'")
+    config$redcap$primary_key <- "record_id"
+  }
+
+  # Log what primary key we're using
+  message(sprintf("Using '%s' as the primary key", config$redcap$primary_key))
 
   # Define the allowed superkey columns explicitly
   allowed_superkey_cols <- c(
@@ -157,10 +166,8 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   # Check if the instrument exists before trying to retrieve data
   tryCatch({
     forms_data <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
-
     # Ensure instrument_name is properly trimmed
     instrument_name <- trimws(instrument_name)
-
     if (instrument_name %in% forms_data$instrument_name) {
       # Instrument exists, continue
     } else {
@@ -182,7 +189,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   # First get metadata to identify PII fields
   metadata <- NULL
   pii_fields <- c()
-
   # Get the full metadata to identify date fields
   metadata <- tryCatch({
     REDCapR::redcap_metadata_read(
@@ -203,7 +209,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     date_fields <- metadata$field_name[metadata$text_validation_type_or_show_slider_number %in% date_validation_types]
     date_fields <- c(date_fields, "interview_date") # Add interview_date explicitly
     date_fields <- date_fields[!is.na(date_fields)]
-
     if (length(date_fields) > 0) {
       message(sprintf("Found %d date fields that will be properly formatted: %s",
                       length(date_fields),
@@ -213,10 +218,8 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
 
   if (exclude_pii && !is.null(metadata) && "field_name" %in% names(metadata) && "identifier" %in% names(metadata)) {
     pii_fields <- metadata$field_name[metadata$identifier == "y"]
-
     # Filter out NA values and print only the non-NA field names
     pii_fields <- pii_fields[!is.na(pii_fields)]
-
     if (length(pii_fields) > 0) {
       message(sprintf("Found %d PII fields that will be excluded: %s",
                       length(pii_fields),
@@ -226,7 +229,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
 
   # Now decide which fields to request based on the PII exclusion
   selected_fields <- NULL
-
   if (exclude_pii && length(pii_fields) > 0) {
     # If fields parameter is provided, exclude PII fields from it
     if (!is.null(fields)) {
@@ -299,90 +301,133 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   }
 
   # 3. Process superkey data to ensure it's available for all subjects regardless of event
-  # First, create a consolidated superkey dataset with one row per subject
-  # First, create a consolidated superkey dataset with one row per subject
   if ("redcap_event_name" %in% names(superkey_response$data)) {
+    # First, ensure the primary key exists in the superkey data
+    if (!(config$redcap$primary_key %in% names(superkey_response$data))) {
+      stop(sprintf("Primary key '%s' not found in superkey data", config$redcap$primary_key))
+    }
+
     # For each subject, collect all non-NA values across events
     subjects <- unique(superkey_response$data[[config$redcap$primary_key]])
 
-    # Fix: Create data frame with dynamic column name properly
-    consolidated_superkey <- data.frame(subjects)
-    names(consolidated_superkey) <- config$redcap$primary_key
+    if (length(subjects) == 0) {
+      message("No subjects found in superkey data. Creating empty consolidated superkey.")
+      # Create an empty data frame with the primary key as the first column
+      consolidated_superkey <- data.frame(matrix(ncol = 0, nrow = 0))
+    } else {
+      # Create a data frame with the primary key column
+      primary_key_col <- config$redcap$primary_key
+      consolidated_superkey <- data.frame(matrix(ncol = 1, nrow = length(subjects)))
+      colnames(consolidated_superkey) <- primary_key_col
+      consolidated_superkey[[primary_key_col]] <- subjects
 
-    for (col in super_key_cols) {
-      if (col != config$redcap$primary_key && col != "redcap_event_name") {
-        consolidated_superkey[[col]] <- NA
-        for (subject_id in subjects) {
-          # Get all values for this subject across all events
-          subject_rows <- superkey_response$data[superkey_response$data[[config$redcap$primary_key]] == subject_id, ]
-          non_na_values <- subject_rows[[col]][!is.na(subject_rows[[col]])]
-          if (length(non_na_values) > 0) {
-            consolidated_superkey[consolidated_superkey[[config$redcap$primary_key]] == subject_id, col] <- non_na_values[1]
+      # Add the rest of the columns
+      for (col in super_key_cols) {
+        if (col != primary_key_col && col != "redcap_event_name") {
+          # Only try to process columns that exist in the source data
+          if (col %in% names(superkey_response$data)) {
+            consolidated_superkey[[col]] <- NA
+            for (subject_id in subjects) {
+              # Get all values for this subject across all events
+              subject_rows <- superkey_response$data[superkey_response$data[[primary_key_col]] == subject_id, ]
+              non_na_values <- subject_rows[[col]][!is.na(subject_rows[[col]])]
+              if (length(non_na_values) > 0) {
+                consolidated_superkey[consolidated_superkey[[primary_key_col]] == subject_id, col] <- non_na_values[1]
+              }
+            }
           }
         }
       }
     }
   } else {
     # If no redcap_event_name, just use the superkey data as is, but only the allowed columns
-    consolidated_superkey <- superkey_response$data[, intersect(names(superkey_response$data), super_key_cols), drop = FALSE]
+    allowed_cols <- intersect(names(superkey_response$data), super_key_cols)
+
+    if (length(allowed_cols) == 0) {
+      message("No matching columns found in superkey data. Creating empty consolidated superkey.")
+      consolidated_superkey <- data.frame()
+    } else {
+      consolidated_superkey <- superkey_response$data[, allowed_cols, drop = FALSE]
+    }
   }
 
   # FIXED: Merge the consolidated superkey with the instrument data
-  # We will use a different approach to ensure event names are preserved
-  if ("redcap_event_name" %in% names(instrument_response$data)) {
+  # Check for empty data frames first
+  if (nrow(consolidated_superkey) == 0) {
+    message("Warning: Consolidated superkey is empty. Using instrument data as is.")
+    df <- instrument_response$data
+  } else if (nrow(instrument_response$data) == 0) {
+    message("Warning: Instrument data is empty. Using consolidated superkey as is.")
+    df <- consolidated_superkey
+  } else if ("redcap_event_name" %in% names(instrument_response$data)) {
     # Keep the original event names from the instrument data
     df <- instrument_response$data
 
-    # Merge in the consolidated superkey data (excluding event_name)
-    for (subject_id in unique(df[[config$redcap$primary_key]])) {
-      # Get the superkey data for this subject
-      superkey_data <- consolidated_superkey[consolidated_superkey[[config$redcap$primary_key]] == subject_id,
-                                             !(names(consolidated_superkey) %in% c("redcap_event_name")), drop = FALSE]
+    # Check if the primary key exists in the instrument data
+    if (!(config$redcap$primary_key %in% names(df))) {
+      message(sprintf("Warning: Primary key '%s' not found in instrument data. Cannot merge superkey information.", config$redcap$primary_key))
+    } else {
+      # Merge in the consolidated superkey data (excluding event_name)
+      for (subject_id in unique(df[[config$redcap$primary_key]])) {
+        # Check if this subject exists in the superkey data
+        if (config$redcap$primary_key %in% names(consolidated_superkey)) {
+          superkey_data <- consolidated_superkey[consolidated_superkey[[config$redcap$primary_key]] == subject_id,
+                                                 !(names(consolidated_superkey) %in% c("redcap_event_name")),
+                                                 drop = FALSE]
 
-      # Apply the superkey data to all rows for this subject
-      for (col in names(superkey_data)) {
-        if (col != config$redcap$primary_key && col %in% names(df)) {
-          df[df[[config$redcap$primary_key]] == subject_id, col] <- superkey_data[[col]][1]
-        } else if (col != config$redcap$primary_key && !(col %in% names(df))) {
-          # Add the column if it doesn't exist in the instrument data
-          df[[col]] <- NA
-          df[df[[config$redcap$primary_key]] == subject_id, col] <- superkey_data[[col]][1]
+          if (nrow(superkey_data) > 0) {
+            # Apply the superkey data to all rows for this subject
+            for (col in names(superkey_data)) {
+              if (col != config$redcap$primary_key) {
+                if (col %in% names(df)) {
+                  df[df[[config$redcap$primary_key]] == subject_id, col] <- superkey_data[[col]][1]
+                } else {
+                  # Add the column if it doesn't exist in the instrument data
+                  df[[col]] <- NA
+                  df[df[[config$redcap$primary_key]] == subject_id, col] <- superkey_data[[col]][1]
+                }
+              }
+            }
+          }
         }
       }
     }
   } else {
     # Standard merge if there's no event name in the instrument data
-    df <- merge(
-      consolidated_superkey,
-      instrument_response$data,
-      by = config$redcap$primary_key,
-      all.y = TRUE
-    )
+    message("Performing standard merge of superkey and instrument data")
+    # Make sure at least the primary key is in both data frames
+    if (!(config$redcap$primary_key %in% names(consolidated_superkey)) ||
+        !(config$redcap$primary_key %in% names(instrument_response$data))) {
+      message(sprintf("Warning: Primary key '%s' missing from one of the data frames. Concatenating data instead of merging.", config$redcap$primary_key))
+      df <- rbind(consolidated_superkey, instrument_response$data)
+    } else {
+      df <- merge(
+        consolidated_superkey,
+        instrument_response$data,
+        by = config$redcap$primary_key,
+        all.y = TRUE
+      )
+    }
   }
 
   # Continue with the existing propagation logic
   if (config$redcap$primary_key %in% names(df) && "redcap_event_name" %in% names(df)) {
     # Keep only fields that exist in our dataframe
     super_key_cols <- super_key_cols[super_key_cols %in% names(df)]
-
     if (length(super_key_cols) > 0) {
       message("\nPropagating superkey across all events for each subject...")
-
       # For each subject
       for (subject_id in unique(df[[config$redcap$primary_key]])) {
         # Get all rows for this subject
         subject_rows <- which(df[[config$redcap$primary_key]] == subject_id)
-
         # For each super key field, find a non-NA value across all events
         for (key_field in super_key_cols) {
           # Skip redcap_event_name to preserve the original values
           if (key_field == "redcap_event_name") {
             next
           }
-
           key_values <- df[subject_rows, key_field]
           non_na_values <- key_values[!is.na(key_values)]
-
           if (length(non_na_values) > 0) {
             # Propagate the first non-NA value to all events for this subject
             df[subject_rows, key_field] <- non_na_values[1]
@@ -396,21 +441,18 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   # Process date fields - this includes interview_date
   if (length(date_fields) > 0) {
     message("\nConverting date fields to proper date format...")
-
     for (date_field in date_fields) {
       if (date_field %in% names(df)) {
         # Only process if the column exists and has some non-NA values
         if (any(!is.na(df[[date_field]]))) {
           # Convert to character first to handle both numeric and character inputs
           dates_char <- as.character(df[[date_field]])
-
           # Check if dates are numeric (SPSS/SAS format) - typically represented as days since 1960-01-01
           if (all(grepl("^\\d+(\\.\\d+)?$", dates_char[!is.na(dates_char)]))) {
             # Convert from numeric to date
             # For SPSS/SAS dates (days since 1960-01-01)
             numeric_dates <- as.numeric(dates_char)
             date_values <- as.Date(numeric_dates, origin = "1960-01-01")
-
             # Now format the date according to the requested format
             if (date_format == "mdy") {
               df[[date_field]] <- format(date_values, "%m/%d/%Y")
@@ -419,7 +461,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
             } else if (date_format == "ymd") {
               df[[date_field]] <- format(date_values, "%Y-%m-%d")
             }
-
             message(sprintf("  Converted %s from numeric to %s format", date_field, date_format))
           }
           # Check if they are already in a date-like format
@@ -455,7 +496,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
               message(sprintf("  Warning: Could not parse dates in %s, leaving as is", date_field))
               return(NULL)
             })
-
             if (!is.null(parsed_dates)) {
               # Format according to preference
               if (date_format == "mdy") {
@@ -482,7 +522,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   # For interview_date columns - more robust handling
   date_patterns <- c("_interview_date$", "interview_date")
   date_cols <- NULL
-
   for (pattern in date_patterns) {
     found_cols <- grep(pattern, base::names(df), ignore.case = TRUE)
     if (length(found_cols) > 0) {
@@ -490,7 +529,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
       break  # Stop at first pattern that finds matches
     }
   }
-
   if (!is.null(date_cols) && length(date_cols) > 0) {
     base::names(df)[date_cols] <- "interview_date"
   }
@@ -512,7 +550,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   if (exclude_pii && length(pii_fields) > 0) {
     pii_cols_present <- intersect(names(df), pii_fields)
     pii_cols_present <- pii_cols_present[!is.na(pii_cols_present)]
-
     if (length(pii_cols_present) > 0) {
       message(sprintf("\nRemoving %d PII fields from final dataset: %s",
                       length(pii_cols_present),
@@ -529,41 +566,37 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     if (is.na(date_string) || is.null(date_string)) {
       return(NA)
     }
-
     # Try multiple date formats sequentially
     date <- NULL
-
     # Try ISO format (YYYY-MM-DD)
     if (grepl("^\\d{4}-\\d{1,2}-\\d{1,2}$", date_string)) {
-      date <- tryCatch(ymd(date_string), error = function(e) NULL)
+      date <- tryCatch(lubridate::ymd(date_string), error = function(e) NULL)
     }
     # Try US format (MM/DD/YYYY)
     else if (grepl("^\\d{1,2}/\\d{1,2}/\\d{4}$", date_string)) {
-      date <- tryCatch(mdy(date_string), error = function(e) NULL)
+      date <- tryCatch(lubridate::mdy(date_string), error = function(e) NULL)
     }
     # Try European format (DD.MM.YYYY)
     else if (grepl("^\\d{1,2}\\.\\d{1,2}\\.\\d{4}$", date_string)) {
-      date <- tryCatch(dmy(date_string), error = function(e) NULL)
+      date <- tryCatch(lubridate::dmy(date_string), error = function(e) NULL)
     }
     # Try Canadian format (YYYY/MM/DD)
     else if (grepl("^\\d{4}/\\d{1,2}/\\d{1,2}$", date_string)) {
-      date <- tryCatch(ymd(date_string), error = function(e) NULL)
+      date <- tryCatch(lubridate::ymd(date_string), error = function(e) NULL)
     }
     # Try other format (DD-MM-YYYY)
     else if (grepl("^\\d{1,2}-\\d{1,2}-\\d{4}$", date_string)) {
-      date <- tryCatch(dmy(date_string), error = function(e) NULL)
+      date <- tryCatch(lubridate::dmy(date_string), error = function(e) NULL)
     }
     # Try abbreviated month name (15-Jan-2023 or Jan 15, 2023)
     else if (grepl("[A-Za-z]", date_string)) {
-      date <- tryCatch(parse_date_time(date_string, c("dmy", "mdy")), error = function(e) NULL)
+      date <- tryCatch(lubridate::parse_date_time(date_string, c("dmy", "mdy")), error = function(e) NULL)
     }
-
     # If all attempts fail, return NA
     if (is.null(date) || all(is.na(date))) {
       warning("Failed to parse date: ", date_string, ". Treating as NA.")
       return(NA)
     }
-
     return(as.Date(date))
   }
 
@@ -571,7 +604,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   if ("interview_date" %in% names(df)) {
     # Create a temporary date column for filtering but don't modify the original
     df$temp_date <- sapply(df$interview_date, parseAnyDate)
-
     # Handle the interview_date parameter
     if (!is.null(interview_date)) {
       if (is.logical(interview_date) && interview_date == TRUE) {
@@ -590,11 +622,9 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
         }, error = function(e) {
           stop("Failed to parse interview_date parameter: ", interview_date)
         })
-
         if (is.na(input_date)) {
           stop("Failed to parse interview_date parameter: ", interview_date)
         }
-
         # If we're here with a valid date, keep rows with dates before or equal to input_date
         rows_to_keep <- !is.na(df$temp_date) & df$temp_date <= input_date
         df <- df[rows_to_keep, ]
@@ -603,7 +633,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
         stop("interview_date must be either a date string or TRUE")
       }
     }
-
     # Remove temporary column after filtering
     df$temp_date <- NULL
   }
@@ -615,13 +644,10 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
       c(config$redcap$primary_key, "redcap_event_name", super_key_cols),
       names(df)
     )
-
     # Get names of all instrument columns
     instrument_cols <- setdiff(names(df), superkey_cols_in_data)
-
     # Create the new column order
     new_col_order <- c(superkey_cols_in_data, instrument_cols)
-
     # Reorder the dataframe
     df <- df[, new_col_order, drop = FALSE]
   }
@@ -633,7 +659,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   if (!is.null(instrument_name) && !is.null(complete)) {
     # Construct the complete variable name based on instrument_name
     complete_var <- paste0(instrument_name, "_complete")
-
     # Check if the complete variable exists in the dataframe
     if (complete_var %in% names(df)) {
       # Check for NA values in the complete variable
@@ -641,7 +666,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
       if (na_counts > 0) {
         message(sprintf("Note: Found %d rows with NA values in %s", na_counts, complete_var))
       }
-
       # If complete is TRUE, keep only complete records
       # If complete is FALSE, keep only incomplete records
       if (is.logical(complete)) {
@@ -675,42 +699,33 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   if (length(dots_args) > 0) {
     # Convert the dots arguments to a character vector
     requested_cols <- as.character(unlist(dots_args))
-
     # Find which of the requested columns actually exist in the data
     existing_cols <- intersect(requested_cols, names(df))
-
     if (length(existing_cols) > 0) {
       # Display the names of the columns that were found
       message(sprintf("Found %d of %d requested columns: %s",
                       length(existing_cols),
                       length(requested_cols),
                       paste(existing_cols, collapse = ", ")))
-
       # Create a filter to keep only rows where ALL requested columns have data
       rows_to_keep <- rep(TRUE, nrow(df))
-
       for (col in existing_cols) {
         # Check if column values are not NA
         not_na <- !is.na(df[[col]])
-
         # For non-NA values, check if they're not empty strings (if character type)
         not_empty <- rep(TRUE, nrow(df))
         if (is.character(df[[col]])) {
           not_empty <- df[[col]] != ""
         }
-
         # Combine the conditions - both not NA and not empty (if applicable)
         has_data <- not_na & not_empty
-
         # Update the rows_to_keep vector
         rows_to_keep <- rows_to_keep & has_data
       }
-
       # Apply the filter to keep only rows with data in all requested columns
       original_rows <- nrow(df)
       df <- df[rows_to_keep, ]
       kept_rows <- nrow(df)
-
       message(sprintf("Kept %d of %d rows where all requested columns have values.",
                       kept_rows, original_rows))
     } else {
@@ -724,7 +739,6 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "secs")
   message(sprintf("\nData frame '%s' retrieved in %s.", instrument_name, formatDuration(duration)))
-
   return(df)
 }
 
