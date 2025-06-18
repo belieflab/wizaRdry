@@ -673,7 +673,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
           message("Filtering for complete records only...")
           # Handle both raw (1) and label ("Complete") formats
           if (raw_or_label == "raw") {
-            df <- df[df[[complete_var]] == 1, ]
+            df <- df[df[[complete_var]] == 2, ]
           } else {
             df <- df[df[[complete_var]] == "Complete", ]
           }
