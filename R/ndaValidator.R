@@ -2112,6 +2112,392 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
   return(df)
 }
 
+# Robust bidirectional transformation function for field values
+# Fixed bidirectional transformation function that properly handles empty cells
+transform_field_values <- function(df, elements, verbose = TRUE) {
+  if(verbose) cat("\n\n--- Transforming Field Values (Bidirectional) ---\n")
+
+  # Track all transformations
+  all_transformations <- list()
+  field_statuses <- list()
+
+  # Process each field in the structure
+  for (i in 1:nrow(elements)) {
+    field_name <- elements$name[i]
+    type <- elements$type[i]
+    value_range <- elements$valueRange[i]
+    notes <- elements$notes[i]
+
+    # Skip if field doesn't exist
+    if (!field_name %in% names(df)) next
+
+    # Get current field values
+    field_values <- df[[field_name]]
+    field_values_char <- as.character(field_values)
+
+    # Determine if we need a transformation
+    needs_transformation <- FALSE
+    transformation_direction <- NULL
+    invalid_values <- NULL
+
+    # Check numeric fields for non-numeric values
+    if (type %in% c("Integer", "Float")) {
+      # Test if values can be converted to numeric
+      numeric_test <- suppressWarnings(as.numeric(field_values_char))
+      # Handle empty strings - treat them as NA
+      empty_mask <- !is.na(field_values) & field_values_char == ""
+      if (any(empty_mask)) {
+        field_values_char[empty_mask] <- NA
+        field_values[empty_mask] <- NA
+      }
+
+      # Check for non-numeric, non-empty values
+      invalid_mask <- !is.na(field_values) & is.na(numeric_test) & field_values_char != ""
+
+      if (any(invalid_mask)) {
+        needs_transformation <- TRUE
+        transformation_direction <- "string_to_numeric"
+        invalid_values <- unique(field_values[invalid_mask])
+      }
+    }
+    # Check string fields that contain numeric values but should be text
+    else if (type == "String" && !is.null(value_range) && !is.na(value_range) && value_range != "") {
+      # If value range specifies text values but we have numbers
+      if (grepl(";", value_range) && !grepl("::", value_range)) {
+        valid_values <- trimws(strsplit(value_range, ";")[[1]])
+        # Check if valid values are non-numeric text
+        if (any(!suppressWarnings(all(!is.na(as.numeric(valid_values)))))) {
+          # Check if our current values are numeric and need conversion to text
+          is_numeric_mask <- !is.na(field_values) & !is.na(suppressWarnings(as.numeric(field_values_char)))
+          if (any(is_numeric_mask)) {
+            needs_transformation <- TRUE
+            transformation_direction <- "numeric_to_string"
+            invalid_values <- unique(field_values[is_numeric_mask])
+          }
+        }
+      }
+    }
+
+    # Skip if no transformation needed
+    if (!needs_transformation || length(invalid_values) == 0) next
+
+    if(verbose) {
+      cat(sprintf("\nField: %s", field_name))
+      cat(sprintf("\n  Type: %s", type))
+      cat(sprintf("\n  Expected range: %s", value_range))
+      cat(sprintf("\n  Direction: %s", transformation_direction))
+      cat(sprintf("\n  Invalid values: %s", paste(invalid_values, collapse=", ")))
+    }
+
+    # Extract mapping rules
+    mapping <- NULL
+
+    # Try to extract mapping from notes field
+    if (!is.null(notes) && !is.na(notes) && notes != "") {
+      # Get mapping rules - handle bidirectional mapping
+      mapping_result <- extract_bidirectional_mappings(notes, transformation_direction)
+      mapping <- mapping_result$mapping
+
+      if(verbose && !is.null(mapping) && length(mapping) > 0) {
+        cat("\n  Extracted mapping rules from notes:")
+        for (key in names(mapping)) {
+          cat(sprintf("\n    '%s' -> '%s'", key, mapping[[key]]))
+        }
+      }
+    }
+
+    # If no mapping found, try to create one based on value range
+    if ((is.null(mapping) || length(mapping) == 0) &&
+        !is.null(value_range) && !is.na(value_range) && value_range != "") {
+
+      if (transformation_direction == "string_to_numeric") {
+        # Get valid numeric values from value range
+        valid_values <- NULL
+        if (grepl("::", value_range)) {
+          # Numeric range (e.g., "1::3")
+          range_parts <- strsplit(value_range, "::")[[1]]
+          range_start <- as.numeric(range_parts[1])
+          range_end <- as.numeric(range_parts[2])
+          valid_values <- seq(from = range_start, to = range_end)
+        } else if (grepl(";", value_range)) {
+          # Discrete values (e.g., "1;2")
+          valid_values <- as.numeric(strsplit(value_range, ";")[[1]])
+        }
+
+        # Create position-based mapping if we have valid values
+        if (!is.null(valid_values) && length(invalid_values) <= length(valid_values)) {
+          mapping <- list()
+          for (j in 1:length(invalid_values)) {
+            # Skip empty strings - they'll be handled as NAs
+            if (invalid_values[j] != "") {
+              mapping[[as.character(invalid_values[j])]] <- as.character(valid_values[j])
+            }
+          }
+
+          if(verbose && length(mapping) > 0) {
+            cat("\n  Created position-based mapping:")
+            for (key in names(mapping)) {
+              cat(sprintf("\n    '%s' -> '%s'", key, mapping[[key]]))
+            }
+          }
+        }
+      }
+      else if (transformation_direction == "numeric_to_string") {
+        # Get valid string values from value range
+        if (grepl(";", value_range)) {
+          valid_text_values <- trimws(strsplit(value_range, ";")[[1]])
+
+          # Create position-based mapping if we have valid values
+          if (length(invalid_values) <= length(valid_text_values)) {
+            mapping <- list()
+            for (j in 1:length(invalid_values)) {
+              mapping[[as.character(invalid_values[j])]] <- valid_text_values[j]
+            }
+
+            if(verbose && length(mapping) > 0) {
+              cat("\n  Created position-based mapping:")
+              for (key in names(mapping)) {
+                cat(sprintf("\n    '%s' -> '%s'", key, mapping[[key]]))
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # Apply the mapping if we have one
+    if (!is.null(mapping) && length(mapping) > 0) {
+      transformations <- list()
+      transformed_count <- 0
+
+      # Apply each mapping rule
+      for (from_value in names(mapping)) {
+        to_value <- mapping[[from_value]]
+
+        # Case-insensitive matching for text values
+        if (transformation_direction == "string_to_numeric") {
+          matches <- !is.na(field_values) &
+            tolower(field_values_char) == tolower(from_value)
+        } else {
+          # Exact matching for numeric values
+          matches <- !is.na(field_values) &
+            field_values_char == from_value
+        }
+
+        if (any(matches)) {
+          field_values_char[matches] <- to_value
+          transformed_count <- transformed_count + sum(matches)
+          transformations[[from_value]] <- list(
+            to = to_value,
+            count = sum(matches)
+          )
+        }
+      }
+
+      # Update the dataframe with transformed values
+      if (transformed_count > 0) {
+        # Apply the appropriate type conversion
+        if (transformation_direction == "string_to_numeric") {
+          if (type == "Integer") {
+            df[[field_name]] <- suppressWarnings(as.integer(field_values_char))
+          } else {
+            df[[field_name]] <- suppressWarnings(as.numeric(field_values_char))
+          }
+        } else {
+          # Just use the character values for string conversion
+          df[[field_name]] <- field_values_char
+        }
+
+        # Record successful transformation
+        all_transformations[[field_name]] <- transformations
+        field_statuses[[field_name]] <- "FIXED"
+
+        if(verbose) {
+          cat("\n  FIXED: Transformed values")
+          for (value in names(transformations)) {
+            cat(sprintf("\n    '%s' -> '%s' (%d occurrences)",
+                        value, transformations[[value]]$to,
+                        transformations[[value]]$count))
+          }
+        }
+      } else {
+        field_statuses[[field_name]] <- "FAILED"
+        if(verbose) cat("\n  FAILED: Could not transform all values")
+      }
+    } else {
+      field_statuses[[field_name]] <- "FAILED"
+      if(verbose) cat("\n  FAILED: No mapping rules found")
+    }
+
+    # Always handle empty strings separately for numeric fields
+    if (type %in% c("Integer", "Float")) {
+      # Convert empty strings to NA
+      empty_mask <- !is.na(df[[field_name]]) & as.character(df[[field_name]]) == ""
+      if (any(empty_mask)) {
+        if(verbose) {
+          cat(sprintf("\n  Converting %d empty string values to NA", sum(empty_mask)))
+        }
+        df[[field_name]][empty_mask] <- NA
+      }
+    }
+  }
+
+  # Final summary report
+  if(verbose && length(all_transformations) > 0) {
+    cat("\n\nField Value Transformation Summary:")
+    for (field in names(all_transformations)) {
+      cat(sprintf("\n- %s: %s", field, field_statuses[[field]]))
+      if (field_statuses[[field]] == "FIXED") {
+        # Calculate total transformations for this field
+        total_transformed <- sum(sapply(all_transformations[[field]],
+                                        function(x) x$count))
+        cat(sprintf(" (%d values transformed)", total_transformed))
+      }
+    }
+    cat("\n")
+  }
+
+  return(df)
+}
+# Helper function to extract bidirectional mappings from notes
+extract_bidirectional_mappings <- function(notes, direction = "string_to_numeric") {
+  if (is.null(notes) || is.na(notes) || notes == "") {
+    return(list(mapping = NULL, source = "none"))
+  }
+
+  mapping <- list()
+  source <- "none"
+
+  # Try multiple pattern matching approaches
+
+  # 1. Look for explicit mappings with equals sign
+  # Format: "text=number" or "number=text"
+  if (grepl("=", notes)) {
+    parts <- strsplit(notes, "[;,]")[[1]]
+    for (part in parts) {
+      if (grepl("=", part)) {
+        key_value <- strsplit(part, "=")[[1]]
+        if (length(key_value) >= 2) {
+          key <- trimws(key_value[1])
+          value <- trimws(key_value[2])
+
+          # Determine which is the string and which is the number
+          key_numeric <- suppressWarnings(!is.na(as.numeric(key)))
+          value_numeric <- suppressWarnings(!is.na(as.numeric(value)))
+
+          if (key_numeric && !value_numeric) {
+            # number=text format
+            if (direction == "numeric_to_string") {
+              mapping[[key]] <- value
+            } else {
+              mapping[[value]] <- key
+            }
+          } else if (!key_numeric && value_numeric) {
+            # text=number format
+            if (direction == "string_to_numeric") {
+              mapping[[key]] <- value
+            } else {
+              mapping[[value]] <- key
+            }
+          }
+        }
+      }
+    }
+
+    if (length(mapping) > 0) {
+      source <- "equals_pattern"
+      return(list(mapping = mapping, source = source))
+    }
+  }
+
+  # 2. Look for "X means Y" or "X represents Y" patterns
+  patterns <- c(
+    "([^ ]+)\\s+means\\s+([^ ]+)",
+    "([^ ]+)\\s+represents\\s+([^ ]+)",
+    "([^ ]+)\\s+is\\s+([^ ]+)",
+    "([^ ]+)\\s+for\\s+([^ ]+)"
+  )
+
+  for (pattern in patterns) {
+    matches <- gregexpr(pattern, notes, perl = TRUE)
+    if (matches[[1]][1] != -1) {
+      result <- regmatches(notes, matches)[[1]]
+      for (match in result) {
+        parts <- regexec(pattern, match, perl = TRUE)
+        extracted <- regmatches(match, parts)[[1]]
+        if (length(extracted) >= 3) {
+          key <- trimws(extracted[2])
+          value <- trimws(extracted[3])
+
+          # Determine which is the string and which is the number
+          key_numeric <- suppressWarnings(!is.na(as.numeric(key)))
+          value_numeric <- suppressWarnings(!is.na(as.numeric(value)))
+
+          if (key_numeric && !value_numeric) {
+            # number means/represents text format
+            if (direction == "numeric_to_string") {
+              mapping[[key]] <- value
+            } else {
+              mapping[[value]] <- key
+            }
+          } else if (!key_numeric && value_numeric) {
+            # text means/represents number format
+            if (direction == "string_to_numeric") {
+              mapping[[key]] <- value
+            } else {
+              mapping[[value]] <- key
+            }
+          }
+        }
+      }
+    }
+
+    if (length(mapping) > 0) {
+      source <- "means_pattern"
+      return(list(mapping = mapping, source = source))
+    }
+  }
+
+  # 3. Last resort - try to find any pattern with text and numbers in notes
+  text_num_pattern <- "([a-zA-Z:_-]+)\\s*[=:]\\s*(\\d+)"
+  num_text_pattern <- "(\\d+)\\s*[=:]\\s*([a-zA-Z:_-]+)"
+
+  # Choose pattern based on transformation direction
+  if (direction == "string_to_numeric") {
+    pattern <- text_num_pattern
+  } else {
+    pattern <- num_text_pattern
+  }
+
+  matches <- gregexpr(pattern, notes, perl = TRUE)
+  if (matches[[1]][1] != -1) {
+    result <- regmatches(notes, matches)[[1]]
+    for (match in result) {
+      parts <- regexec(pattern, match, perl = TRUE)
+      extracted <- regmatches(match, parts)[[1]]
+      if (length(extracted) >= 3) {
+        if (direction == "string_to_numeric") {
+          text_val <- trimws(extracted[2])
+          num_val <- trimws(extracted[3])
+          mapping[[text_val]] <- num_val
+        } else {
+          num_val <- trimws(extracted[2])
+          text_val <- trimws(extracted[3])
+          mapping[[num_val]] <- text_val
+        }
+      }
+    }
+
+    if (length(mapping) > 0) {
+      source <- "general_pattern"
+      return(list(mapping = mapping, source = source))
+    }
+  }
+
+  # If we get here, no mappings were found
+  return(list(mapping = mapping, source = source))
+}
+
 # Updated ndaValidator to incorporate better missing value handling
 # Updated ndaValidator to incorporate better missing value handling
 ndaValidator <- function(measure_name,
@@ -2227,6 +2613,9 @@ ndaValidator <- function(measure_name,
     # Extract missing required fields from attributes
     missing_required_fields <- attr(df, "missing_required_fields")
     if(is.null(missing_required_fields)) missing_required_fields <- character(0)
+
+    # Transform field values using bidirectional approach
+    df <- transform_field_values(df, elements, verbose = verbose)
 
     # Apply type conversions
     df <- apply_type_conversions(df, elements, verbose = verbose)
