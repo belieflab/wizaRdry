@@ -449,6 +449,19 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
 # Improved conversion that preserves original values and only converts actual missing data
 apply_type_conversions <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nApplying type conversions...")
+
+  # First, convert all empty strings to NA in character columns
+  for (col in names(df)) {
+    if (is.character(df[[col]])) {
+      empty_count <- sum(df[[col]] == "", na.rm = TRUE)
+      if (empty_count > 0 && verbose) {
+        cat(sprintf("\n\nField: %s", col))
+        cat(sprintf("\n  Converting %d empty strings to NA", empty_count))
+      }
+      df[[col]][df[[col]] == ""] <- NA
+    }
+  }
+
   conversion_summary <- list()
 
   for (i in 1:nrow(elements)) {
