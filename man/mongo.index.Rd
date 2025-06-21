@@ -4,10 +4,10 @@
 \alias{mongo.index}
 \title{Display table of available MongoDB collections}
 \usage{
-mongo.index(db_name = NULL)
+mongo.index(database = NULL)
 }
 \arguments{
-\item{db_name}{Optional; the name of the database to connect to. If NULL, uses the database
+\item{database}{Optional; the name of the database to connect to. If NULL, uses the database
 specified in the configuration file.}
 }
 \value{

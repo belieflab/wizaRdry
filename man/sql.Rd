@@ -15,7 +15,8 @@ sql(
   date_format = NULL,
   batch_size = 1000,
   exclude_pii = TRUE,
-  interview_date = NULL
+  interview_date = NULL,
+  all = FALSE
 )
 }
 \arguments{
@@ -43,6 +44,9 @@ in ALL specified columns will be returned.}
 \item{interview_date}{Optional; can be either:
 - A date string in various formats (ISO, US, etc.) to filter data up to that date
 - A boolean TRUE to return only rows with non-NA interview_date values}
+
+\item{all}{Logical; if TRUE, use LEFT OUTER JOIN instead of INNER JOIN (default: FALSE),
+similar to the 'all' parameter in base R's merge() function}
 }
 \value{
 A data frame containing the requested SQL data
@@ -59,5 +63,8 @@ data <- sql("participants")
 # Get data with a where clause
 survey_data <- sql("vw_surveyquestionresults",
                   where_clause = "resultidentifier = 'NRS'")
+
+# Get all records, including those without matching primary key
+all_data <- sql("candidate", all = TRUE)
 }
 }

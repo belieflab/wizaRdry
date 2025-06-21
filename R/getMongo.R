@@ -216,11 +216,11 @@ formatDuration <- function(duration) {
 
 #' Fetch data from MongoDB to be stored in a data frame
 #'
-#' @param collection_name The name of the MongoDB collection
+#' @param collection The name of the MongoDB collection
 #' @param ... Optional column names to filter for. Only rows with non-missing values
 #'        in ALL specified columns will be returned. This is useful for filtering
 #'        data to only include complete cases for specific variables of interest.
-#' @param db_name The database name (optional)
+#' @param database The database name (optional)
 #' @param identifier Field to use as identifier (optional)
 #' @param chunk_size Number of records per chunk (optional)
 #' @param verbose Logical; if TRUE, displays detailed progress messages. Default is FALSE.
@@ -242,9 +242,9 @@ formatDuration <- function(duration) {
 #' @examples
 #' \dontrun{
 #' # Get data from MongoDB collection
-#' data <- mongo("collection_name")
+#' data <- mongo("collection")
 #' }
-mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE, interview_date = NULL) {
+mongo <- function(collection, ..., database = NULL, identifier = NULL, chunk_size = NULL, verbose = FALSE, interview_date = NULL) {
   start_time <- Sys.time()
   Mongo <- NULL  # Initialize to NULL for cleanup in on.exit
 
@@ -259,8 +259,8 @@ mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk
   # Get configuration
   cfg <- validate_config("mongo")
 
-  if (is.null(db_name)) {
-    db_name <- cfg$mongo$collection
+  if (is.null(database)) {
+    database <- cfg$mongo$collection
   }
 
   # Validate identifier
@@ -273,7 +273,7 @@ mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk
   }
 
   # Try connecting - will now throw explicit error if collection doesn't exist
-  Mongo <- ConnectMongo(collection_name, db_name)
+  Mongo <- ConnectMongo(collection, database)
 
   # Find valid identifier
   if (is.null(identifier)) {
@@ -344,7 +344,7 @@ mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk
   # Progress message
   message(sprintf("\nImporting %s records from %s/%s into dataframe...",
                   formatC(total_records, format = "d", big.mark = ","),
-                  db_name, collection_name))
+                  database, collection))
 
   # Initialize custom progress bar
   pb <- initializeLoadingAnimation(num_chunks)
@@ -364,7 +364,7 @@ mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk
       })
 
       tryCatch({
-        chunk_mongo <- ConnectMongo(collection_name, db_name)
+        chunk_mongo <- ConnectMongo(collection, database)
         batch_info <- chunks[[i]]
         if (!is.null(batch_info) && !is.null(batch_info$start) && !is.null(batch_info$size)) {
           data_chunk <- getMongoData(chunk_mongo, identifier, batch_info, verbose)
@@ -428,7 +428,7 @@ mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk
 
   # Harmonize data
   message(sprintf("Harmonizing data on %s...", identifier), appendLF = FALSE)  # Prevents line feed
-  clean_df <- taskHarmonization(df, identifier, collection_name)
+  clean_df <- taskHarmonization(df, identifier, collection)
   message(sprintf("\rHarmonizing data on %s...done.", identifier))  # Overwrites the line with 'done'
 
   # List of allowed superkey columns to prioritize
@@ -528,7 +528,7 @@ mongo <- function(collection_name, ..., db_name = NULL, identifier = NULL, chunk
   # Report execution time
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "secs")
-  message(sprintf("\nData frame '%s' retrieved in %s.", collection_name, formatDuration(duration)))
+  message(sprintf("\nData frame '%s' retrieved in %s.", collection, formatDuration(duration)))
 
   return(clean_df)
 }
@@ -559,11 +559,11 @@ createChunks <- function(total_records, chunk_size) {
 }
 
 #' Setup MongoDB connection with suppressed messages
-#' @param collection_name The name of the collection you want to connect to.
-#' @param db_name The name of the database you cant to connect to.
+#' @param collection The name of the collection you want to connect to.
+#' @param database The name of the database you cant to connect to.
 #' @return A mongolite::mongo object representing the connection to the MongoDB collection.
 #' @noRd
-ConnectMongo <- function(collection_name, db_name) {
+ConnectMongo <- function(collection, database) {
   # Validate secrets
   validate_secrets("mongo")
 
@@ -572,8 +572,8 @@ ConnectMongo <- function(collection_name, db_name) {
   # Get secrets using get_secret() to keep it secret, keep it safe
   connectionString <- get_secret("connectionString")
 
-  if (is.null(db_name)) {
-    db_name = config$mongo$collection
+  if (is.null(database)) {
+    database = config$mongo$database
   }
   options <- ssl_options(weak_cert_validation = TRUE, key = "rds-combined-ca-bundle.pem")
 
@@ -583,8 +583,8 @@ ConnectMongo <- function(collection_name, db_name) {
 
   # Create connection without specifying collection first
   base_connection <- mongolite::mongo(
-    collection = collection_name, # This is a system collection that always exists
-    db = db_name,
+    collection = collection, # This is a system collection that always exists
+    db = database,
     url = connectionString,
     verbose = FALSE,
     options = options
@@ -599,9 +599,9 @@ ConnectMongo <- function(collection_name, db_name) {
   unlink(temp)
 
   # Validate that collection exists
-  if (!collection_name %in% collections_list) {
+  if (!collection %in% collections_list) {
     stop(sprintf("Collection '%s' does not exist in database '%s'. Available collections: %s",
-                 collection_name, db_name, paste(collections_list, collapse=", ")))
+                 collection, database, paste(collections_list, collapse=", ")))
   }
 
   # If we get here, the collection exists - create normal connection
@@ -612,8 +612,8 @@ ConnectMongo <- function(collection_name, db_name) {
   })
 
   Mongo <- mongolite::mongo(
-    collection = collection_name,
-    db = db_name,
+    collection = collection,
+    db = database,
     url = connectionString,
     verbose = FALSE,
     options = options
@@ -707,7 +707,7 @@ getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
 #' @param df A data frame containing the data to be harmonized.
 #' @param identifier A string that specifies the unique identifier for the dataset;
 #' it influences how date conversions and subsetting are handled.
-#' @param collection_name A string representing the specific collection that needs harmonization.
+#' @param collection A string representing the specific collection that needs harmonization.
 #'
 #' @return A data frame with the harmonized data, including standardized 'visit' column entries,
 #' converted interview dates, and added 'measure' column based on the task.
@@ -725,7 +725,7 @@ getMongoData <- function(Mongo, identifier, batch_info, verbose = FALSE) {
 #'
 #' @importFrom stats setNames
 #' @noRd
-taskHarmonization <- function(df, identifier, collection_name) {
+taskHarmonization <- function(df, identifier, collection) {
 
   # Ensure 'visit' column exists and update it as necessary
   if (!("visit" %in% colnames(df))) {
@@ -745,11 +745,11 @@ taskHarmonization <- function(df, identifier, collection_name) {
   }
 
   # add measure column
-  # df$measure <- collection_name
+  # df$measure <- collection
 
   return(df)
   # comment into add prefixes (will break code)
-  #return(addPrefixToColumnss(df,collection_name))
+  #return(addPrefixToColumnss(df,collection))
 
 }
 
@@ -763,14 +763,14 @@ getCollectionsFromConnection <- function(mongo_connection) {
 #'
 #' Retrieves a list of all available collections in the configured MongoDB database.
 #'
-#' @param db_name Optional; the name of the database to connect to. If NULL, uses the database
+#' @param database Optional; the name of the database to connect to. If NULL, uses the database
 #'   specified in the configuration file.
 #'
 #' @return A character vector containing the names of all available collections
 #'   in the configured MongoDB database.
 #'
 #' @export
-mongo.index <- function(db_name = NULL) {
+mongo.index <- function(database = NULL) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
 
@@ -793,8 +793,8 @@ mongo.index <- function(db_name = NULL) {
   # Get secrets using get_secret() to keep it secret, keep it safe
   connectionString <- get_secret("connectionString")
 
-  if (is.null(db_name)) {
-    db_name = config$mongo$collection
+  if (is.null(database)) {
+    database = config$mongo$database
   }
 
   options <- ssl_options(weak_cert_validation = TRUE, key = "rds-combined-ca-bundle.pem")
@@ -812,7 +812,7 @@ mongo.index <- function(db_name = NULL) {
       # Connect directly to the database, not a specific collection
       base_connection <- mongolite::mongo(
         collection = "system.namespaces", # This is a system collection that always exists
-        db = db_name,
+        db = database,
         url = connectionString,
         verbose = FALSE,
         options = options

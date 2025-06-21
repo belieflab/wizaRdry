@@ -5,9 +5,9 @@
 \title{Alias for 'mongo'}
 \usage{
 getTask(
-  collection_name,
+  collection,
   ...,
-  db_name = NULL,
+  database = NULL,
   identifier = NULL,
   chunk_size = NULL,
   verbose = FALSE,
@@ -15,13 +15,13 @@ getTask(
 )
 }
 \arguments{
-\item{collection_name}{The name of the MongoDB collection}
+\item{collection}{The name of the MongoDB collection}
 
 \item{...}{Optional column names to filter for. Only rows with non-missing values
 in ALL specified columns will be returned. This is useful for filtering
 data to only include complete cases for specific variables of interest.}
 
-\item{db_name}{The database name (optional)}
+\item{database}{The database name (optional)}
 
 \item{identifier}{Field to use as identifier (optional)}
 

@@ -5,9 +5,9 @@
 \title{Fetch data from MongoDB to be stored in a data frame}
 \usage{
 mongo(
-  collection_name,
+  collection,
   ...,
-  db_name = NULL,
+  database = NULL,
   identifier = NULL,
   chunk_size = NULL,
   verbose = FALSE,
@@ -15,13 +15,13 @@ mongo(
 )
 }
 \arguments{
-\item{collection_name}{The name of the MongoDB collection}
+\item{collection}{The name of the MongoDB collection}
 
 \item{...}{Optional column names to filter for. Only rows with non-missing values
 in ALL specified columns will be returned. This is useful for filtering
 data to only include complete cases for specific variables of interest.}
 
-\item{db_name}{The database name (optional)}
+\item{database}{The database name (optional)}
 
 \item{identifier}{Field to use as identifier (optional)}
 
@@ -42,6 +42,6 @@ Fetch data from MongoDB to be stored in a data frame
 \examples{
 \dontrun{
 # Get data from MongoDB collection
-data <- mongo("collection_name")
+data <- mongo("collection")
 }
 }

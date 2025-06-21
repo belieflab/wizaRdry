@@ -8,7 +8,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                            # Define validation specs for each API
                            api_specs = list(
                              mongo = list(
-                               required = c("collection")
+                               required = c("database")
                              ),
                              qualtrics = list(
                                required = c("survey_ids")
@@ -17,7 +17,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                required = c("superkey", "primary_key")
                              ),
                              sql = list(
-                               required = c()  # Add required fields for SQL as needed
+                               required = c("superkey", "primary_key", "schemas", "pii_fields")
                              ),
                              missing_data_codes = list(
                                required = c(),  # No required fields - all are optional
@@ -47,14 +47,14 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
 
                            # Method to handle variable substitutions like ${study_alias}
                            process_substitutions = function() {
-                             # Process mongo collection name if it references study_alias
+                             # Process mongo database name if it references study_alias
                              if (!is.null(self$config$mongo) &&
-                                 !is.null(self$config$mongo$collection) &&
-                                 self$config$mongo$collection == "${study_alias}") {
+                                 !is.null(self$config$mongo$database) &&
+                                 self$config$mongo$database == "${study_alias}") {
                                if (!is.null(self$config$study_alias)) {
-                                 self$config$mongo$collection <- self$config$study_alias
+                                 self$config$mongo$database <- self$config$study_alias
                                } else {
-                                 warning("Cannot substitute ${study_alias} in mongo.collection: study_alias is not defined in config")
+                                 warning("Cannot substitute ${study_alias} in mongo.database: study_alias is not defined in config")
                                }
                              }
                              # Add more substitution rules as needed
@@ -145,9 +145,9 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              }
                              # API-specific additional validations
                              if (api_type == "mongo") {
-                               # Check if collection is empty after substitution
-                               if (self$has_value("mongo.collection") && nchar(self$get_value("mongo.collection")) == 0) {
-                                 all_errors <- c(all_errors, "The 'collection' setting cannot be empty")
+                               # Check if database is empty after substitution
+                               if (self$has_value("mongo.database") && nchar(self$get_value("mongo.database")) == 0) {
+                                 all_errors <- c(all_errors, "The 'database' setting cannot be empty")
                                }
                              } else if (api_type == "qualtrics") {
                                # Check if survey_ids exists and is a list
