@@ -1,4 +1,4 @@
-# Modified ConfigEnv class with more flexible missing value categories
+# Modified ConfigEnv class with more flexible missing value categories and SQL support
 ConfigEnv <- R6::R6Class("ConfigEnv",
                          public = list(
                            # Store configuration
@@ -171,7 +171,24 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                  all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
                                }
                              } else if (api_type == "sql") {
-                               # Any sql-specific validations
+                               # SQL-specific validations
+                               # Check for primary_key setting if specified
+                               if (self$has_value("sql.primary_key") && nchar(self$get_value("sql.primary_key")) == 0) {
+                                 all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
+                               }
+
+                               # Check for superkey table if specified
+                               if (self$has_value("sql.superkey") && nchar(self$get_value("sql.superkey")) == 0) {
+                                 all_errors <- c(all_errors, "The 'superkey' setting cannot be empty")
+                               }
+
+                               # Check for pii_fields if specified
+                               if (self$has_value("sql.pii_fields")) {
+                                 pii_fields <- self$get_value("sql.pii_fields")
+                                 if (!is.vector(pii_fields) || !is.character(pii_fields)) {
+                                   all_errors <- c(all_errors, "The 'pii_fields' setting must be a character vector")
+                                 }
+                               }
                              } else if (api_type == "missing_data_codes") {
                                # Get the current missing_data_codes configuration
                                missing_value_config <- self$get_value("missing_data_codes")
