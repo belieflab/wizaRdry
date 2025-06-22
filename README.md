@@ -109,7 +109,7 @@ default:
     primary_key: 'sub_id'
     superkey: 'phi'
     schemas:
-      - 'omnibus'
+      - ${study_alias}
     pii_fields:
       - 'name_first'
       - 'name_middle'
