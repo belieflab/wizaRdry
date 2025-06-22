@@ -86,6 +86,11 @@ baseUrls <- c("BASE_URL_1", "BASE_URL_2")
 
 # MongoDB
 connectionString <- "mongodb://your-connection-string"
+
+# SQL Server
+conn <- "BASE_URL"
+uid <- "USERNAME"
+pwd <- "PASSWORD"
 ```
 
 ### 3. Configure Study Settings
