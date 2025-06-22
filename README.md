@@ -97,7 +97,7 @@ default:
   study_alias: yourstudy
   identifier: src_subject_id
   mongo:
-    collection: ${study_alias}
+    database: ${study_alias}
   qualtrics:
     survey_ids:
       Institution1:
@@ -105,6 +105,15 @@ default:
   redcap:
     primary_key: record_id
     superkey: ndar_subject01
+  sql:
+    primary_key: 'sub_id'
+    superkey: 'phi'
+    schemas:
+      - 'omnibus'
+    pii_fields:
+      - 'name_first'
+      - 'name_middle'
+      - 'name_last'
 ```
 
 ### 4. Configure Missing Data Codes
