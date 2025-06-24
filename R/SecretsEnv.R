@@ -27,8 +27,8 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                 types = c(apiKeys = "vector", baseUrls = "vector")
                               ),
                               sql = list(
-                                required = c("conn", "uid", "pwd"),
-                                types = c(conn = "character", uid = "character", pwd = "character")
+                                required = c("host", "uid", "pwd"),
+                                types = c(host = "character", uid = "character", pwd = "character")
                               )
                             ),
 

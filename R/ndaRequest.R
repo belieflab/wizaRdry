@@ -38,6 +38,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   redcap_list <- tools::file_path_sans_ext(list.files("./nda/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./nda/qualtrics"))
   mongo_list <- tools::file_path_sans_ext(list.files("./nda/mongo"))
+  oracle_list <- tools::file_path_sans_ext(list.files("./nda/oracle"))
   sql_list <- tools::file_path_sans_ext(list.files("./nda/sql"))
 
   # Get identifier from config
@@ -88,7 +89,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
     # Your existing code to determine structures to create
     # For example:
-    invalid_structures <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
+    invalid_structures <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, oracle_list, sql_list), data_list)
 
     # If we have structures to create and need to prompt
     if (length(invalid_structures) > 0) {
@@ -279,7 +280,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
         # If script passes validation, allow user to select api:
         api_selection <- function() {
-          options <- c("csv", "mongo", "qualtrics", "redcap", "sql")
+          options <- c("csv", "mongo", "qualtrics", "redcap", "oracle", "sql")
 
           cat("Select script type (choose only one):\n")
 
@@ -377,6 +378,29 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               sep = "\n"
             )
           ),
+          oracle = list(
+            path = sprintf(file.path(path, "nda", "oracle", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# nda/oracle/%s.R", script_name),
+              "#",
+              "# config:  coming soon...",
+              "# secrets: coming soon...",
+              "#",
+              "# return a list of the table(s) from ORACLE",
+              "# oracle.index()",
+              "#",
+              "# get the table data from ORACLE",
+              "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
+              sprintf("%s <- oracle(\"%s\")", script_name, script_name),
+              "",
+              "# nda remediation code...",
+              "",
+              "# IMPORTANT: final df name must still match the NDA data structure alias",
+              "",
+              sep = "\n"
+            )
+          ),
           sql = list(
             path = sprintf(file.path(path, "nda", "sql", "%s.R"), script_name),  # Added .R extension
             content = paste(
@@ -443,6 +467,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     redcap_list <<- tools::file_path_sans_ext(list.files("./nda/redcap"))
     qualtrics_list <<- tools::file_path_sans_ext(list.files("./nda/qualtrics"))
     mongo_list <<- tools::file_path_sans_ext(list.files("./nda/mongo"))
+    oracle_list <<- tools::file_path_sans_ext(list.files("./nda/oracle"))
     sql_list <<- tools::file_path_sans_ext(list.files("./nda/sql"))
 
 
@@ -475,7 +500,8 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
       api <- ifelse(measure %in% redcap_list, "redcap",
                     ifelse(measure %in% qualtrics_list, "qualtrics",
                            ifelse(measure %in% mongo_list, "mongo",
-                                  ifelse(measure %in% sql_list, "sql", "csv"))))
+                                  ifelse(measure %in% oracle_list, "oracle",
+                                         ifelse(measure %in% sql_list, "sql", "csv")))))
     }
 
     processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset)

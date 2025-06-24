@@ -55,6 +55,7 @@ The function creates the following directory structure:
 \item mongo/
 \item qualtrics/
 \item redcap/
+\item oracle/
 \item sql/
 }
 \item nda/
@@ -63,6 +64,7 @@ The function creates the following directory structure:
 \item mongo/
 \item qualtrics/
 \item redcap/
+\item oracle/
 \item sql/
 }
 \item tmp/

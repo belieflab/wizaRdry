@@ -35,6 +35,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
   redcap_list <- tools::file_path_sans_ext(list.files("./clean/redcap"))
   qualtrics_list <- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
   mongo_list <- tools::file_path_sans_ext(list.files("./clean/mongo"))
+  oracle_list <- tools::file_path_sans_ext(list.files("./clean/oracle"))
   sql_list <- tools::file_path_sans_ext(list.files("./clean/sql"))
 
   # Get identifier from config
@@ -88,7 +89,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     }
 
     # Validate measures against predefined lists
-    invalid_scripts <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, sql_list), data_list)
+    invalid_scripts <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, oracle_list, sql_list), data_list)
 
     # If we have invalid scripts to create and need to prompt
     if (length(invalid_scripts) > 0) {
@@ -219,6 +220,29 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
               sep = "\n"
             )
           ),
+          oracle = list(
+            path = sprintf(file.path(path, "clean", "oracle", "%s.R"), script_name),  # Added .R extension
+            content = paste(
+              "#",
+              sprintf("# clean/oracle/%s.R", script_name),
+              "#",
+              "# config:  coming soon...",
+              "# secrets: coming soon...",
+              "#",
+              "# return a list of tables from ORACLE",
+              "# oracle.index()",
+              "#",
+              "# get the table from ORACLE",
+              "# IMPORTANT: both variable name and script filename must match",
+              sprintf("%s <- oracle(\"%s\")", script_name, script_name),
+              "",
+              "# cleaning script code...",
+              "",
+              "# IMPORTANT: final df must be appended with _clean",
+              sprintf("%s_clean <- %s", script_name, script_name),
+              sep = "\n"
+            )
+          ),
           sql = list(
             path = sprintf(file.path(path, "clean", "sql", "%s.R"), script_name),  # Added .R extension
             content = paste(
@@ -285,6 +309,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
     redcap_list <<- tools::file_path_sans_ext(list.files("./clean/redcap"))
     qualtrics_list <<- tools::file_path_sans_ext(list.files("./clean/qualtrics"))
     mongo_list <<- tools::file_path_sans_ext(list.files("./clean/mongo"))
+    oracle_list <<- tools::file_path_sans_ext(list.files("./clean/oracle"))
     sql_list <<- tools::file_path_sans_ext(list.files("./clean/sql"))
 
     # Return the data_list invisibly instead of stopping execution
@@ -316,7 +341,8 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
       sourceCategory <- ifelse(measure %in% redcap_list, "redcap",
                                ifelse(measure %in% qualtrics_list, "qualtrics",
                                       ifelse(measure %in% mongo_list, "mongo",
-                                             ifelse(measure %in% sql_list, "sql", "csv"))))
+                                             ifelse(measure %in% oracle_list, "oracle",
+                                                    ifelse(measure %in% sql_list, "sql", "csv")))))
     }
 
     processData(measure, sourceCategory, csv, rdata, spss, identifier)

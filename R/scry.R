@@ -28,12 +28,14 @@
 #'   - mongo/
 #'   - qualtrics/
 #'   - redcap/
+#'   - oracle/
 #'   - sql/
 #' - nda/
 #'   - csv/
 #'   - mongo/
 #'   - qualtrics/
 #'   - redcap/
+#'   - oracle/
 #'   - sql/
 #' - tmp/
 #'
@@ -120,12 +122,14 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     file.path(path, "clean", "mongo"),
     file.path(path, "clean", "qualtrics"),
     file.path(path, "clean", "redcap"),
+    file.path(path, "clean", "oracle"),
     file.path(path, "clean", "sql"),
     file.path(path, "nda"),
     file.path(path, "nda", "csv"),
     file.path(path, "nda", "mongo"),
     file.path(path, "nda", "qualtrics"),
     file.path(path, "nda", "redcap"),
+    file.path(path, "nda", "oracle"),
     file.path(path, "nda", "sql"),
     file.path(path, "tmp")
   )
@@ -268,6 +272,7 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     "  redcap:",
     "    #primary_key: record_id",
     "    #superkey: ndar_subject01",
+    "  # Configuration for both SQL and ORACLE",
     "  sql:",
     "    # Primary key and superkey table configuration",
     "    #primary_key: 'PARTICIPANTIDENTIFIER'",
@@ -324,8 +329,8 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     "# Mongo",
     "connectionString <- \"\"",
     "",
-    "# SQL Server",
-    "conn <- \"\"",
+    "# SQL or ORACLE Server",
+    "host <- \"\"",
     "uid <- \"\"",
     "pwd <- \"\"",
     sep = "\n"

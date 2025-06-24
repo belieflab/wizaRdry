@@ -67,7 +67,7 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Get connection parameters using get_secret
-  host_value <- get_secret("conn")
+  host_value <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -421,7 +421,7 @@ sql.index <- function(schema = NULL) {
   config <- validate_config("sql")
 
   # Get connection parameters using get_secret
-  host_value <- get_secret("conn")
+  host_value <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -511,7 +511,7 @@ sql.index <- function(schema = NULL) {
 #' @param table_name Name of the table to get metadata for
 #' @return A data frame with column information
 #' @export
-sql.dict <- function(table_name) {
+sql.desc <- function(table_name) {
   # Check if required packages are available
   if (!requireNamespace("RMariaDB", quietly = TRUE)) {
     stop("Package 'RMariaDB' is needed for this function to work. Please install it.",
@@ -535,7 +535,7 @@ sql.dict <- function(table_name) {
   config <- validate_config("sql")
 
   # Get connection parameters using get_secret
-  host_value <- get_secret("conn")
+  host_value <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -688,7 +688,7 @@ sql.query <- function(query, exclude_pii = FALSE) {
   config <- validate_config("sql")
 
   # Get connection parameters using get_secret
-  host_value <- get_secret("conn")
+  host_value <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
