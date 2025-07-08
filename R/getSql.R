@@ -214,43 +214,60 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       }
     } else {
       # For PII exclusion with SELECT *, we need to get all column names first
+      # with this updated version:
+
+      # For PII exclusion with SELECT *, we need to get all column names first
       if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0 && is.null(fields)) {
-        # Extract schema and table name
-        table_parts <- strsplit(table_name, "\\.")[[1]]
-        schema_name <- NULL
-        table_only <- table_name
+        # Check if we're joining tables
+        if (!is.null(superkey_table) && !is.null(primary_key_column)) {
+          # Get column names from both tables
+          table_parts <- strsplit(table_name, "\\.")[[1]]
+          main_schema <- NULL
+          main_table_only <- table_name
+          if (length(table_parts) > 1) {
+            main_schema <- table_parts[1]
+            main_table_only <- table_parts[2]
+          }
 
-        if (length(table_parts) > 1) {
-          schema_name <- table_parts[1]
-          table_only <- table_parts[2]
-        }
+          # Extract schema and table name for superkey table
+          superkey_parts <- strsplit(superkey_table, "\\.")[[1]]
+          superkey_schema <- NULL
+          superkey_table_only <- superkey_table
+          if (length(superkey_parts) > 1) {
+            superkey_schema <- superkey_parts[1]
+            superkey_table_only <- superkey_parts[2]
+          }
 
-        # Get all column names from the table
-        col_query <- sprintf("SELECT column_name FROM information_schema.columns WHERE table_name = '%s'", table_only)
+          # Get columns from main table
+          main_col_query <- sprintf("SELECT column_name FROM information_schema.columns WHERE table_name = '%s'", main_table_only)
+          if (!is.null(main_schema)) {
+            main_col_query <- sprintf("%s AND table_schema = '%s'", main_col_query, main_schema)
+          }
 
-        # If table_name includes schema, add schema filter
-        if (!is.null(schema_name)) {
-          col_query <- sprintf("%s AND table_schema = '%s'", col_query, schema_name)
-        }
+          # Get columns from superkey table
+          superkey_col_query <- sprintf("SELECT column_name FROM information_schema.columns WHERE table_name = '%s'", superkey_table_only)
+          if (!is.null(superkey_schema)) {
+            superkey_col_query <- sprintf("%s AND table_schema = '%s'", superkey_col_query, superkey_schema)
+          }
 
-        message("Fetching column list to exclude PII fields...")
-        all_columns <- DBI::dbGetQuery(db_conn, col_query)
+          message("Fetching column lists from both tables to exclude PII fields...")
+          main_columns <- DBI::dbGetQuery(db_conn, main_col_query)
+          superkey_columns <- DBI::dbGetQuery(db_conn, superkey_col_query)
 
-        if (nrow(all_columns) > 0) {
-          # Filter out PII fields
-          valid_columns <- setdiff(all_columns$column_name, pii_fields)
+          if (nrow(main_columns) > 0 && nrow(superkey_columns) > 0) {
+            # Filter out PII fields from both tables
+            main_valid_columns <- setdiff(main_columns$column_name, pii_fields)
+            superkey_valid_columns <- setdiff(superkey_columns$column_name, pii_fields)
 
-          # Build query with explicit column list
-          if (!is.null(superkey_table) && !is.null(primary_key_column)) {
-            # With join
-            table_alias <- "t"
-            column_list <- paste0(table_alias, ".", valid_columns, collapse = ", ")
+            # Build column list with table aliases
+            main_column_list <- paste0("t.", main_valid_columns, collapse = ", ")
+            superkey_column_list <- paste0("pk.", superkey_valid_columns, collapse = ", ")
+            column_list <- paste(main_column_list, superkey_column_list, sep = ", ")
 
-            # Parse table name parts
+            # Parse table name parts for schema handling
             table_parts <- strsplit(table_name, "\\.")[[1]]
             if (length(table_parts) > 1) {
               schema <- table_parts[1]
-
               # Apply schema to superkey_table if needed
               if (!grepl("\\.", superkey_table)) {
                 superkey_table <- paste0(schema, ".", superkey_table)
@@ -259,19 +276,51 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
             # Determine join type based on 'all' parameter
             join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
-
             query <- sprintf(
-              "SELECT DISTINCT %s FROM %s %s %s %s pk ON %s.%s = pk.%s %s %s",
+              "SELECT DISTINCT %s FROM %s t %s %s pk ON t.%s = pk.%s %s %s",
               column_list,
-              table_name, table_alias,
+              table_name,
               join_type,
               superkey_table,
-              table_alias, primary_key_column, primary_key_column,
+              primary_key_column, primary_key_column,
               ifelse(!is.null(where_clause) && nchar(where_clause) > 0, paste("WHERE", where_clause), ""),
               ifelse(!is.null(max_rows) && is.numeric(max_rows) && max_rows > 0, paste("LIMIT", as.integer(max_rows)), "")
             )
+            message("Generated SQL query with PII exclusion for joined tables: ", query)
           } else {
-            # Without join
+            # Fall back to standard query building if column fetch fails
+            query <- build_sql_query(
+              table_name = table_name,
+              fields = fields,
+              where_clause = where_clause,
+              superkey_table = if (join_primary_keys) superkey_table else NULL,
+              primary_key_column = if (join_primary_keys) primary_key_column else NULL,
+              max_rows = max_rows,
+              pii_fields = NULL,  # Don't filter in query, will filter result after
+              all = all
+            )
+          }
+        } else {
+          # Single table case (existing code)
+          table_parts <- strsplit(table_name, "\\.")[[1]]
+          schema_name <- NULL
+          table_only <- table_name
+          if (length(table_parts) > 1) {
+            schema_name <- table_parts[1]
+            table_only <- table_parts[2]
+          }
+
+          # Get all column names from the table
+          col_query <- sprintf("SELECT column_name FROM information_schema.columns WHERE table_name = '%s'", table_only)
+          # If table_name includes schema, add schema filter
+          if (!is.null(schema_name)) {
+            col_query <- sprintf("%s AND table_schema = '%s'", col_query, schema_name)
+          }
+          message("Fetching column list to exclude PII fields...")
+          all_columns <- DBI::dbGetQuery(db_conn, col_query)
+          if (nrow(all_columns) > 0) {
+            # Filter out PII fields
+            valid_columns <- setdiff(all_columns$column_name, pii_fields)
             column_list <- paste(valid_columns, collapse = ", ")
             query <- sprintf(
               "SELECT DISTINCT %s FROM %s %s %s",
@@ -280,21 +329,20 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
               ifelse(!is.null(where_clause) && nchar(where_clause) > 0, paste("WHERE", where_clause), ""),
               ifelse(!is.null(max_rows) && is.numeric(max_rows) && max_rows > 0, paste("LIMIT", as.integer(max_rows)), "")
             )
+            message("Generated SQL query with PII exclusion: ", query)
+          } else {
+            # Fall back to standard query building if column fetch fails
+            query <- build_sql_query(
+              table_name = table_name,
+              fields = fields,
+              where_clause = where_clause,
+              superkey_table = if (join_primary_keys) superkey_table else NULL,
+              primary_key_column = if (join_primary_keys) primary_key_column else NULL,
+              max_rows = max_rows,
+              pii_fields = NULL,  # Don't filter in query, will filter result after
+              all = all
+            )
           }
-
-          message("Generated SQL query with PII exclusion: ", query)
-        } else {
-          # Fall back to standard query building if column fetch fails
-          query <- build_sql_query(
-            table_name = table_name,
-            fields = fields,
-            where_clause = where_clause,
-            superkey_table = if (join_primary_keys) superkey_table else NULL,
-            primary_key_column = if (join_primary_keys) primary_key_column else NULL,
-            max_rows = max_rows,
-            pii_fields = NULL,  # Don't filter in query, will filter result after
-            all = all
-          )
         }
       } else {
         # Standard query building
@@ -787,22 +835,10 @@ sql.query <- function(query, exclude_pii = FALSE) {
   return(result)
 }
 
-#' Build SQL query based on provided parameters
-#'
-#' @param table_name The main table to query
-#' @param fields Optional specific fields to select
-#' @param where_clause Optional WHERE clause
-#' @param superkey_table Optional superkey table for joining
-#' @param primary_key_column Primary key column name for joining
-#' @param max_rows Maximum number of rows to return
-#' @param pii_fields Fields to exclude as PII
-#' @param all Logical; if TRUE, use LEFT OUTER JOIN instead of INNER JOIN (default: FALSE)
-#'
-#' @return A string containing the SQL query
-#' @noRd
 build_sql_query <- function(table_name, fields = NULL, where_clause = NULL,
                             superkey_table = NULL, primary_key_column = NULL,
                             max_rows = NULL, pii_fields = NULL, all = FALSE) {
+
   # Define table aliases
   main_table_alias <- "t"
   pk_table_alias <- "pk"
@@ -810,27 +846,46 @@ build_sql_query <- function(table_name, fields = NULL, where_clause = NULL,
   # Determine which fields to select
   if (is.null(fields)) {
     # No specific fields requested
-    if (!is.null(pii_fields) && length(pii_fields) > 0) {
-      # PII exclusion needed but no specific fields requested
-      # This requires getting table metadata first, which we can't do in this function
-      message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
-      select_clause <- "SELECT DISTINCT *" # Temporary - will be replaced in main function
+    if (!is.null(superkey_table) && !is.null(primary_key_column)) {
+      # When joining, always include fields from both tables
+      if (!is.null(pii_fields) && length(pii_fields) > 0) {
+        # PII exclusion needed but no specific fields requested
+        # This requires getting table metadata first, which we can't do in this function
+        message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
+        select_clause <- "SELECT DISTINCT t.*, pk.*" # Will be replaced in main function
+      } else {
+        # No PII exclusion needed - include all fields from both tables
+        select_clause <- "SELECT DISTINCT t.*, pk.*"
+      }
     } else {
-      # No PII exclusion needed
-      select_clause <- "SELECT DISTINCT *"
+      # No join - just select from main table
+      if (!is.null(pii_fields) && length(pii_fields) > 0) {
+        message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
+        select_clause <- "SELECT DISTINCT *" # Will be replaced in main function
+      } else {
+        select_clause <- "SELECT DISTINCT *"
+      }
     }
   } else {
     # Specific fields requested, exclude PII fields
     if (!is.null(pii_fields)) {
       fields <- setdiff(fields, pii_fields)
     }
-
     # If fields array is not empty after filtering
     if (length(fields) > 0) {
       # For joins, qualify field names with table alias
       if (!is.null(superkey_table) && !is.null(primary_key_column)) {
-        # Add table alias to field names
-        qualified_fields <- paste0(main_table_alias, ".", fields)
+        # Check if fields already have table qualifiers
+        qualified_fields <- character(0)
+        for (field in fields) {
+          if (grepl("\\.", field)) {
+            # Field already has table qualifier (e.g., "t.sub_id" or "pk.phi_field")
+            qualified_fields <- c(qualified_fields, field)
+          } else {
+            # Add main table alias to field names
+            qualified_fields <- c(qualified_fields, paste0(main_table_alias, ".", field))
+          }
+        }
         select_clause <- paste0("SELECT DISTINCT ", paste(qualified_fields, collapse = ", "))
       } else {
         select_clause <- paste0("SELECT DISTINCT ", paste(fields, collapse = ", "))
@@ -844,21 +899,17 @@ build_sql_query <- function(table_name, fields = NULL, where_clause = NULL,
   # Build the FROM clause
   # Handle schema in table name
   table_parts <- strsplit(table_name, "\\.")[[1]]
-
   if (!is.null(superkey_table) && !is.null(primary_key_column)) {
     # If table_name includes a schema, apply it to superkey_table if needed
     if (length(table_parts) > 1) {
       schema <- table_parts[1]
-
       # Apply schema to superkey_table if it doesn't already have one
       if (!grepl("\\.", superkey_table)) {
         superkey_table <- paste0(schema, ".", superkey_table)
       }
     }
-
     # Determine join type based on 'all' parameter
     join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
-
     # Create JOIN clause
     from_clause <- sprintf(
       "FROM %s %s %s %s %s ON %s.%s = %s.%s",

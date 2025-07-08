@@ -694,29 +694,14 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
   return(result)
 }
 
-#' Build SQL query based on provided parameters
-#'
-#' @param table_name The main table to query
-#' @param fields Optional specific fields to select
-#' @param where_clause Optional WHERE clause
-#' @param superkey_table Optional superkey table for joining
-#' @param primary_key_column Primary key column name for joining
-#' @param max_rows Maximum number of rows to return
-#' @param pii_fields Fields to exclude as PII
-#' @param all Logical; if TRUE, use LEFT OUTER JOIN instead of INNER JOIN (default: FALSE)
-#' @param schema Optional schema name
-#' @param is_oracle Logical; whether the database is Oracle
-#'
-#' @return A string containing the SQL query
-#' @noRd
 build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
-                            superkey_table = NULL, primary_key_column = NULL,
-                            max_rows = NULL, pii_fields = NULL, all = FALSE,
-                            schema = NULL, is_oracle = TRUE) {
+                               superkey_table = NULL, primary_key_column = NULL,
+                               max_rows = NULL, pii_fields = NULL, all = FALSE,
+                               schema = NULL, is_oracle = TRUE) {
+
   # Add schema prefix to table names if specified
   table_with_schema <- table_name
   superkey_with_schema <- superkey_table
-
   if (!is.null(schema)) {
     if (!grepl("\\.", table_name)) {
       table_with_schema <- paste0(schema, ".", table_name)
@@ -733,13 +718,24 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
   # Determine which fields to select
   if (is.null(fields)) {
     # No specific fields requested
-    select_clause <- "SELECT DISTINCT"
-
-    # For Oracle with joins, be explicit about the table for the asterisk
-    if (is_oracle && !is.null(superkey_table) && !is.null(primary_key_column)) {
-      select_clause <- paste0(select_clause, " ", main_table_alias, ".*")
+    if (!is.null(superkey_table) && !is.null(primary_key_column)) {
+      # When joining, include fields from both tables
+      if (!is.null(pii_fields) && length(pii_fields) > 0) {
+        # PII exclusion needed - this will be handled in the main function
+        message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
+        select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
+      } else {
+        # No PII exclusion needed - include all fields from both tables
+        select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
+      }
     } else {
-      select_clause <- paste0(select_clause, " *")
+      # No join - just select from main table
+      if (!is.null(pii_fields) && length(pii_fields) > 0) {
+        message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
+        select_clause <- "SELECT DISTINCT *"
+      } else {
+        select_clause <- "SELECT DISTINCT *"
+      }
     }
   } else {
     # Specific fields requested
@@ -750,17 +746,27 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
 
     # If fields array is not empty after filtering
     if (length(fields) > 0) {
-      # For joins, qualify field names with table alias
+      # For joins, qualify field names with table alias if they don't already have one
       if (!is.null(superkey_table) && !is.null(primary_key_column)) {
-        # Add table alias to field names
-        qualified_fields <- paste0(main_table_alias, ".", fields)
+        # Check if fields specify table aliases or need them
+        qualified_fields <- character(0)
+        for (field in fields) {
+          if (grepl("\\.", field)) {
+            # Field already has table qualifier (e.g., "t.sub_id" or "pk.phi_field")
+            qualified_fields <- c(qualified_fields, field)
+          } else {
+            # Add main table alias to field names
+            qualified_fields <- c(qualified_fields, paste0(main_table_alias, ".", field))
+          }
+        }
         select_clause <- paste0("SELECT DISTINCT ", paste(qualified_fields, collapse = ", "))
       } else {
+        # No join, use fields as-is
         select_clause <- paste0("SELECT DISTINCT ", paste(fields, collapse = ", "))
       }
     } else {
       # All requested fields were PII, so select a dummy field
-      select_clause <- "SELECT DISTINCT 1 AS dummy_column" # Fallback
+      select_clause <- "SELECT DISTINCT 1 AS dummy_column"
     }
   }
 
@@ -768,7 +774,6 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
   if (!is.null(superkey_with_schema) && !is.null(primary_key_column)) {
     # Determine join type based on 'all' parameter
     join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
-
     # Join with superkey table
     from_clause <- sprintf(
       "FROM %s %s %s %s %s ON %s.%s = %s.%s",
