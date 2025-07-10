@@ -87,6 +87,12 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
       })
     }
 
+    # Create a list name_changes to store updated script_names
+    name_changes <- list()
+
+    # Create a character vector for failed validation tracking 
+    failed_validations <- character(0)
+
     # Your existing code to determine structures to create
     # For example:
     invalid_structures <- Filter(function(measure) !measure %in% c(csv_list, redcap_list, qualtrics_list, mongo_list, oracle_list, sql_list), data_list)
@@ -120,7 +126,9 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
       # Process each invalid script
       for (script_name in invalid_structures) {
-        message(sprintf("\nProcessing script: %s", script_name))
+        message(sprintf("Processing script: %s\n", script_name))
+
+        original_name <- script_name  # Store the original name for tracking changes
 
         # Improved validation function for NDA data structure names
         validate_script_name <- function(script_name, nda_base_url = "https://nda.nih.gov/api/datadictionary/v2") {
@@ -142,10 +150,15 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
             status_code <- httr::status_code(response)
 
             if (status_code == 200) {
-              # Try to parse the JSON with error handling
+              # Try to parse the JSON with handling for errors and empty string responses
               content <- tryCatch({
-                jsonlite::fromJSON(rawToChar(response$content))
-              }, error = function(e) {
+                raw_content <- rawToChar(response$content) # store raw_content
+                if (nchar(raw_content) > 0) { # if there is content
+                  jsonlite::fromJSON(raw_content)
+                } else { # response is valid but content is empty
+                  NULL # set content to NULL and go to similarity search
+                }
+              }, error = function(e) { # throw an error if something is wrong
                 message("Error parsing API response: ", e$message)
                 return(NULL)
               })
@@ -167,10 +180,10 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
           }
 
           # If we get here, the direct lookup failed, so search for similar structures
-          search_url <- sprintf("%s/datastructure", nda_base_url)
+          search_url <- sprintf("%s/datastructure", nda_base_url) # API endpoint to search and get all NDA data structures
 
           search_response <- tryCatch({
-            httr::GET(search_url, httr::timeout(10))
+            httr::GET(search_url, httr::timeout(10)) # Get and store all NDA data structures
           }, error = function(e) {
             message("Network error when searching NDA API: ", e$message)
             return(NULL)
@@ -179,14 +192,19 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
           if (!is.null(search_response) && httr::status_code(search_response) == 200) {
             # Try to parse the JSON with error handling
             all_structures <- tryCatch({
-              content <- jsonlite::fromJSON(rawToChar(search_response$content))
-              if (is.data.frame(content)) {
-                content
+              raw_content <- rawToChar(search_response$content)
+              if (nchar(raw_content) > 0) {
+                content <- jsonlite::fromJSON(raw_content)
+                if (is.data.frame(content)) {
+                  content
+                } else {
+                  message("Unexpected API response format: not a data frame")
+                  return(data.frame())
+                }
               } else {
-                message("Unexpected API response format: not a data frame")
-                return(data.frame())
+                data.frame() # Pass in an empty dataframe if api response is empty
               }
-            }, error = function(e) {
+            }, error = function(e) { # Throw an error if something else is wrong.
               message("Error parsing API response: ", e$message)
               return(data.frame())
             })
@@ -221,14 +239,18 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                   })
 
                   if (length(top_matches) > 0 && top_matches[1] > 0.7) {
-                    message("\nData structure name not found in NDA dictionary. Did you mean one of these?")
+                    message("Data structure name not found in NDA dictionary. Did you mean one of these?")
                     for (i in seq_along(top_matches)) {
                       match_name <- names(top_matches)[i]
                       match_score <- top_matches[i]
                       message(sprintf("%d. %s (%.1f%% match)", i, match_name, match_score * 100))
                     }
 
-                    use_suggested <- readline(prompt = "Use one of these instead? (enter number or 'n' to keep original): ")
+                    use_suggested <- readline(prompt = "Use one of these instead? (select number or press Enter to keep original): ")
+                    while (use_suggested != "" && (!grepl("^[0-9]+$", use_suggested) ||
+                                                   as.numeric(use_suggested) < 1 || as.numeric(use_suggested) > length(top_matches))) {
+                      use_suggested <- readline(prompt = sprintf("Please enter a number between 1 and %d, or press Enter to keep original: ", length(top_matches)))
+                    }
 
                     if (grepl("^[0-9]+$", use_suggested)) {
                       selection <- as.numeric(use_suggested)
@@ -241,6 +263,10 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                   } else {
                     message(sprintf("Warning: '%s' not found in NDA data dictionary and no close matches found", script_name))
                     proceed <- readline(prompt = "Proceed anyway? (y/n): ")
+                    # Check that proceed was given a valid y or n response
+                    while (!tolower(proceed) %in% c("y", "n")){
+                      proceed <- readline(prompt = "Please enter either y or n: ")
+                    }
                     if (tolower(proceed) == "y") {
                       return(script_name)  # Return the original name
                     } else {
@@ -260,6 +286,9 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
           message(sprintf("Warning: Unable to validate '%s' against NDA data dictionary", script_name))
           proceed <- readline(prompt = "Proceed anyway? (y/n): ")
+          while (!tolower(proceed) %in% c("y", "n")){
+            proceed <- readline(prompt = "Please enter either y or n: ")
+          }
           if (tolower(proceed) == "y") {
             return(script_name)  # Return the original name
           } else {
@@ -270,19 +299,24 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
         # Validate the script name
         validated_name <- validate_script_name(script_name)
 
-        if (is.logical(validated_name) && !validated_name) {
+        if (is.logical(validated_name) && !validated_name) { # Only runs if validation fails
           message("Script creation cancelled due to validation failure.")
+          # Store current original (script) name in failed_validations
+          failed_validations <- c(failed_validations, original_name)
           next  # Skip this script and continue with the next one
         } else if (is.character(validated_name)) {
           # A different name was selected
           script_name <- validated_name
         }
 
+        # Track name changes after validated name is stored in script_name
+        name_changes[[original_name]] <- script_name
+
         # If script passes validation, allow user to select api:
         api_selection <- function() {
           options <- c("csv", "mongo", "qualtrics", "redcap", "oracle", "sql")
 
-          cat("Select script type (choose only one):\n")
+          cat("\nSelect script type (choose only one):\n")
 
           for (i in 1:length(options)) {
             cat(i, ":", options[i], "\n")
@@ -297,6 +331,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
           }
 
           # Return the selected API
+          cat("\n") # Improve spacing and readability
           return(options[choice])
         }
 
@@ -470,8 +505,24 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     oracle_list <<- tools::file_path_sans_ext(list.files("./nda/oracle"))
     sql_list <<- tools::file_path_sans_ext(list.files("./nda/sql"))
 
+    # Update data_list with validated names if necessary (only if name_changes is not empty)
+    if (length(name_changes) > 0) {
+      for (original_name in names(name_changes)) {
+        new_name <- name_changes[[original_name]]
+        if (original_name != new_name) {
+          # Replace the original name with the new name in data_list
+          data_list[data_list == original_name] <- new_name
+        }
+      }
+    }
 
-    # Return the data_list invisibly instead of stopping execution
+    # Remove failed validations (scripts) from data_list if they exist
+    # This will make sure unvalidated scripts are not processed later on
+    if (length(failed_validations) > 0) {
+      data_list <- data_list[!data_list %in% failed_validations]
+    }
+
+    # Return the updated data_list and name_changes invisibly instead of stopping execution
     return(invisible(data_list))
   }
 
@@ -488,7 +539,11 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   }
 
   # Validate measures and potentially create new scripts
-  validateMeasures(data_list)
+  # Validation results contains data_list (updated if necessary)
+  validation_results <- validateMeasures(data_list)
+
+  # Update data_list with validated names in main function call (for invalid structures if neccessary)
+  data_list <- validation_results # This where data_list is updated globally if necessary
 
   # Process each measure using processNda function
   for (measure in data_list) {
@@ -516,6 +571,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   # Store the origin environment (the one that called this function)
   origin_env <- parent.frame()
 
+  # Add message to user to signify which data structure is being processed
+  # This will help when iterating through multiple data structures
+
+  # Create dynamic border length based on the length of the data structure name (measure)
+  # 33 is the length of the preceeding message "Now Processing NDA..."
+  border_length <- 33 + nchar(measure)
+  border <- paste(rep("=", border_length), collapse = "")
+  # Use dynamic border in message
+  message(sprintf("\n%s\n Now Processing NDA Request for: %s \n Data Source: %s\n%s\n", border, measure, toupper(api), border))
+
   # Add debugging flag
   DEBUG <- FALSE
 
@@ -539,7 +604,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
   # Construct the path to the measure's cleaning script
   file_path <- sprintf("./nda/%s/%s.R", api, measure)
-  message("\nFetching ", measure, " with ./nda/", api, "/", measure,".R\n")
+  message("Fetching ", measure, " with ./nda/", api, "/", measure, ".R\n")
 
   # Setup cleanup on exit
   on.exit({
