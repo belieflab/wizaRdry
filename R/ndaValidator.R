@@ -33,6 +33,270 @@ safe_readline <- function(prompt, default = "", allow_exit = TRUE) {
   return(result)
 }
 
+# STEP 1: Add these 3 functions to your code (before ndaValidator function)
+
+# STEP 1: Add these 3 functions to your code (before ndaValidator function)
+
+# Enhanced parse_array_string function to handle your specific array formats
+parse_array_string <- function(value) {
+  if (is.null(value) || is.na(value)) return(NULL)
+
+  # Handle string arrays with brackets
+  if (is.character(value) && length(value) == 1) {
+    # Remove brackets and unicode prefixes
+    clean_str <- gsub("^\\[|\\]$", "", value)  # Remove outer brackets
+    clean_str <- gsub("u'|'|\"", "", clean_str)  # Remove unicode prefixes and quotes
+
+    # Split by comma and clean up
+    values <- strsplit(clean_str, ",\\s*")[[1]]
+    values <- trimws(values)
+
+    # Remove empty values
+    values <- values[values != ""]
+
+    return(values)
+  }
+
+  # Handle numeric arrays
+  if (is.numeric(value) && length(value) > 1) {
+    return(sprintf("%.1f", value))
+  }
+
+  return(as.character(value))
+}
+
+# Enhanced function to detect and handle array-like fields
+detect_array_fields <- function(df, elements, verbose = TRUE) {
+  array_fields <- list()
+
+  for (i in 1:nrow(elements)) {
+    field_name <- elements$name[i]
+    type <- elements$type[i]
+    value_range <- elements$valueRange[i]
+    notes <- elements$notes[i]
+
+    # Skip if field doesn't exist
+    if (!field_name %in% names(df)) next
+
+    field_values <- df[[field_name]]
+
+    # Check if values look like arrays
+    if (is.character(field_values)) {
+      # Look for bracket notation
+      has_brackets <- any(grepl("^\\[.*\\]$", field_values), na.rm = TRUE)
+
+      if (has_brackets) {
+        # Parse a sample to understand the data structure
+        sample_values <- field_values[!is.na(field_values) & grepl("^\\[.*\\]$", field_values)]
+        if (length(sample_values) > 0) {
+          parsed_sample <- parse_array_string(sample_values[1])
+
+          array_fields[[field_name]] <- list(
+            type = type,
+            value_range = value_range,
+            notes = notes,
+            sample_parsed = parsed_sample,
+            array_type = if (all(suppressWarnings(!is.na(as.numeric(parsed_sample))))) "numeric" else "text"
+          )
+
+          if (verbose) {
+            cat(sprintf("\nDetected array field: %s", field_name))
+            cat(sprintf("\n  Expected type: %s", type))
+            cat(sprintf("\n  Array type: %s", array_fields[[field_name]]$array_type))
+            cat(sprintf("\n  Sample parsed: %s", paste(parsed_sample, collapse=", ")))
+            cat(sprintf("\n  Expected range: %s", value_range))
+          }
+        }
+      }
+    }
+  }
+
+  return(array_fields)
+}
+
+# Enhanced function to convert array fields to appropriate numeric codes
+convert_array_fields <- function(df, elements, verbose = TRUE) {
+  if (verbose) cat("\n\n--- Converting Array Fields ---\n")
+
+  # Detect array fields
+  array_fields <- detect_array_fields(df, elements, verbose = verbose)
+
+  if (length(array_fields) == 0) {
+    if (verbose) cat("No array fields detected.\n")
+    return(df)
+  }
+
+  conversions_made <- list()
+
+  for (field_name in names(array_fields)) {
+    field_info <- array_fields[[field_name]]
+    field_values <- df[[field_name]]
+
+    if (verbose) {
+      cat(sprintf("\n\nProcessing array field: %s", field_name))
+      cat(sprintf("\n  Target type: %s", field_info$type))
+      cat(sprintf("\n  Expected range: %s", field_info$value_range))
+    }
+
+    # Strategy 1: Try to extract mappings from notes
+    mapping <- NULL
+    if (!is.null(field_info$notes) && !is.na(field_info$notes)) {
+      # Look for array notation in notes like "1=[0.9, 0.5, 0.1]" or "1=(Left, Middle, Right)"
+      array_pattern <- "(\\d+)\\s*=\\s*[\\(\\[]([^\\)\\]]+)[\\)\\]]"
+      matches <- gregexpr(array_pattern, field_info$notes, perl = TRUE)
+
+      if (matches[[1]][1] != -1) {
+        mapping <- list()
+        all_matches <- regmatches(field_info$notes, matches)[[1]]
+
+        for (match in all_matches) {
+          parts <- regexec(array_pattern, match, perl = TRUE)
+          extracted <- regmatches(match, parts)[[1]]
+
+          if (length(extracted) >= 3) {
+            code <- extracted[2]
+            array_content <- extracted[3]
+
+            # Clean up the array content and normalize case
+            clean_content <- gsub("'|\"", "", array_content)
+            array_values <- trimws(strsplit(clean_content, ",")[[1]])
+
+            # Create a signature for this array (normalize to lowercase and sort)
+            array_signature <- paste(sort(tolower(array_values)), collapse=",")
+            mapping[[array_signature]] <- code
+          }
+        }
+
+        if (verbose && length(mapping) > 0) {
+          cat("\n  Found array mappings in notes:")
+          for (sig in names(mapping)) {
+            cat(sprintf("\n    [%s] -> %s", sig, mapping[[sig]]))
+          }
+        }
+      }
+    }
+
+    # Strategy 2: If no mapping found, create position-based mapping
+    if (is.null(mapping) || length(mapping) == 0) {
+      # Get unique arrays and assign codes based on value range
+      unique_arrays <- unique(field_values[!is.na(field_values)])
+
+      if (field_info$type %in% c("Integer", "Float")) {
+        # Get valid codes from value range
+        valid_codes <- NULL
+
+        if (!is.null(field_info$value_range) && !is.na(field_info$value_range)) {
+          if (grepl("::", field_info$value_range)) {
+            # Range notation
+            range_parts <- strsplit(field_info$value_range, "::")[[1]]
+            valid_codes <- seq(from = as.numeric(range_parts[1]),
+                               to = as.numeric(range_parts[2]))
+          } else if (grepl(";", field_info$value_range)) {
+            # Discrete values
+            valid_codes <- as.numeric(strsplit(field_info$value_range, ";")[[1]])
+          }
+        }
+
+        # Special handling for single value ranges with multi-element arrays
+        if (!is.null(valid_codes) && length(valid_codes) == 1 && length(unique_arrays) > 0) {
+          # If range is just "1" but we have arrays, expand the range based on array content
+          sample_array <- parse_array_string(unique_arrays[1])
+          if (!is.null(sample_array) && length(sample_array) > 1) {
+            # Create a range from 1 to length of array elements
+            valid_codes <- seq(1, length(sample_array))
+            if (verbose) {
+              cat(sprintf("\n  Expanded range from %s to 1::%d based on array length",
+                          field_info$value_range, length(sample_array)))
+            }
+          }
+        }
+
+        if (!is.null(valid_codes) && length(unique_arrays) <= length(valid_codes)) {
+          mapping <- list()
+          for (i in 1:length(unique_arrays)) {
+            array_val <- unique_arrays[i]
+            # Parse the array to create a signature
+            parsed_array <- parse_array_string(array_val)
+            if (!is.null(parsed_array)) {
+              # Normalize case and sort for consistent signature
+              array_signature <- paste(sort(tolower(parsed_array)), collapse=",")
+              mapping[[array_signature]] <- as.character(valid_codes[i])
+            }
+          }
+
+          if (verbose && length(mapping) > 0) {
+            cat("\n  Created position-based mapping:")
+            for (sig in names(mapping)) {
+              cat(sprintf("\n    [%s] -> %s", sig, mapping[[sig]]))
+            }
+          }
+        }
+      }
+    }
+
+    # Apply the mapping
+    if (!is.null(mapping) && length(mapping) > 0) {
+      new_values <- field_values
+      conversion_count <- 0
+
+      for (i in 1:length(field_values)) {
+        if (!is.na(field_values[i])) {
+          parsed_array <- parse_array_string(field_values[i])
+          if (!is.null(parsed_array)) {
+            # Normalize case and sort for consistent signature matching
+            array_signature <- paste(sort(tolower(parsed_array)), collapse=",")
+
+            if (array_signature %in% names(mapping)) {
+              new_values[i] <- mapping[[array_signature]]
+              conversion_count <- conversion_count + 1
+            }
+          }
+        }
+      }
+
+      if (conversion_count > 0) {
+        # Apply type conversion
+        if (field_info$type == "Integer") {
+          df[[field_name]] <- as.integer(new_values)
+        } else if (field_info$type == "Float") {
+          df[[field_name]] <- as.numeric(new_values)
+        } else {
+          df[[field_name]] <- new_values
+        }
+
+        conversions_made[[field_name]] <- list(
+          converted_count = conversion_count,
+          mapping = mapping
+        )
+
+        if (verbose) {
+          cat(sprintf("\n  SUCCESS: Converted %d array values to numeric codes", conversion_count))
+        }
+      } else {
+        if (verbose) {
+          cat("\n  FAILED: Could not convert array values")
+        }
+      }
+    } else {
+      if (verbose) {
+        cat("\n  FAILED: No mapping strategy worked")
+      }
+    }
+  }
+
+  # Summary
+  if (verbose && length(conversions_made) > 0) {
+    cat("\n\nArray Conversion Summary:")
+    for (field in names(conversions_made)) {
+      cat(sprintf("\n- %s: %d values converted",
+                  field, conversions_made[[field]]$converted_count))
+    }
+    cat("\n")
+  }
+
+  return(df)
+}
+
 # Function to handle missing required fields
 handle_missing_fields <- function(df, elements, missing_required, verbose = FALSE) {
   if(verbose) {
@@ -2629,6 +2893,9 @@ ndaValidator <- function(measure_name,
 
     # Transform field values using bidirectional approach
     df <- transform_field_values(df, elements, verbose = verbose)
+
+    # Convert array fields to numeric codes - ADD THIS LINE
+    df <- convert_array_fields(df, elements, verbose = verbose)
 
     # Apply type conversions
     df <- apply_type_conversions(df, elements, verbose = verbose)
