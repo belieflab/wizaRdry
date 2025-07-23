@@ -575,11 +575,22 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   # This will help when iterating through multiple data structures
 
   # Create dynamic border length based on the length of the data structure name (measure)
-  # 33 is the length of the preceeding message "Now Processing NDA..."
-  border_length <- 33 + nchar(measure)
+  # 24 is the length of the preceeding message "Processing NDA Structure:"
+  border_length <- 27 + nchar(measure)
   border <- paste(rep("=", border_length), collapse = "")
-  # Use dynamic border in message
-  message(sprintf("\n%s\n Now Processing NDA Request for: %s \n Data Source: %s\n%s\n", border, measure, toupper(api), border))
+
+  # Format api name for processing message
+  api_formatted <- switch(api,
+                          redcap = "REDCap",
+                          qualtrics = "Qualtrics",
+                          mongo = "MongoDB",
+                          oracle = "Oracle",
+                          sql = "SQL",
+                          csv = "CSV",
+                          api)
+
+  # Use dynamic border and formatted api name in message
+  message(sprintf("\n%s\n Processing NDA Structure: %s \n Data source: %s\n%s\n", border, measure, api_formatted, border))
 
   # Add debugging flag
   DEBUG <- FALSE
