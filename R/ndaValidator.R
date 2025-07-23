@@ -1921,7 +1921,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     }
 
     # Check for invalid GUID values
-    if(verbose) cat("\n\nChecking for invalid GUID values...")
+    if(verbose) message("\n\nChecking for invalid GUID values...")
 
     # First, create a list to store the specific issues
     guid_issues <- list(
@@ -2139,7 +2139,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         # Report the top 10 GUIDs with multiple src_subject_ids (if any)
         if(length(results$guid_validation$duplicate_guids) > 0) {
-            message(sprintf("- GUIDs with multiple src_subject_ids found: %d (%s)",
+            message(sprintf("- Non-unique GUIDs found: %d (%s)",
                             length(results$guid_validation$duplicate_guids),
                             paste(head(names(results$guid_validation$duplicate_guids), 10), collapse=", ")))
           if(length(results$guid_validation$duplicate_guids) > 10) {
