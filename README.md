@@ -9,7 +9,7 @@
 
 ## A Magical Framework for Collaborative & Reproducible Data Analysis
 
-The wizaRdry package provides a comprehensive data analysis framework specifically designed for NIH-funded computational psychiatry, neuroscience, and psychology research with built-in NIH Data Archive (NDA) integration.
+The 'wizaRdry' package provides a comprehensive data analysis framework specifically designed for NIH-funded computational psychiatry, neuroscience, and psychology research with built-in NIH Data Archive (NDA) integration.
 
 ## Installation
 
