@@ -146,6 +146,36 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   uri <- get_secret("uri")
   token <- get_secret("token")
 
+  # Test to see if API connection is working
+  message("Validating REDCap API connection and user permissions...")
+  api_test <- tryCatch({
+    # Use a call to redcap_instruments to see if API connnection is working
+    forms_test <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)
+
+    # Add conditions to see if API connection is working, if not, throw an error
+    if (!is.null(forms_test$success) && !forms_test$success) {
+      stop("API connection failed - check your user permissions")
+    }
+
+    if (is.null(forms_test$data) || nrow(forms_test$data) == 0) {
+      stop("API connected but no instruments accessible - check your export permissions")
+    }
+
+    # If permissions are correct and everything is working, notify the user
+    message("\nREDCap API connection and permissions validated successfully\n")
+    TRUE
+
+    # If permissions are not correct, throw an error with message
+  }, error = function(e) {
+    stop(sprintf(paste(
+      "REDCap API validation failed: \n",
+      "Please verify:\n",
+      "1. Your REDCap user has 'API Export' and 'API Import/Update' rights\n",
+      "2. The API module is enabled for your REDCap project\n",
+      "3. Your API token and URI are correct in your secrets configuration"
+    )), call. = FALSE)
+  })
+
   # Input validation
   if (is.null(instrument_name)) {
     forms_data <- REDCapR::redcap_instruments(redcap_uri = uri, token = token, verbose = FALSE)$data
