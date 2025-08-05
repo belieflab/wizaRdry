@@ -32,9 +32,6 @@ safe_readline <- function(prompt, default = "", allow_exit = TRUE) {
 
   return(result)
 }
-
-# STEP 1: Add these 3 functions to your code (before ndaValidator function)
-
 # STEP 1: Add these 3 functions to your code (before ndaValidator function)
 
 # Enhanced parse_array_string function to handle your specific array formats
@@ -1923,6 +1920,74 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       }
     }
 
+    # Check for invalid GUID values
+    if(verbose) message("\n\nChecking for invalid GUID values...")
+
+    # First, create a list to store the specific issues
+    guid_issues <- list(
+      invalid_length = character(0),
+      duplicate_guids = list(),
+      valid = TRUE
+    )
+
+    # Check 1: GUID length validation (must be exactly 12 characters)
+    subjectkeys <- as.character(df$subjectkey)
+    invalid_length_mask <- nchar(subjectkeys) != 12 & !is.na(subjectkeys) # Create a boolean to see if there are any GUIDs that are not 12 characters long
+
+    if(any(invalid_length_mask)) {
+      guid_issues$invalid_length <- unique(subjectkeys[invalid_length_mask]) # Store the GUIDs that are not 12 characters long
+      guid_issues$valid <- FALSE # Set valid flag for GUIDs to FALSE
+
+      if(verbose) {
+        cat(sprintf("\n  ERROR: %d GUIDs with invalid length (must be 12 characters):", length(guid_issues$invalid_length)))
+        cat(sprintf("\n    %s", paste(head(guid_issues$invalid_length, 10), collapse=", ")))
+        if(length(guid_issues$invalid_length) > 10) {
+          cat(sprintf(" (and %d more)", length(guid_issues$invalid_length) - 10))
+        }
+      }
+    }
+
+    # Check 2: GUID uniqueness per src_subject_id
+    # Use aggregate to get unique src_subject_ids per GUID in one pass
+    valid_rows <- !is.na(df$subjectkey) & !is.na(df$src_subject_id)
+    if(any(valid_rows)) {
+      guid_src_unique <- stats::aggregate(df$src_subject_id[valid_rows], 
+                                  by = list(GUID = df$subjectkey[valid_rows]),
+                                  FUN = function(x) length(unique(x)))
+
+      # Find GUIDs with more than one unique src_subject_id
+      problematic_guids <- guid_src_unique$GUID[guid_src_unique$x > 1]
+
+      if(length(problematic_guids) > 0) {
+        guid_issues$valid <- FALSE
+
+        # Only for problematic GUIDs, get the actual src_subject_id values
+        for(guid in problematic_guids) {
+          src_ids <- unique(df$src_subject_id[df$subjectkey == guid & !is.na(df$subjectkey)])
+          guid_issues$duplicate_guids[[guid]] <- src_ids
+        }
+
+        if(verbose) {
+          cat(sprintf("\n  ERROR: %d GUIDs used with multiple src_subject_ids:", 
+                    length(problematic_guids))) # Show the user the # of GUIDs with multiple src_subject_ids
+          for(guid in head(problematic_guids, 5)) {
+            cat(sprintf("\n    '%s' -> %s", guid, 
+                      paste(guid_issues$duplicate_guids[[guid]], collapse=", "))) # Show the invalid GUID and associated src_subject_ids
+          }
+          if(length(problematic_guids) > 5) {
+            cat(sprintf("\n    (and %d more problematic GUIDs)", length(problematic_guids) - 5))
+          }
+        }
+      }
+    }
+
+    # Update the the valid flag for results based on GUID issues
+    # Store the GUID issues list in results for later use in the summary
+    if(guid_issues$valid == FALSE) {
+      results$valid <- FALSE
+      results$guid_validation <- guid_issues # Store length issue GUIDs and duplicate GUIDs in results
+    }
+
     # Check required fields
     missing_required <- required_fields[!required_fields %in% df_cols]
     if(length(missing_required) > 0) {
@@ -2057,6 +2122,29 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         if(length(results$unknown_fields) > 10) {
           message(sprintf("  ... and %d more", length(results$unknown_fields) - 10))
+        }
+      }
+
+      # If GUID issues were found, report them
+      if(length(results$guid_validation) > 0) {
+        # First report the top 10 GUIDs with invalid length (if any)
+        if(length(results$guid_validation$invalid_length) > 0) {
+          message(sprintf("- GUIDs with invalid length found (must be 12 characters): %d (%s)",
+                          length(results$guid_validation$invalid_length),
+                          paste(head(results$guid_validation$invalid_length, 10), collapse=", ")))
+          if(length(results$guid_validation$invalid_length) > 10) {
+            message(sprintf("  ... and %d more", length(results$guid_validation$invalid_length) - 10))
+          }
+        }
+
+        # Report the top 10 GUIDs with multiple src_subject_ids (if any)
+        if(length(results$guid_validation$duplicate_guids) > 0) {
+            message(sprintf("- Non-unique GUIDs found: %d (%s)",
+                            length(results$guid_validation$duplicate_guids),
+                            paste(head(names(results$guid_validation$duplicate_guids), 10), collapse=", ")))
+          if(length(results$guid_validation$duplicate_guids) > 10) {
+            message(sprintf("  ... and %d more", length(results$guid_validation$duplicate_guids) - 10))
+          }
         }
       }
 
