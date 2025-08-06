@@ -116,7 +116,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              return(NULL)
                            },
 
-                           # Validate specific API configuration
+                           # Validate specific API configuration - STRICT VERSION
                            validate_config = function(api_type = NULL) {
                              # If no API type specified, validate core config
                              if (is.null(api_type)) {
@@ -127,12 +127,12 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                stop("Unknown API type: '", api_type, "'. Valid options are: ",
                                     paste(names(self$api_specs), collapse=", "))
                              }
-                             # Check if this API is actually configured
+                             # STRICT: Check if this API is actually configured - now REQUIRED
                              if (!self$has_value(api_type)) {
-                               # If the API section doesn't exist, skip validation but return TRUE
-                               # message("The '", api_type, "' section is not defined in config.yml, skipping validation.")
-                               return(TRUE)
+                               stop(api_type, " configuration errors in ", self$config_file, ":\n- ",
+                                    "Missing '", api_type, "' section in configuration", call. = FALSE)
                              }
+
                              all_errors <- c()
                              # Get API specs
                              specs <- self$api_specs[[api_type]]
@@ -255,7 +255,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              #   message("The ", api_type, " configuration in ", self$config_file, " is valid.")
                              # }
                              return(TRUE)
-                           },
+                           }
 
                            # Validate core configuration
                            validate_core_config = function() {
