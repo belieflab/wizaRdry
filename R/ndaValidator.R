@@ -2872,7 +2872,8 @@ ndaValidator <- function(measure_name,
                          verbose = TRUE,
                          debug = FALSE,
                          auto_drop_unknown = FALSE,
-                         interactive_mode = TRUE) {
+                         interactive_mode = TRUE,
+                         modified_structure = NULL) {
   tryCatch({
     # Initialize a list to track all columns to be removed
     all_columns_to_drop <- character(0)
@@ -2920,10 +2921,33 @@ ndaValidator <- function(measure_name,
     # Save the cleaned dataframe
     assign(measure_name, df, envir = .wizaRdry_env)
 
-    # Get structure name and fetch elements
+    # Get structure name and fetch/use elements
     structure_name <- measure_name
-    message("\n\nFetching ", structure_name, " Data Structure from NDA API...")
-    elements <- fetch_structure_elements(structure_name, nda_base_url)
+
+    if (!is.null(modified_structure)) {
+      # Use the enhanced structure that was passed in
+      message("\n\nUsing enhanced NDA structure with ndar_subject01 definitions...")
+      elements <- modified_structure$dataElements
+
+      if (is.null(elements) || nrow(elements) == 0) {
+        stop("Enhanced structure contains no dataElements")
+      }
+
+      message(sprintf("Enhanced structure contains %d field definitions", nrow(elements)))
+
+      # Show what key fields are now defined
+      key_fields <- c("race", "phenotype", "phenotype_description", "twins_study", "sibling_study")
+      enhanced_fields <- intersect(key_fields, elements$name)
+      if (length(enhanced_fields) > 0) {
+        message(sprintf("Enhanced with ndar_subject01 definitions for: %s",
+                        paste(enhanced_fields, collapse = ", ")))
+      }
+
+    } else {
+      # Original logic: fetch from API
+      message("\n\nFetching ", structure_name, " Data Structure from NDA API...")
+      elements <- fetch_structure_elements(structure_name, nda_base_url)
+    }
 
     if (is.null(elements) || nrow(elements) == 0) {
       stop("No elements found in the structure definition")

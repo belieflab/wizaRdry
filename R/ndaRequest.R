@@ -861,8 +861,17 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     })
 
     if (nda_structure_exists && !is.null(nda_structure)) {
+
+      # *** ADD THIS NEW CODE HERE ***
+      # Enhance existing structure with ndar_subject01 metadata BEFORE validation
+      if (!is.null(required_field_metadata) || !is.null(recommended_field_metadata)) {
+        message("Enhancing existing NDA structure with ndar_subject01 metadata...")
+        nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata)
+      }
+      # *** END NEW CODE ***
+
       # EXISTING NDA STRUCTURE - Run full validation
-      validation_results <- ndaValidator(measure, api, limited_dataset)
+      validation_results <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
 
       # ADD BOTH METADATA ATTRIBUTES
       if (!is.null(required_field_metadata)) {
@@ -1247,6 +1256,115 @@ mergeRequiredMetadata <- function(new_structure, required_metadata, recommended_
   })
 
   return(new_structure)
+}
+
+# Enhanced mergeNdarSubjectIntoExisting function to properly override field definitions
+
+mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, recommended_metadata) {
+  if (is.null(existing_structure) || is.null(existing_structure$dataElements)) {
+    return(existing_structure)
+  }
+
+  tryCatch({
+    message("Overriding existing structure fields with authoritative ndar_subject01 definitions...")
+
+    # Combine required and recommended metadata from ndar_subject01
+    ndar_metadata <- data.frame()
+    if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
+      ndar_metadata <- rbind(ndar_metadata, required_metadata)
+    }
+    if (!is.null(recommended_metadata) && nrow(recommended_metadata) > 0) {
+      ndar_metadata <- rbind(ndar_metadata, recommended_metadata)
+    }
+
+    if (nrow(ndar_metadata) == 0) {
+      return(existing_structure)
+    }
+
+    # Get existing and ndar field names
+    existing_names <- existing_structure$dataElements$name
+    ndar_names <- ndar_metadata$name
+
+    # Find fields that should be REPLACED with ndar_subject01 definitions
+    fields_to_replace <- intersect(existing_names, ndar_names)
+
+    # Find fields that are completely new from ndar_subject01
+    new_fields <- setdiff(ndar_names, existing_names)
+
+    # Find fields that remain unchanged from original structure
+    unchanged_fields <- setdiff(existing_names, ndar_names)
+
+    message(sprintf("Replacing %d fields with ndar_subject01 definitions: %s",
+                    length(fields_to_replace), paste(head(fields_to_replace, 8), collapse = ", ")))
+
+    if (length(new_fields) > 0) {
+      message(sprintf("Adding %d new ndar_subject01 fields: %s",
+                      length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+    }
+
+    message(sprintf("Keeping %d original structure fields unchanged: %s",
+                    length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
+
+    # Build the new dataElements in priority order:
+    # 1. REQUIRED fields from ndar_subject01 (first priority)
+    # 2. RECOMMENDED fields from ndar_subject01 (second priority)
+    # 3. Original structure fields that weren't replaced (last)
+
+    new_data_elements <- data.frame()
+
+    # Add REQUIRED fields from ndar_subject01 first
+    if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
+      required_in_structure <- required_metadata[required_metadata$name %in% c(fields_to_replace, new_fields), ]
+      if (nrow(required_in_structure) > 0) {
+        new_data_elements <- rbind(new_data_elements, required_in_structure)
+        message(sprintf("Added %d required fields from ndar_subject01", nrow(required_in_structure)))
+      }
+    }
+
+    # Add RECOMMENDED fields from ndar_subject01 second
+    if (!is.null(recommended_metadata) && nrow(recommended_metadata) > 0) {
+      recommended_in_structure <- recommended_metadata[recommended_metadata$name %in% c(fields_to_replace, new_fields), ]
+      if (nrow(recommended_in_structure) > 0) {
+        new_data_elements <- rbind(new_data_elements, recommended_in_structure)
+        message(sprintf("Added %d recommended fields from ndar_subject01", nrow(recommended_in_structure)))
+      }
+    }
+
+    # Add unchanged original structure fields last
+    unchanged_elements <- existing_structure$dataElements[
+      existing_structure$dataElements$name %in% unchanged_fields,
+    ]
+    if (nrow(unchanged_elements) > 0) {
+      new_data_elements <- rbind(new_data_elements, unchanged_elements)
+      message(sprintf("Preserved %d original structure fields", nrow(unchanged_elements)))
+    }
+
+    # Replace the dataElements with the new prioritized version
+    existing_structure$dataElements <- new_data_elements
+
+    message(sprintf("Enhanced structure now has %d total fields with ndar_subject01 definitions taking priority",
+                    nrow(existing_structure$dataElements)))
+
+    # Show what the key fields now look like
+    key_fields <- c("race", "phenotype", "phenotype_description", "twins_study", "sibling_study")
+    present_key_fields <- intersect(key_fields, existing_structure$dataElements$name)
+    if (length(present_key_fields) > 0) {
+      message("Key ndar_subject01 field definitions now active:")
+      for (field in present_key_fields) {
+        field_def <- existing_structure$dataElements[existing_structure$dataElements$name == field, ]
+        if (nrow(field_def) > 0) {
+          message(sprintf("  - %s: %s (%s) - %s",
+                          field, field_def$type[1], field_def$required[1],
+                          substr(field_def$description[1], 1, 50)))
+        }
+      }
+    }
+
+  }, error = function(e) {
+    message("Error merging ndar_subject01 into existing structure: ", e$message)
+  })
+
+  return(existing_structure)
 }
 
 # Add helper function for MongoDB cleanup
