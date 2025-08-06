@@ -859,7 +859,29 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     # Create data upload template regardless of if test passes
     if (DEBUG) message("[DEBUG] Creating NDA template")
-    createNda(measure)
+    createNdaSubmissionTemplate(measure)
+
+    # Create data definition
+    if (DEBUG) message("[DEBUG] Creating NDA data definition")
+    tryCatch({
+      df <- base::get0(measure)
+      if (!is.null(df) && is.data.frame(df) &&
+          exists("validation_results") && is.list(validation_results)) {
+
+        # Get NDA structure from validation results attribute
+        nda_structure <- attr(validation_results, "nda_structure")
+
+        if (!is.null(nda_structure)) {
+          submission_template <- list(columns = names(df))
+          createNdaDataDefinition(submission_template, nda_structure, measure)
+        } else {
+          message("NDA structure not available from validation results")
+        }
+      }
+    }, error = function(e) {
+      message("Error creating data definition: ", e$message)
+    })
+
     formatElapsedTime(start_time)
   }, error = function(e) {
     if (DEBUG) message("[DEBUG] Error caught: ", e$message)

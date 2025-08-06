@@ -1951,7 +1951,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     # Use aggregate to get unique src_subject_ids per GUID in one pass
     valid_rows <- !is.na(df$subjectkey) & !is.na(df$src_subject_id)
     if(any(valid_rows)) {
-      guid_src_unique <- stats::aggregate(df$src_subject_id[valid_rows], 
+      guid_src_unique <- stats::aggregate(df$src_subject_id[valid_rows],
                                   by = list(GUID = df$subjectkey[valid_rows]),
                                   FUN = function(x) length(unique(x)))
 
@@ -1968,10 +1968,10 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         }
 
         if(verbose) {
-          cat(sprintf("\n  ERROR: %d GUIDs used with multiple src_subject_ids:", 
+          cat(sprintf("\n  ERROR: %d GUIDs used with multiple src_subject_ids:",
                     length(problematic_guids))) # Show the user the # of GUIDs with multiple src_subject_ids
           for(guid in head(problematic_guids, 5)) {
-            cat(sprintf("\n    '%s' -> %s", guid, 
+            cat(sprintf("\n    '%s' -> %s", guid,
                       paste(guid_issues$duplicate_guids[[guid]], collapse=", "))) # Show the invalid GUID and associated src_subject_ids
           }
           if(length(problematic_guids) > 5) {
@@ -3015,16 +3015,20 @@ ndaValidator <- function(measure_name,
       fields_to_drop <- setdiff(validation_results$unknown_fields_dropped, renamed_fields)
       all_columns_to_drop <- c(all_columns_to_drop, fields_to_drop)
     }
-
     # Provide an attribute to the validation result with the processed dataframe
     # This allows the calling function to access the updated dataframe
     validation_results$df <- df
+
+    # Store NDA structure as an attribute
+    attr(validation_results, "nda_structure") <- list(
+      shortName = structure_name,
+      dataElements = elements
+    )
 
     # Final check for missing required values
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
       if(verbose) message("\nValidation FAILED: Required fields are missing or contain NA values")
     }
-
     return(validation_results)
   }, error = function(e) {
     message("Error in ndaValidator: ", e$message)
