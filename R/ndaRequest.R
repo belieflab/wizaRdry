@@ -406,8 +406,6 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
               sprintf("%s <- redcap(\"%s\")", script_name, original_name),
               "",
-              sprintf("%s <- %s[, !(names(%s) %%in%% c(\"%s\", \"redcap_event_name\"))]", script_name, script_name, script_name, config$redcap$primary_key),
-              "",
               "# nda remediation code...",
               "",
               "# IMPORTANT: final df name must still match the NDA data structure alias",
@@ -738,6 +736,79 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (DEBUG) message("[DEBUG] Calling ndaCheckQualtricsDuplicates")
       ndaCheckQualtricsDuplicates(measure, "qualtrics")
 
+    }
+
+    if (api == "redcap") {
+      if (DEBUG) message("[DEBUG] Processing as REDCap data")
+
+      # Re-get the data to ensure we have the latest version
+      if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
+      if (exists(measure, envir = globalenv())) {
+        df <- base::get(measure, envir = globalenv())
+        if (DEBUG) message("[DEBUG] Got from globalenv()")
+      } else if (exists(measure, envir = .wizaRdry_env)) {
+        df <- base::get(measure, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Got from .wizaRdry_env")
+      } else if (exists(measure, envir = origin_env)) {
+        df <- base::get(measure, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Got from origin_env")
+      } else {
+        if (DEBUG) message("[DEBUG] ERROR: Can't find dataframe in any environment")
+        stop(paste("Object", measure, "not found in any environment"))
+      }
+
+
+      # Define config so you can access primary key
+      config <- validate_config()
+
+      # Remove specified REDCap columns, including configured primary key
+      cols_to_remove <- c(config$redcap$primary_key, "redcap_event_name")
+
+      if (DEBUG) {
+        message("[DEBUG] Current columns: ", paste(names(df), collapse=", "))
+        intersection <- intersect(names(df), cols_to_remove)
+        message("[DEBUG] Columns to remove (", length(intersection), "): ", paste(intersection, collapse=", "))
+      }
+
+      # Remove the columns - different approach
+      cols_to_keep <- setdiff(names(df), cols_to_remove)
+      if (DEBUG) message("[DEBUG] Columns to keep (", length(cols_to_keep), "): ", paste(head(cols_to_keep, 10), collapse=", "), "...")
+
+      # Create a new dataframe with only the columns to keep
+      df_new <- df[, cols_to_keep, drop = FALSE]
+
+      if (DEBUG) {
+        message("[DEBUG] After removal: ", ncol(df_new), " columns remain")
+        message("[DEBUG] New columns: ", paste(names(df_new), collapse=", "))
+      }
+
+      # Reassign the filtered dataframe to BOTH environments
+      if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
+
+      # Update in globalenv
+      base::assign(measure, df_new, envir = globalenv())
+      if (DEBUG) message("[DEBUG] Assigned to globalenv()")
+
+      # Update in origin_env
+      base::assign(measure, df_new, envir = origin_env)
+      if (DEBUG) message("[DEBUG] Assigned to origin_env")
+
+      # Update in .wizaRdry_env if it exists
+      if (exists(".wizaRdry_env")) {
+        base::assign(measure, df_new, envir = .wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
+      }
+
+      # Update our local df variable for continuing the function
+      df <- df_new
+
+      # Verify the changes took effect
+      if (DEBUG) {
+        if (exists(measure, envir = globalenv())) {
+          df_check <- base::get(measure, envir = globalenv())
+          message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
+        }
+      }
     }
 
     if (api == "mongo") {
