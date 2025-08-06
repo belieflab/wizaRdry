@@ -11,7 +11,7 @@ safe_readline <- function(prompt, default = "", allow_exit = TRUE) {
     readline(prompt)
   }, interrupt = function(i) { # Interrupt handling. This part only gets called if Ctrl + C is pressed
     if (allow_exit) {
-      message("\nOperation cancelled by user. Exiting...")
+      message("\nOperation canceled by user. Exiting...")
       invokeRestart("abort") # At this point, the abort should cause nda() to exit at the highest level
     } else {
       message("\nInterrupt received. Using default value.")
