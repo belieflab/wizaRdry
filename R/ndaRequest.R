@@ -90,7 +90,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
     # Create a list name_changes to store updated script_names
     name_changes <- list()
 
-    # Create a character vector for failed validation tracking 
+    # Create a character vector for failed validation tracking
     failed_validations <- character(0)
 
     # Your existing code to determine structures to create
@@ -357,7 +357,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               "# get collection from MongoDB",
               "# IMPORTANT: both variable name and script filename must match",
-              sprintf("%s <- mongo(\"%s\")", script_name, script_name),
+              sprintf("%s <- mongo(\"%s\")", script_name, original_name),
               "",
               "# nda remediation code...",
               "",
@@ -381,7 +381,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               "# get survey from Qualtrics",
               "# IMPORTANT: both variable name and script filename must match",
-              sprintf("%s <- qualtrics(\"%s\")", script_name, script_name),
+              sprintf("%s <- qualtrics(\"%s\")", script_name, original_name),
               "",
               "# nda remediation code...",
               "",
@@ -427,7 +427,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               "# get the table data from ORACLE",
               "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
-              sprintf("%s <- oracle(\"%s\")", script_name, script_name),
+              sprintf("%s <- oracle(\"%s\")", script_name, original_name),
               "",
               "# nda remediation code...",
               "",
@@ -450,7 +450,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               "# get the table data from SQL",
               "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
-              sprintf("%s <- sql(\"%s\")", script_name, script_name),
+              sprintf("%s <- sql(\"%s\")", script_name, original_name),
               "",
               "# nda remediation code...",
               "",
@@ -467,7 +467,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
               "#",
               "# get the data from CSV file",
               "# IMPORTANT: both variable name and script filename must match the NDA data structure alias",
-              sprintf("%s <- read.csv(\"%s\".csv)", script_name, script_name),
+              sprintf("%s <- read.csv(\"%s\".csv)", script_name, original_name),
               "",
               "# nda remediation code...",
               "",
