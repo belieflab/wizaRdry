@@ -3,11 +3,13 @@
 #' This function creates a data definition by intersecting the columns selected
 #' for the final submission template against the data structure pulled from NDA.
 #' It provides metadata about each field including validation rules, data types,
-#' and submission-specific information.
+#' and submission-specific information. For fields not found in NDA, it computes
+#' metadata by analyzing the actual data.
 #'
 #' @param submission_template List containing the submission template with selected columns
 #' @param nda_structure List containing the complete NDA data structure from API
 #' @param measure_name Character string of the measure/data structure name
+#' @param data_frame Optional data frame to analyze for computing missing metadata
 #' @return List containing the intersected data definition with metadata
 #' @export
 #' @examples
@@ -16,11 +18,23 @@
 #'   template <- createTemplate(selected_columns, nda_data)
 #'   data_def <- createDataDefinition(template, nda_data, "prl01")
 #' }
-createNdaDataDefinition <- function(submission_template, nda_structure, measure_name) {
+createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL) {
+
+  # Try to get the data frame from the global environment if not provided
+  if (is.null(data_frame)) {
+    data_frame <- tryCatch({
+      base::get0(measure_name)
+    }, error = function(e) NULL)
+  }
+
+  # Handle both character vector and list formats
+  if (is.character(submission_template)) {
+    submission_template <- list(columns = submission_template)
+  }
 
   # Validate inputs
   if (!is.list(submission_template)) {
-    stop("submission_template must be a list")
+    stop("submission_template must be a list or character vector")
   }
 
   if (!is.list(nda_structure)) {
@@ -81,25 +95,218 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   }
 
-  # Initialize data definition structure
-  data_definition <- list(
-    measure_name = measure_name,
-    created_at = Sys.time(),
-    total_selected_fields = length(selected_columns),
-    fields = list(),
-    metadata = list(
-      source_template = if ("metadata" %in% names(submission_template)) submission_template$metadata else NULL,
-      nda_structure_info = list(
-        total_elements = length(nda_lookup),
-        structure_name = if ("shortName" %in% names(nda_structure)) nda_structure$shortName else measure_name
-      ),
-      validation_summary = list(
-        matched_fields = 0,
-        unmatched_fields = 0,
-        warnings = character(0)
-      )
-    )
-  )
+  # Helper function to compute metadata from actual data
+  compute_field_metadata <- function(field_name, data_vector) {
+    if (is.null(data_vector) || length(data_vector) == 0) {
+      return(list(
+        data_type = "String",
+        description = paste("Missing field:", field_name),
+        size = 255,
+        valueRange = "",
+        required = "Recommended",
+        notes = "Field not found in dataset. Default metadata applied.",
+        aliases = ""
+      ))
+    }
+
+    # Remove NAs for analysis
+    clean_data <- data_vector[!is.na(data_vector)]
+    total_count <- length(data_vector)
+    valid_count <- length(clean_data)
+
+    if (valid_count == 0) {
+      return(list(
+        data_type = "String",
+        description = paste("Empty field:", field_name, "- all values are NA"),
+        size = 255,
+        valueRange = "",
+        required = "Recommended",
+        notes = paste0("Field contains only NA values (", total_count, " total rows)."),
+        aliases = ""
+      ))
+    }
+
+    # Determine data type based on R class and content
+    data_type <- "String"  # default
+    size <- 255  # default for strings
+
+    # Check actual R class first
+    if (is.integer(data_vector) || (is.numeric(data_vector) && all(clean_data == round(clean_data), na.rm = TRUE))) {
+      data_type <- "Integer"
+      # For integers, size is based on the maximum number of digits
+      max_val <- max(abs(clean_data), na.rm = TRUE)
+      size <- max(nchar(as.character(max_val)), 1)
+    } else if (is.numeric(data_vector) || is.double(data_vector)) {
+      data_type <- "Float"
+      # For floats, size includes decimal places
+      max_chars <- max(nchar(as.character(clean_data)), na.rm = TRUE)
+      size <- min(max_chars, 50)  # Cap at reasonable size
+    } else if (is.logical(data_vector)) {
+      data_type <- "Integer"  # NDA uses 0/1 for booleans
+      size <- 1
+    } else if (is.character(data_vector) || is.factor(data_vector)) {
+      data_type <- "String"
+      # For strings, size is the maximum character length
+      char_lengths <- nchar(as.character(clean_data))
+      size <- max(char_lengths, na.rm = TRUE)
+      if (is.na(size) || size < 1) size <- 255
+    } else {
+      # Fallback for other types
+      data_type <- "String"
+      size <- max(nchar(as.character(clean_data)), na.rm = TRUE)
+      if (is.na(size) || size < 1) size <- 255
+    }
+
+    # Compute value range based on data type
+    unique_vals <- unique(clean_data)
+    unique_count <- length(unique_vals)
+    value_range <- ""
+
+    if (data_type %in% c("Integer", "Float")) {
+      min_val <- min(clean_data, na.rm = TRUE)
+      max_val <- max(clean_data, na.rm = TRUE)
+
+      # If small number of unique values, list them; otherwise use range
+      if (unique_count <= 20) {
+        # Sort numeric values
+        sorted_vals <- sort(unique_vals)
+        value_range <- paste(sorted_vals, collapse = ";")
+      } else {
+        # Use range notation for continuous data
+        if (data_type == "Integer") {
+          value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
+        } else {
+          value_range <- paste0(round(min_val, 3), "::", round(max_val, 3))
+        }
+      }
+    } else {
+      # For categorical/string data, list unique values (up to 20)
+      if (unique_count <= 20) {
+        # Sort string values alphabetically
+        sorted_vals <- sort(as.character(unique_vals))
+        value_range <- paste(sorted_vals, collapse = ";")
+      } else {
+        value_range <- paste0("Multiple categorical values (", unique_count, " unique)")
+      }
+    }
+
+    # Generate smart description based on field name patterns and data
+    description <- generate_field_description(field_name, clean_data, data_type)
+
+    # All computed fields are marked as "Recommended" (requirement 3)
+    required <- "Recommended"
+
+    # Generate comprehensive notes
+    completeness_pct <- round((valid_count / total_count) * 100, 1)
+
+    notes_parts <- c()
+    notes_parts <- c(notes_parts, paste0("Computed field - ", unique_count, " unique values"))
+    notes_parts <- c(notes_parts, paste0(completeness_pct, "% complete (", valid_count, "/", total_count, " non-NA)"))
+
+    if (data_type %in% c("Integer", "Float")) {
+      mean_val <- round(mean(clean_data, na.rm = TRUE), 3)
+      sd_val <- round(stats::sd(clean_data, na.rm = TRUE), 3)
+      notes_parts <- c(notes_parts, paste0("Mean: ", mean_val, ", SD: ", sd_val))
+    }
+
+    if (unique_count <= 10 && data_type == "String") {
+      # For categorical data with few categories, show frequency
+      freq_table <- table(clean_data)
+      most_common <- names(freq_table)[which.max(freq_table)]
+      notes_parts <- c(notes_parts, paste0("Most common: '", most_common, "' (", max(freq_table), " cases)"))
+    }
+
+    notes <- paste(notes_parts, collapse = "; ")
+
+    return(list(
+      data_type = data_type,
+      description = description,
+      size = size,
+      valueRange = value_range,
+      required = required,
+      aliases = "",
+      notes = notes
+    ))
+  }
+
+  # Enhanced helper function to generate smart descriptions
+  generate_field_description <- function(field_name, data_vector, data_type) {
+    # Pattern matching for common field types
+    name_lower <- tolower(field_name)
+
+    # Handle specific patterns first
+    if (grepl("^(src_)?subject", name_lower)) {
+      return("Subject identifier")
+    } else if (grepl("subjectkey|guid", name_lower)) {
+      return("Global unique identifier")
+    } else if (grepl("interview_age|age", name_lower)) {
+      return("Age at interview (in months)")
+    } else if (grepl("interview_date|date", name_lower)) {
+      return("Interview date")
+    } else if (grepl("^sex$|gender", name_lower)) {
+      return("Biological sex")
+    } else if (grepl("handedness", name_lower)) {
+      return("Handedness preference")
+    } else if (grepl("arm|group|condition", name_lower)) {
+      return("Study arm or condition assignment")
+    }
+
+    # Pattern matching for survey/task items
+    if (grepl("attention|check", name_lower)) {
+      return("Attention check or validation item")
+    } else if (grepl("trial|item_\\d+", name_lower)) {
+      return("Trial or item response")
+    } else if (grepl("response|answer", name_lower)) {
+      return("Response data")
+    } else if (grepl("score|total", name_lower)) {
+      if (data_type %in% c("Integer", "Float")) {
+        min_val <- min(data_vector, na.rm = TRUE)
+        max_val <- max(data_vector, na.rm = TRUE)
+        return(paste0("Score ranging from ", min_val, " to ", max_val))
+      } else {
+        return("Score or total measurement")
+      }
+    } else if (grepl("time|duration|rt|latency", name_lower)) {
+      if (data_type %in% c("Integer", "Float")) {
+        return("Response time or duration (likely in milliseconds)")
+      } else {
+        return("Time measurement")
+      }
+    }
+
+    # Task-specific patterns (based on your rgpts fields)
+    if (grepl("rgpts|gpts", name_lower)) {
+      if (grepl("_a#?\\d+", name_lower)) {
+        return("RGPTS Scale A item response")
+      } else if (grepl("_b#?\\d+", name_lower)) {
+        return("RGPTS Scale B item response")
+      } else {
+        return("RGPTS questionnaire response")
+      }
+    }
+
+    # Generic patterns based on data characteristics
+    if (data_type %in% c("Integer", "Float")) {
+      unique_count <- length(unique(data_vector[!is.na(data_vector)]))
+      min_val <- min(data_vector, na.rm = TRUE)
+      max_val <- max(data_vector, na.rm = TRUE)
+
+      if (unique_count <= 10) {
+        return(paste0("Numeric scale (", unique_count, " levels: ", min_val, "-", max_val, ")"))
+      } else {
+        return(paste0("Numeric measurement (range: ", min_val, "-", max_val, ")"))
+      }
+    } else {
+      unique_count <- length(unique(data_vector[!is.na(data_vector)]))
+      if (unique_count <= 5) {
+        return(paste0("Categorical variable (", unique_count, " categories)"))
+      } else if (unique_count <= 20) {
+        return(paste0("Categorical response (", unique_count, " possible values)"))
+      } else {
+        return(paste0("Text field (", unique_count, " unique values)"))
+      }
+    }
+  }
 
   # Sort selected columns: existing fields first, then missing ones
   existing_fields <- character(0)
@@ -115,6 +322,27 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
   # Reorder: existing fields first, then missing ones
   ordered_columns <- c(existing_fields, missing_fields)
+
+  # Initialize data definition structure
+  data_definition <- list(
+    measure_name = measure_name,
+    created_at = Sys.time(),
+    total_selected_fields = length(selected_columns),
+    fields = list(),
+    metadata = list(
+      source_template = if ("metadata" %in% names(submission_template)) submission_template$metadata else NULL,
+      nda_structure_info = list(
+        total_elements = length(nda_lookup),
+        structure_name = if ("shortName" %in% names(nda_structure)) nda_structure$shortName else measure_name
+      ),
+      validation_summary = list(
+        matched_fields = 0,
+        unmatched_fields = 0,
+        computed_fields = 0,
+        warnings = character(0)
+      )
+    )
+  )
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -152,8 +380,27 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         data_definition$metadata$validation_summary$matched_fields + 1
 
     } else {
-      # Field not found in NDA structure
-      warning_msg <- paste("Column", column_name, "not found in NDA data structure")
+      # Field not found in NDA structure - compute metadata from data
+
+      # Get data for this column if data frame is available
+      column_data <- NULL
+      field_exists_in_data <- FALSE
+
+      if (!is.null(data_frame) && column_name %in% names(data_frame)) {
+        column_data <- data_frame[[column_name]]
+        field_exists_in_data <- TRUE
+      }
+
+      # Compute metadata
+      computed_metadata <- compute_field_metadata(column_name, column_data)
+
+      # Adjust warning message based on whether field exists in data
+      if (field_exists_in_data) {
+        warning_msg <- paste("Column", column_name, "not found in NDA data structure - computing metadata from data")
+      } else {
+        warning_msg <- paste("Column", column_name, "not found in NDA data structure or data frame - using placeholder metadata")
+      }
+
       data_definition$metadata$validation_summary$warnings <-
         c(data_definition$metadata$validation_summary$warnings, warning_msg)
 
@@ -161,16 +408,36 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         name = column_name,
         selection_order = i,
         selected_for_submission = TRUE,
-        source = "template_only",
-        data_type = "unknown",
-        description = "Field not found in NDA data structure",
-        required = FALSE,
-        validation_rules = list(),
+        source = if (field_exists_in_data) "computed_from_data" else "template_only",
+        data_type = computed_metadata$data_type,
+        description = computed_metadata$description,
+        required = computed_metadata$required == "Required",
+        validation_rules = list(
+          min_value = NULL,
+          max_value = NULL,
+          allowed_values = computed_metadata$valueRange,
+          pattern = NULL
+        ),
+        # Create NDA-style metadata structure
+        nda_metadata = list(
+          name = column_name,
+          type = computed_metadata$data_type,
+          size = computed_metadata$size,
+          required = computed_metadata$required,
+          description = computed_metadata$description,
+          valueRange = computed_metadata$valueRange,
+          notes = computed_metadata$notes,
+          aliases = computed_metadata$aliases
+        ),
+        computed = TRUE,
+        exists_in_data = field_exists_in_data,
         warning = warning_msg
       )
 
       data_definition$metadata$validation_summary$unmatched_fields <-
         data_definition$metadata$validation_summary$unmatched_fields + 1
+      data_definition$metadata$validation_summary$computed_fields <-
+        data_definition$metadata$validation_summary$computed_fields + 1
     }
   }
 
@@ -179,6 +446,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     total_fields = length(selected_columns),
     matched_fields = data_definition$metadata$validation_summary$matched_fields,
     unmatched_fields = data_definition$metadata$validation_summary$unmatched_fields,
+    computed_fields = data_definition$metadata$validation_summary$computed_fields,
     match_percentage = round(
       (data_definition$metadata$validation_summary$matched_fields / length(selected_columns)) * 100,
       2
@@ -190,11 +458,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   cat("Measure:", measure_name, "\n")
   cat("Selected fields:", length(selected_columns), "\n")
   cat("Matched with NDA:", data_definition$summary$matched_fields, "\n")
-  cat("Unmatched fields:", data_definition$summary$unmatched_fields, "\n")
+  cat("Computed from data:", data_definition$summary$computed_fields, "\n")
   cat("Match percentage:", paste0(data_definition$summary$match_percentage, "%"), "\n")
 
   if (length(data_definition$metadata$validation_summary$warnings) > 0) {
-    cat("\nWarnings:\n")
+    cat("\nInfo:\n")
     for (warning in data_definition$metadata$validation_summary$warnings) {
       cat("  -", warning, "\n")
     }

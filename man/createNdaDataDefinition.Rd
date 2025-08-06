@@ -4,7 +4,12 @@
 \alias{createNdaDataDefinition}
 \title{Create Data Definition from NDA Structure and Submission Template}
 \usage{
-createNdaDataDefinition(submission_template, nda_structure, measure_name)
+createNdaDataDefinition(
+  submission_template,
+  nda_structure,
+  measure_name,
+  data_frame = NULL
+)
 }
 \arguments{
 \item{submission_template}{List containing the submission template with selected columns}
@@ -12,6 +17,8 @@ createNdaDataDefinition(submission_template, nda_structure, measure_name)
 \item{nda_structure}{List containing the complete NDA data structure from API}
 
 \item{measure_name}{Character string of the measure/data structure name}
+
+\item{data_frame}{Optional data frame to analyze for computing missing metadata}
 }
 \value{
 List containing the intersected data definition with metadata
@@ -20,7 +27,8 @@ List containing the intersected data definition with metadata
 This function creates a data definition by intersecting the columns selected
 for the final submission template against the data structure pulled from NDA.
 It provides metadata about each field including validation rules, data types,
-and submission-specific information.
+and submission-specific information. For fields not found in NDA, it computes
+metadata by analyzing the actual data.
 }
 \examples{
 \dontrun{
