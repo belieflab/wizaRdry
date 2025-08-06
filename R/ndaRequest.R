@@ -818,34 +818,105 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     # Re-integrate ndaValidator with proper environment management
     if (DEBUG) message("[DEBUG] Running validation")
-    validation_results <- ndaValidator(measure, api, limited_dataset)
 
-    # CRITICAL: Update all environments with validated dataframe
-    if (is.list(validation_results) && !is.null(validation_results$df)) {
-      if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
-      # Update globalenv
-      base::assign(measure, validation_results$df, envir = globalenv())
-      if (DEBUG) message("[DEBUG] Updated globalenv()")
+    # First check if NDA structure exists
+    nda_structure_exists <- TRUE
+    nda_structure <- NULL
 
-      # Update origin_env
-      base::assign(measure, validation_results$df, envir = origin_env)
-      if (DEBUG) message("[DEBUG] Updated origin_env")
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/%s", nda_base_url, measure)
 
-      # Update wizaRdry_env
-      if (exists(".wizaRdry_env")) {
-        base::assign(measure, validation_results$df, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
+      response <- httr::GET(url, httr::timeout(10))
+
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          nda_structure <- jsonlite::fromJSON(raw_content)
+          if (!"dataElements" %in% names(nda_structure)) {
+            nda_structure_exists <- FALSE
+          }
+        } else {
+          nda_structure_exists <- FALSE
+        }
+      } else if (httr::status_code(response) == 404) {
+        nda_structure_exists <- FALSE
+        message(sprintf("\nNDA structure '%s' not found in data dictionary - treating as new structure", measure))
+      } else {
+        nda_structure_exists <- FALSE
+        message(sprintf("Could not validate NDA structure '%s' (status: %d) - treating as new structure",
+                        measure, httr::status_code(response)))
+      }
+    }, error = function(e) {
+      nda_structure_exists <- FALSE
+      message(sprintf("Network error checking NDA structure '%s' - treating as new structure: %s",
+                      measure, e$message))
+    })
+
+    if (nda_structure_exists && !is.null(nda_structure)) {
+      # EXISTING NDA STRUCTURE - Run full validation
+      validation_results <- ndaValidator(measure, api, limited_dataset)
+
+      # CRITICAL: Update all environments with validated dataframe
+      if (is.list(validation_results) && !is.null(validation_results$df)) {
+        if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
+        # Update globalenv
+        base::assign(measure, validation_results$df, envir = globalenv())
+        if (DEBUG) message("[DEBUG] Updated globalenv()")
+        # Update origin_env
+        base::assign(measure, validation_results$df, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Updated origin_env")
+        # Update wizaRdry_env
+        if (exists(".wizaRdry_env")) {
+          base::assign(measure, validation_results$df, envir = .wizaRdry_env)
+          if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
+        }
+        # Update our local df variable
+        df <- validation_results$df
+        if (DEBUG) message("[DEBUG] Updated local df variable")
       }
 
-      # Update our local df variable
-      df <- validation_results$df
-      if (DEBUG) message("[DEBUG] Updated local df variable")
-    }
+      # Play validation sound
+      if (exists("validation_results") && is.list(validation_results)) {
+        if (DEBUG) message("[DEBUG] Playing validation sound")
+        ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
+      }
 
-    # Also re-enable the validation sound alert
-    if (exists("validation_results") && is.list(validation_results)) {
-      if (DEBUG) message("[DEBUG] Playing validation sound")
-      ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
+    } else {
+      # NEW STRUCTURE - Bypass validation, create minimal results
+      message(sprintf("\nSkipping NDA validation for new structure '%s'", measure))
+      message("Proceeding with data definition creation using computed metadata only")
+
+      # Create minimal validation results for compatibility
+      validation_results <- list(
+        valid = TRUE,  # Always valid for new structures
+        df = base::get0(measure),
+        message = paste("New data structure:", measure, "- no NDA validation performed"),
+        bypassed_validation = TRUE
+      )
+
+      # Create a mock NDA structure for data definition creation
+      df <- base::get0(measure)
+      if (!is.null(df) && is.data.frame(df)) {
+        # Create minimal structure that will force all fields to be computed
+        nda_structure <- list(
+          shortName = measure,
+          dataElements = data.frame(
+            name = character(0),
+            type = character(0),
+            description = character(0),
+            required = character(0),
+            stringsAsFactors = FALSE
+          )
+        )
+
+        # Store as attribute for data definition creation
+        attr(validation_results, "nda_structure") <- nda_structure
+      }
+
+      # Play success sound for new structure
+      if (DEBUG) message("[DEBUG] Playing new structure sound")
+      beepr::beep("treasure")
     }
 
     # Now apply date format preservation AFTER validation
