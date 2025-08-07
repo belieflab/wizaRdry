@@ -6,7 +6,7 @@ remove.packages("wizaRdry")
 rstudioapi::restartSession()
 
 # install devtools to usethis
-install.packages("devtools")
+if(!require(devtools)) {install.packages("devtools")}; library(devtools)
 
 # load dependencies
 usethis::use_package("config")

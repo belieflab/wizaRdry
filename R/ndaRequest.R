@@ -635,30 +635,37 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
   result <- tryCatch({
     if (DEBUG) message("[DEBUG] Sourcing script file: ", file_path)
-    base::source(file_path)  # Execute the cleaning script for the measure
+    base::source(file_path)
 
-    # Initialize the wizaRdry environment if it doesn't exist
+    # Initialize environments...
     if (!exists(".wizaRdry_env")) {
       if (DEBUG) message("[DEBUG] Creating .wizaRdry_env")
       .wizaRdry_env <- new.env(parent = globalenv())
     }
 
-    # Get the data frame from global environment
+    # Get the data frame
     if (DEBUG) message("[DEBUG] Attempting to get dataframe: ", measure)
     df <- base::get0(measure)
 
-    # Only process if df exists and is a data frame
+    # Store required metadata for later use
+    required_field_metadata <- NULL
+
     if (!is.null(df) && is.data.frame(df)) {
       if (DEBUG) {
         message("[DEBUG] Found dataframe, dims: ", nrow(df), "x", ncol(df))
-        message("[DEBUG] First 10 column names: ", paste(names(df)[1:min(10, ncol(df))], collapse=", "))
       }
 
-      # Reassign the processed data frame to both environments
+      # ADD REQUIRED AND RECOMMENDED ELEMENTS
+      enhancement_result <- addNdarSubjectElements(df, measure)
+      df <- enhancement_result$df
+      required_field_metadata <- enhancement_result$required_metadata
+      recommended_field_metadata <- enhancement_result$recommended_metadata  # NEW
+
+      # Update environments
+      base::assign(measure, df, envir = globalenv())
       base::assign(measure, df, envir = .wizaRdry_env)
-      if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
-    } else {
-      if (DEBUG) message("[DEBUG] Warning: dataframe not found or not a data.frame")
+
+      if (DEBUG) message("[DEBUG] Enhanced dataframe with required and recommended elements")
     }
 
     if (api == "qualtrics") {
@@ -891,34 +898,135 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     # Re-integrate ndaValidator with proper environment management
     if (DEBUG) message("[DEBUG] Running validation")
-    validation_results <- ndaValidator(measure, api, limited_dataset)
 
-    # CRITICAL: Update all environments with validated dataframe
-    if (is.list(validation_results) && !is.null(validation_results$df)) {
-      if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
-      # Update globalenv
-      base::assign(measure, validation_results$df, envir = globalenv())
-      if (DEBUG) message("[DEBUG] Updated globalenv()")
+    # First check if NDA structure exists
+    nda_structure_exists <- TRUE
+    nda_structure <- NULL
 
-      # Update origin_env
-      base::assign(measure, validation_results$df, envir = origin_env)
-      if (DEBUG) message("[DEBUG] Updated origin_env")
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/%s", nda_base_url, measure)
 
-      # Update wizaRdry_env
-      if (exists(".wizaRdry_env")) {
-        base::assign(measure, validation_results$df, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
+      response <- httr::GET(url, httr::timeout(10))
+
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          nda_structure <- jsonlite::fromJSON(raw_content)
+          if (!"dataElements" %in% names(nda_structure)) {
+            nda_structure_exists <- FALSE
+          }
+        } else {
+          nda_structure_exists <- FALSE
+        }
+      } else if (httr::status_code(response) == 404) {
+        nda_structure_exists <- FALSE
+        message(sprintf("\nNDA structure '%s' not found in data dictionary - treating as new structure", measure))
+      } else {
+        nda_structure_exists <- FALSE
+        message(sprintf("Could not validate NDA structure '%s' (status: %d) - treating as new structure",
+                        measure, httr::status_code(response)))
+      }
+    }, error = function(e) {
+      nda_structure_exists <- FALSE
+      message(sprintf("Network error checking NDA structure '%s' - treating as new structure: %s",
+                      measure, e$message))
+    })
+
+    if (nda_structure_exists && !is.null(nda_structure)) {
+
+      # *** ADD THIS NEW CODE HERE ***
+      # Enhance existing structure with ndar_subject01 metadata BEFORE validation
+      if (!is.null(required_field_metadata) || !is.null(recommended_field_metadata)) {
+        message("Enhancing existing NDA structure with ndar_subject01 metadata...")
+        nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata)
+      }
+      # *** END NEW CODE ***
+
+      # EXISTING NDA STRUCTURE - Run full validation
+      validation_results <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
+
+      # ADD BOTH METADATA ATTRIBUTES
+      if (!is.null(required_field_metadata)) {
+        attr(validation_results, "required_metadata") <- required_field_metadata
+      }
+      if (!is.null(recommended_field_metadata)) {
+        attr(validation_results, "recommended_metadata") <- recommended_field_metadata
       }
 
-      # Update our local df variable
-      df <- validation_results$df
-      if (DEBUG) message("[DEBUG] Updated local df variable")
-    }
+      # CRITICAL: Update all environments with validated dataframe
+      if (is.list(validation_results) && !is.null(validation_results$df)) {
+        if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
+        # Update globalenv
+        base::assign(measure, validation_results$df, envir = globalenv())
+        if (DEBUG) message("[DEBUG] Updated globalenv()")
+        # Update origin_env
+        base::assign(measure, validation_results$df, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Updated origin_env")
+        # Update wizaRdry_env
+        if (exists(".wizaRdry_env")) {
+          base::assign(measure, validation_results$df, envir = .wizaRdry_env)
+          if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
+        }
+        # Update our local df variable
+        df <- validation_results$df
+        if (DEBUG) message("[DEBUG] Updated local df variable")
+      }
 
-    # Also re-enable the validation sound alert
-    if (exists("validation_results") && is.list(validation_results)) {
-      if (DEBUG) message("[DEBUG] Playing validation sound")
-      ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
+      # Play validation sound
+      if (exists("validation_results") && is.list(validation_results)) {
+        if (DEBUG) message("[DEBUG] Playing validation sound")
+        ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
+      }
+
+      # Create data upload template ONLY for existing structures
+      if (DEBUG) message("[DEBUG] Creating NDA template")
+      createNdaSubmissionTemplate(measure)
+
+    } else {
+      # NEW STRUCTURE - Bypass validation, create minimal results
+      message(sprintf("\nSkipping NDA validation for new structure '%s'", measure))
+      message("Proceeding with data definition creation using computed metadata only")
+
+      # Create minimal validation results for compatibility
+      validation_results <- list(
+        valid = TRUE,  # Always valid for new structures
+        df = base::get0(measure),
+        message = paste("New data structure:", measure, "- no NDA validation performed"),
+        bypassed_validation = TRUE
+      )
+
+      # Create a mock NDA structure for data definition creation
+      df <- base::get0(measure)
+      if (!is.null(df) && is.data.frame(df)) {
+        # Create minimal structure that will force all fields to be computed
+        nda_structure <- list(
+          shortName = measure,
+          dataElements = data.frame(
+            name = character(0),
+            type = character(0),
+            description = character(0),
+            required = character(0),
+            stringsAsFactors = FALSE
+          )
+        )
+        # Store as attribute for data definition creation
+        attr(validation_results, "nda_structure") <- nda_structure
+      }
+
+      if (!is.null(required_field_metadata)) {
+        # Enhance with both required and recommended metadata
+        enhanced_structure <- mergeRequiredMetadata(nda_structure, required_field_metadata, recommended_field_metadata)
+        attr(validation_results, "nda_structure") <- enhanced_structure
+        message("Enhanced new structure with complete ndar_subject01 required and recommended field metadata")
+      }
+
+      # Play success sound for new structure
+      if (DEBUG) message("[DEBUG] Playing new structure sound")
+      beepr::beep("treasure")
+
+      # DO NOT CREATE SUBMISSION TEMPLATE FOR NEW STRUCTURES
+      message("Skipping submission template creation for new structure")
     }
 
     # Now apply date format preservation AFTER validation
@@ -931,8 +1039,30 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     }
 
     # Create data upload template regardless of if test passes
-    if (DEBUG) message("[DEBUG] Creating NDA template")
-    createNda(measure)
+    # if (DEBUG) message("[DEBUG] Creating NDA template")
+    # createNdaSubmissionTemplate(measure)
+
+    # Create data definition
+    if (DEBUG) message("[DEBUG] Creating NDA data definition")
+    tryCatch({
+      df <- base::get0(measure)
+      if (!is.null(df) && is.data.frame(df) &&
+          exists("validation_results") && is.list(validation_results)) {
+
+        # Get NDA structure from validation results attribute
+        nda_structure <- attr(validation_results, "nda_structure")
+
+        if (!is.null(nda_structure)) {
+          submission_template <- list(columns = names(df))
+          createNdaDataDefinition(submission_template, nda_structure, measure)
+        } else {
+          message("NDA structure not available from validation results")
+        }
+      }
+    }, error = function(e) {
+      message("Error creating data definition: ", e$message)
+    })
+
     formatElapsedTime(start_time)
   }, error = function(e) {
     if (DEBUG) message("[DEBUG] Error caught: ", e$message)
@@ -962,8 +1092,353 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   return(result)  # Return the result of the processing
 }
 
+addNdarSubjectElements <- function(df, measure) {
+  # Initialize return structure
+  result <- list(
+    df = df,
+    required_metadata = NULL,
+    recommended_metadata = NULL
+  )
 
+  tryCatch({
+    message("Fetching required and recommended elements from ndar_subject01 API...")
 
+    nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+    url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+
+    response <- httr::GET(url, httr::timeout(10))
+
+    if (httr::status_code(response) == 200) {
+      raw_content <- rawToChar(response$content)
+      if (nchar(raw_content) > 0) {
+        subject_structure <- jsonlite::fromJSON(raw_content)
+
+        if ("dataElements" %in% names(subject_structure)) {
+          # Get REQUIRED elements (ALL of them)
+          required_elements <- subject_structure$dataElements[
+            subject_structure$dataElements$required == "Required",
+          ]
+
+          # Get RECOMMENDED elements (ALL of them initially)
+          all_recommended_elements <- subject_structure$dataElements[
+            subject_structure$dataElements$required == "Recommended",
+          ]
+
+          # Filter RECOMMENDED to only those that exist in BOTH ndar_subject01 AND the dataframe
+          common_recommended_names <- intersect(all_recommended_elements$name, names(df))
+          recommended_elements <- all_recommended_elements[
+            all_recommended_elements$name %in% common_recommended_names,
+          ]
+
+          message(sprintf("Found %d required elements from ndar_subject01 (will process ALL)", nrow(required_elements)))
+          message(sprintf("Found %d recommended elements in ndar_subject01, %d are common with dataframe (will process COMMON only)",
+                          nrow(all_recommended_elements), nrow(recommended_elements)))
+
+          if (nrow(recommended_elements) > 0) {
+            message(sprintf("Common recommended fields: %s",
+                            paste(recommended_elements$name, collapse = ", ")))
+          } else {
+            message("No common recommended fields found between ndar_subject01 and dataframe")
+          }
+
+          # PRESERVE ALL METADATA for required and COMMON recommended only
+          result$required_metadata <- required_elements
+          result$recommended_metadata <- recommended_elements  # Only common ones
+
+          # Process ALL REQUIRED elements (add missing, ensure correct types)
+          message("\n--- Processing ALL REQUIRED fields ---")
+          for (i in 1:nrow(required_elements)) {
+            col_name <- required_elements$name[i]
+            col_type <- required_elements$type[i]
+
+            message(sprintf("Processing required field: %s (%s)", col_name, col_type))
+
+            # Determine R data type
+            if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
+              default_value <- NA_character_
+              conversion_func <- as.character
+            } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
+              default_value <- NA_integer_
+              conversion_func <- as.integer
+            } else if (grepl("Float", col_type, ignore.case = TRUE)) {
+              default_value <- NA_real_
+              conversion_func <- as.numeric
+            } else if (grepl("Date", col_type, ignore.case = TRUE)) {
+              default_value <- NA_character_
+              conversion_func <- as.character
+            } else {
+              default_value <- NA_character_
+              conversion_func <- as.character
+            }
+
+            if (col_name %in% names(df)) {
+              # Column exists - preserve existing values but ensure correct type
+              existing_data <- df[[col_name]]
+              non_na_count <- sum(!is.na(existing_data))
+
+              if (non_na_count > 0) {
+                message(sprintf("  - Field exists with %d values, ensuring %s type",
+                                non_na_count, col_type))
+                df[[col_name]] <- tryCatch({
+                  conversion_func(existing_data)
+                }, error = function(e) {
+                  message(sprintf("    Warning: Type conversion failed for %s", col_name))
+                  existing_data
+                })
+              } else {
+                message(sprintf("  - Field exists but empty, setting to %s type", col_type))
+                df[[col_name]] <- rep(default_value, nrow(df))
+              }
+            } else {
+              # Column doesn't exist - add it (REQUIRED fields are always added)
+              message(sprintf("  - Adding new required field as %s type", col_type))
+              df[[col_name]] <- rep(default_value, nrow(df))
+            }
+          }
+
+          # Process ONLY COMMON RECOMMENDED elements
+          if (nrow(recommended_elements) > 0) {
+            message("\n--- Processing COMMON RECOMMENDED fields ---")
+            for (i in 1:nrow(recommended_elements)) {
+              col_name <- recommended_elements$name[i]
+              col_type <- recommended_elements$type[i]
+
+              message(sprintf("Processing common recommended field: %s (%s)", col_name, col_type))
+
+              # Determine R data type (same logic as required)
+              if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
+                default_value <- NA_character_
+                conversion_func <- as.character
+              } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
+                default_value <- NA_integer_
+                conversion_func <- as.integer
+              } else if (grepl("Float", col_type, ignore.case = TRUE)) {
+                default_value <- NA_real_
+                conversion_func <- as.numeric
+              } else if (grepl("Date", col_type, ignore.case = TRUE)) {
+                default_value <- NA_character_
+                conversion_func <- as.character
+              } else {
+                default_value <- NA_character_
+                conversion_func <- as.character
+              }
+
+              # Since we filtered for common fields, we know the column exists
+              # Just ensure correct type and preserve existing values
+              existing_data <- df[[col_name]]
+              non_na_count <- sum(!is.na(existing_data))
+
+              if (non_na_count > 0) {
+                message(sprintf("  - Field exists with %d values, ensuring %s type",
+                                non_na_count, col_type))
+                df[[col_name]] <- tryCatch({
+                  conversion_func(existing_data)
+                }, error = function(e) {
+                  message(sprintf("    Warning: Type conversion failed for %s", col_name))
+                  existing_data
+                })
+              } else {
+                message(sprintf("  - Field exists but empty, setting to %s type", col_type))
+                df[[col_name]] <- rep(default_value, nrow(df))
+              }
+            }
+          } else {
+            message("\n--- No common recommended fields to process ---")
+          }
+
+          # Reorder columns: REQUIRED first, then COMMON RECOMMENDED, then others
+          required_field_names <- required_elements$name
+          recommended_field_names <- recommended_elements$name  # Only common ones
+          other_field_names <- setdiff(names(df), c(required_field_names, recommended_field_names))
+
+          present_required <- intersect(required_field_names, names(df))
+          present_recommended <- intersect(recommended_field_names, names(df))
+
+          df <- df[, c(present_required, present_recommended, other_field_names)]
+          result$df <- df
+
+          message("\nSuccessfully processed ndar_subject01 elements")
+          message(sprintf("Required fields (%d): %s",
+                          length(present_required), paste(present_required, collapse = ", ")))
+          if (length(present_recommended) > 0) {
+            message(sprintf("Common recommended fields (%d): %s",
+                            length(present_recommended), paste(present_recommended, collapse = ", ")))
+          } else {
+            message("Common recommended fields (0): none")
+          }
+
+        } else {
+          message("No dataElements found in ndar_subject01 API response")
+        }
+      } else {
+        message("Empty response from ndar_subject01 API")
+      }
+    } else {
+      message(sprintf("Failed to fetch ndar_subject01 from API (status: %d)", httr::status_code(response)))
+    }
+
+  }, error = function(e) {
+    message("Error fetching ndar_subject01 from API: ", e$message)
+    message("Continuing without required/recommended field updates...")
+  })
+
+  return(result)
+}
+
+# Function to merge required metadata into new structure definitions
+mergeRequiredMetadata <- function(new_structure, required_metadata, recommended_metadata = NULL) {
+  if (is.null(required_metadata) || nrow(required_metadata) == 0) {
+    return(new_structure)
+  }
+
+  tryCatch({
+    message("Merging required and recommended ndar_subject01 metadata into new structure...")
+
+    # Combine required and recommended metadata
+    all_metadata <- required_metadata
+    if (!is.null(recommended_metadata) && nrow(recommended_metadata) > 0) {
+      all_metadata <- rbind(required_metadata, recommended_metadata)
+      message(sprintf("Combined %d required + %d recommended = %d total elements",
+                      nrow(required_metadata), nrow(recommended_metadata), nrow(all_metadata)))
+    }
+
+    # For new structures, prepend the combined metadata with their full definitions
+    if (is.null(new_structure$dataElements) || nrow(new_structure$dataElements) == 0) {
+      # No existing elements, use combined metadata as base
+      new_structure$dataElements <- all_metadata
+      message(sprintf("Added %d elements as base structure", nrow(all_metadata)))
+    } else {
+      # Existing elements - merge without overwriting
+      existing_names <- new_structure$dataElements$name
+      combined_names <- all_metadata$name
+
+      # Find elements not already in the structure
+      missing_elements <- all_metadata[!combined_names %in% existing_names, ]
+
+      if (nrow(missing_elements) > 0) {
+        # Prepend missing elements
+        new_structure$dataElements <- rbind(missing_elements, new_structure$dataElements)
+        message(sprintf("Added %d missing elements", nrow(missing_elements)))
+      }
+
+      message("Required and recommended elements preserved with complete metadata")
+    }
+
+  }, error = function(e) {
+    message("Error merging metadata: ", e$message)
+  })
+
+  return(new_structure)
+}
+
+# Enhanced mergeNdarSubjectIntoExisting function to properly override field definitions
+
+mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, recommended_metadata) {
+  if (is.null(existing_structure) || is.null(existing_structure$dataElements)) {
+    return(existing_structure)
+  }
+
+  tryCatch({
+    message("Overriding existing structure fields with authoritative ndar_subject01 definitions...")
+
+    # Combine required and recommended metadata from ndar_subject01
+    ndar_metadata <- data.frame()
+    if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
+      ndar_metadata <- rbind(ndar_metadata, required_metadata)
+    }
+    if (!is.null(recommended_metadata) && nrow(recommended_metadata) > 0) {
+      ndar_metadata <- rbind(ndar_metadata, recommended_metadata)
+    }
+
+    if (nrow(ndar_metadata) == 0) {
+      return(existing_structure)
+    }
+
+    # Get existing and ndar field names
+    existing_names <- existing_structure$dataElements$name
+    ndar_names <- ndar_metadata$name
+
+    # Find fields that should be REPLACED with ndar_subject01 definitions
+    fields_to_replace <- intersect(existing_names, ndar_names)
+
+    # Find fields that are completely new from ndar_subject01
+    new_fields <- setdiff(ndar_names, existing_names)
+
+    # Find fields that remain unchanged from original structure
+    unchanged_fields <- setdiff(existing_names, ndar_names)
+
+    message(sprintf("Replacing %d fields with ndar_subject01 definitions: %s",
+                    length(fields_to_replace), paste(head(fields_to_replace, 8), collapse = ", ")))
+
+    if (length(new_fields) > 0) {
+      message(sprintf("Adding %d new ndar_subject01 fields: %s",
+                      length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+    }
+
+    message(sprintf("Keeping %d original structure fields unchanged: %s",
+                    length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
+
+    # Build the new dataElements in priority order:
+    # 1. REQUIRED fields from ndar_subject01 (first priority)
+    # 2. RECOMMENDED fields from ndar_subject01 (second priority)
+    # 3. Original structure fields that weren't replaced (last)
+
+    new_data_elements <- data.frame()
+
+    # Add REQUIRED fields from ndar_subject01 first
+    if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
+      required_in_structure <- required_metadata[required_metadata$name %in% c(fields_to_replace, new_fields), ]
+      if (nrow(required_in_structure) > 0) {
+        new_data_elements <- rbind(new_data_elements, required_in_structure)
+        message(sprintf("Added %d required fields from ndar_subject01", nrow(required_in_structure)))
+      }
+    }
+
+    # Add RECOMMENDED fields from ndar_subject01 second
+    if (!is.null(recommended_metadata) && nrow(recommended_metadata) > 0) {
+      recommended_in_structure <- recommended_metadata[recommended_metadata$name %in% c(fields_to_replace, new_fields), ]
+      if (nrow(recommended_in_structure) > 0) {
+        new_data_elements <- rbind(new_data_elements, recommended_in_structure)
+        message(sprintf("Added %d recommended fields from ndar_subject01", nrow(recommended_in_structure)))
+      }
+    }
+
+    # Add unchanged original structure fields last
+    unchanged_elements <- existing_structure$dataElements[
+      existing_structure$dataElements$name %in% unchanged_fields,
+    ]
+    if (nrow(unchanged_elements) > 0) {
+      new_data_elements <- rbind(new_data_elements, unchanged_elements)
+      message(sprintf("Preserved %d original structure fields", nrow(unchanged_elements)))
+    }
+
+    # Replace the dataElements with the new prioritized version
+    existing_structure$dataElements <- new_data_elements
+
+    message(sprintf("Enhanced structure now has %d total fields with ndar_subject01 definitions taking priority",
+                    nrow(existing_structure$dataElements)))
+
+    # Show what the key fields now look like
+    key_fields <- c("race", "phenotype", "phenotype_description", "twins_study", "sibling_study")
+    present_key_fields <- intersect(key_fields, existing_structure$dataElements$name)
+    if (length(present_key_fields) > 0) {
+      message("Key ndar_subject01 field definitions now active:")
+      for (field in present_key_fields) {
+        field_def <- existing_structure$dataElements[existing_structure$dataElements$name == field, ]
+        if (nrow(field_def) > 0) {
+          message(sprintf("  - %s: %s (%s) - %s",
+                          field, field_def$type[1], field_def$required[1],
+                          substr(field_def$description[1], 1, 50)))
+        }
+      }
+    }
+
+  }, error = function(e) {
+    message("Error merging ndar_subject01 into existing structure: ", e$message)
+  })
+
+  return(existing_structure)
+}
 
 # Add helper function for MongoDB cleanup
 disconnectMongo <- function(mongo) {
