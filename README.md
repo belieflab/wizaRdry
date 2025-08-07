@@ -87,7 +87,7 @@ baseUrls <- c("BASE_URL_1", "BASE_URL_2")
 # MongoDB
 connectionString <- "mongodb://your-connection-string"
 
-# SQL Server
+# SQL
 conn <- "BASE_URL"
 uid <- "USERNAME"
 pwd <- "PASSWORD"
