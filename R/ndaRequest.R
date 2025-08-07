@@ -221,7 +221,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                 # Safely calculate similarities
                 similarities <- tryCatch({
                   sapply(all_structures$shortName, function(name) {
-                    calculate_similarity(script_name, name)
+                    calculate_jaro_winkler(script_name, name)
                   })
                 }, error = function(e) {
                   message("Error calculating similarities: ", e$message)
