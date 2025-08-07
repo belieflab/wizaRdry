@@ -71,7 +71,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
       data_list <- as.character(data_list)
     }
 
-    user_prefs_file <- file.path(path, "..wizaRdry_prefs")
+    user_prefs_file <- file.path(path, ".wizaRdry_prefs")
     user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE)
 
     if (file.exists(user_prefs_file)) {

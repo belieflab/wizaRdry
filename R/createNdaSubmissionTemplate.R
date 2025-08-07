@@ -47,7 +47,7 @@
 #' @export
 to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRUE so users need to specify to see prompt after prefs are set
   # Check for user preferences file
-  user_prefs_file <- file.path(path, "..wizaRdry_prefs")
+  user_prefs_file <- file.path(path, ".wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_nda_template = FALSE)
 
   if (file.exists(user_prefs_file)) {

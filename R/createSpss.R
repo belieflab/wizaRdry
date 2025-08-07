@@ -51,7 +51,7 @@ to.sav <- function(df, df_name = NULL, path = ".", skip_prompt = TRUE) { # skip_
   }
 
   # Check for user preferences file
-  user_prefs_file <- file.path(path, "..wizaRdry_prefs")
+  user_prefs_file <- file.path(path, ".wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE,
                      auto_nda_template = FALSE, auto_csv = FALSE, auto_rds = FALSE, auto_sav = FALSE)
 
