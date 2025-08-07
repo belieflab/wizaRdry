@@ -1037,8 +1037,152 @@ standardize_age <- function(df, verbose = TRUE, limited_dataset = limited_datase
   return(df)
 }
 
+# Calculate Jaro-Winkler similarity between two strings
+calculate_jaro_winkler <- function(str1, str2) {
+  # Convert to lowercase for comparison
+  str1 <- tolower(str1)
+  str2 <- tolower(str2)
+
+  # Handle exact matches first
+  if (str1 == str2) return(1.0)
+  if (nchar(str1) == 0 || nchar(str2) == 0) return(0.0)
+
+  # Parse structure names for scientific patterns
+  parse_nda_name <- function(name) {
+    # Remove version numbers (01, 02, etc.)
+    base <- gsub("\\d+$", "", name)
+    # Split on underscores
+    parts <- unlist(strsplit(base, "[_-]"))
+
+    list(
+      base = base,
+      parts = parts,
+      has_suffix = grepl("\\d+$", name),
+      suffix = if(grepl("\\d+$", name)) gsub(".*?(\\d+)$", "\\1", name) else ""
+    )
+  }
+
+  comp1 <- parse_nda_name(str1)
+  comp2 <- parse_nda_name(str2)
+
+  # Jaro-Winkler similarity algorithm implementation
+  jaro_winkler <- function(s1, s2, prefix_weight = 0.1) {
+    if (s1 == s2) return(1.0)
+    if (nchar(s1) == 0 || nchar(s2) == 0) return(0.0)
+
+    len1 <- nchar(s1)
+    len2 <- nchar(s2)
+
+    # Calculate match window
+    match_window <- floor(max(len1, len2) / 2) - 1
+    if (match_window < 0) match_window <- 0
+
+    # Track matches
+    s1_matches <- rep(FALSE, len1)
+    s2_matches <- rep(FALSE, len2)
+    matches <- 0
+    transpositions <- 0
+
+    # Find matches within the window
+    for (i in 1:len1) {
+      start <- max(1, i - match_window)
+      end <- min(len2, i + match_window)
+
+      for (j in start:end) {
+        if (s2_matches[j] || substr(s1, i, i) != substr(s2, j, j)) next
+        s1_matches[i] <- TRUE
+        s2_matches[j] <- TRUE
+        matches <- matches + 1
+        break
+      }
+    }
+
+    if (matches == 0) return(0.0)
+
+    # Count transpositions
+    k <- 1
+    for (i in 1:len1) {
+      if (!s1_matches[i]) next
+      while (!s2_matches[k]) k <- k + 1
+      if (substr(s1, i, i) != substr(s2, k, k)) transpositions <- transpositions + 1
+      k <- k + 1
+    }
+
+    # Calculate Jaro similarity
+    jaro <- (matches/len1 + matches/len2 + (matches - transpositions/2)/matches) / 3
+
+    # Add Winkler prefix bonus
+    prefix_length <- 0
+    max_prefix <- min(len1, len2, 4)
+    for (i in 1:max_prefix) {
+      if (substr(s1, i, i) == substr(s2, i, i)) {
+        prefix_length <- prefix_length + 1
+      } else {
+        break
+      }
+    }
+
+    return(jaro + (prefix_weight * prefix_length * (1 - jaro)))
+  }
+
+  # Start with Jaro-Winkler base similarity
+  base_score <- jaro_winkler(str1, str2)
+
+  # Scientific naming bonuses
+  bonuses <- 0
+
+  # 1. Substring containment bonus (e.g., "fomo" in "fomo01")
+  if (nchar(comp1$base) > 0 && nchar(comp2$base) > 0) {
+    if (grepl(comp1$base, comp2$base, fixed = TRUE) || grepl(comp2$base, comp1$base, fixed = TRUE)) {
+      shorter_len <- min(nchar(comp1$base), nchar(comp2$base))
+      longer_len <- max(nchar(comp1$base), nchar(comp2$base))
+      bonuses <- bonuses + (shorter_len / longer_len) * 0.15  # Reduced from 0.25
+    }
+  }
+
+  # 2. Version number bonus (both have numbers, or one is subset of other)
+  if (comp1$has_suffix && comp2$has_suffix) {
+    if (comp1$suffix == comp2$suffix) {
+      bonuses <- bonuses + 0.08  # Reduced from 0.15
+    }
+  } else if (comp1$has_suffix || comp2$has_suffix) {
+    # One has version, one doesn't - check if base names match
+    base1 <- comp1$base
+    base2 <- comp2$base
+    if (base1 == base2 || base1 == str2 || base2 == str1) {
+      bonuses <- bonuses + 0.12  # Reduced from 0.2
+    }
+  }
+
+  # 3. Common scientific abbreviations
+  scientific_abbrevs <- list(
+    demo = c("demographic", "demographics"),
+    behav = c("behavioral", "behaviour", "behavior"),
+    cog = c("cognitive", "cognition"),
+    psych = c("psychological", "psychology"),
+    neuro = c("neurological", "neuroscience"),
+    clin = c("clinical"),
+    fam = c("family", "familial")
+  )
+
+  # Check if either string is an abbreviation of the other
+  for (abbrev in names(scientific_abbrevs)) {
+    full_terms <- scientific_abbrevs[[abbrev]]
+    if ((str1 == abbrev && any(sapply(full_terms, function(x) grepl(x, str2)))) ||
+        (str2 == abbrev && any(sapply(full_terms, function(x) grepl(x, str1))))) {
+      bonuses <- bonuses + 0.2  # Reduced from 0.3
+      break
+    }
+  }
+
+  # Combine base score with bonuses, cap at 1.0
+  final_score <- min(1.0, base_score + bonuses)
+
+  return(final_score)
+}
+
 # Calculate Levenshtein distance similarity between two strings
-calculate_similarity <- function(str1, str2) {
+calculate_levenshtein <- function(str1, str2) {
   # Convert to lowercase
   str1 <- tolower(str1)
   str2 <- tolower(str2)
@@ -1243,7 +1387,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
       # Calculate similarity scores
       similarities <- sapply(valid_fields, function(name) {
         # Calculate direct similarity
-        calculate_similarity(field, name)
+        calculate_levenshtein(field, name)
       })
 
       # Store all similarity scores

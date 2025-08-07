@@ -72,7 +72,7 @@ clean <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = T
 
 
     # Check for user preferences file
-    user_prefs_file <- file.path(path, "..wizaRdry_prefs")
+    user_prefs_file <- file.path(path, ".wizaRdry_prefs")
     user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE)
 
     if (file.exists(user_prefs_file)) {
