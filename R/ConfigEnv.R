@@ -1,335 +1,261 @@
-# Modified ConfigEnv class with more flexible missing value categories and SQL support
+# Simplified and refactored ConfigEnv class
 ConfigEnv <- R6::R6Class("ConfigEnv",
                          public = list(
-                           # Store configuration
                            config = NULL,
                            config_file = NULL,
 
-                           # Define validation specs for each API
+                           # API validation specs
                            api_specs = list(
                              mongo = list(
-                               required = c("database")
+                               required = "database",
+                               validator = function(self) {
+                                 if (self$has_value("mongo.database") && nchar(self$get_value("mongo.database")) == 0) {
+                                   return("The 'database' setting cannot be empty")
+                                 }
+                                 character(0)
+                               }
                              ),
                              qualtrics = list(
-                               required = c("survey_ids")
+                               required = "survey_ids",
+                               validator = function(self) {
+                                 if (!self$has_value("qualtrics.survey_ids")) return(character(0))
+
+                                 survey_ids <- self$get_value("qualtrics.survey_ids")
+                                 if (!is.list(survey_ids)) {
+                                   return("The 'survey_ids' setting must be a nested structure")
+                                 }
+                                 if (length(names(survey_ids)) == 0) {
+                                   return("No institutions defined in 'survey_ids'")
+                                 }
+                                 character(0)
+                               }
                              ),
                              redcap = list(
-                               required = c("superkey", "primary_key")
+                               required = c("superkey", "primary_key"),
+                               validator = function(self) {
+                                 errors <- character(0)
+                                 for (field in c("superkey", "primary_key")) {
+                                   path <- paste0("redcap.", field)
+                                   if (self$has_value(path) && nchar(self$get_value(path)) == 0) {
+                                     errors <- c(errors, paste("The", sQuote(field), "setting cannot be empty"))
+                                   }
+                                 }
+                                 errors
+                               }
                              ),
                              sql = list(
-                               required = c("superkey", "primary_key", "schemas", "pii_fields")
-                             ),
-                             missing_data_codes = list(
-                               required = c(),  # No required fields - all are optional
-                               types = c("skipped", "refused", "unknown", "missing"),  # Add "missing" as valid category type
-                               aliases = list(                                         # Add support for aliases
-                                 "missing" = c("undefined", "na", "null"),
-                                 "unknown" = c("undefined", "na", "null"),
-                                 "skipped" = c("not_applicable", "na", "skip"),
-                                 "refused" = c("declined", "no_answer")
-                               ),
-                               allow_custom = TRUE  # Flag to allow custom categories beyond the predefined ones
+                               required = c("superkey", "primary_key", "schemas", "pii_fields"),
+                               validator = function(self) {
+                                 errors <- character(0)
+
+                                 # Check string fields
+                                 for (field in c("primary_key", "superkey")) {
+                                   path <- paste0("sql.", field)
+                                   if (self$has_value(path) && nchar(self$get_value(path)) == 0) {
+                                     errors <- c(errors, paste("The", sQuote(field), "setting cannot be empty"))
+                                   }
+                                 }
+
+                                 # Check pii_fields
+                                 if (self$has_value("sql.pii_fields")) {
+                                   pii_fields <- self$get_value("sql.pii_fields")
+                                   if (!is.vector(pii_fields) || !is.character(pii_fields)) {
+                                     errors <- c(errors, "The 'pii_fields' setting must be a character vector")
+                                   }
+                                 }
+
+                                 errors
+                               }
                              )
                            ),
 
+                           # Missing data specs
+                           missing_data_specs = list(
+                             types = c("skipped", "refused", "unknown", "missing"),
+                             aliases = list(
+                               missing = c("undefined", "na", "null"),
+                               unknown = c("undefined", "na", "null"),
+                               skipped = c("not_applicable", "na", "skip"),
+                               refused = c("declined", "no_answer")
+                             ),
+                             allow_custom = TRUE
+                           ),
+
                            initialize = function(config_file = "config.yml") {
-                             # Check if config file exists
                              if (!file.exists(config_file)) {
-                               stop(config_file, " not found. Please create this file with the required API configurations.")
+                               stop(paste(config_file, "not found. Please create this file with the required API configurations."))
                              }
-                             # Store the config file path
+
                              self$config_file <- config_file
-                             # Load configuration
                              self$config <- config::get(file = config_file)
-                             # Process variable substitutions
                              self$process_substitutions()
                            },
 
-                           # Method to handle variable substitutions like ${study_alias}
-                           process_substitutions = function() {
-                             # Process mongo database name if it references study_alias
-                             if (!is.null(self$config$mongo) &&
-                                 !is.null(self$config$mongo$database) &&
-                                 self$config$mongo$database == "${study_alias}") {
-                               if (!is.null(self$config$study_alias)) {
-                                 self$config$mongo$database <- self$config$study_alias
-                               } else {
-                                 warning("Cannot substitute ${study_alias} in mongo.database: study_alias is not defined in config")
-                               }
-                             }
-                             # Add more substitution rules as needed
-                           },
-
-                           # Get a specific configuration value
+                           # Simplified path navigation
                            get_value = function(path) {
-                             # Split the path by dots
                              parts <- strsplit(path, "\\.")[[1]]
-                             # Start with the root config
-                             result <- self$config
-                             # Navigate through the path
-                             for (part in parts) {
-                               if (is.null(result) || !part %in% names(result)) {
-                                 return(NULL)
-                               }
-                               result <- result[[part]]
-                             }
-                             return(result)
+                             Reduce(function(obj, key) {
+                               if (is.null(obj) || !key %in% names(obj)) NULL else obj[[key]]
+                             }, parts, init = self$config)
                            },
 
-                           # Check if a configuration value exists
                            has_value = function(path) {
                              !is.null(self$get_value(path))
                            },
 
-                           # Check which APIs are configured
                            get_configured_apis = function() {
-                             configured_apis <- character(0)
-                             for (api_type in names(self$api_specs)) {
-                               if (self$has_value(api_type)) {
-                                 configured_apis <- c(configured_apis, api_type)
-                               }
-                             }
-                             return(configured_apis)
+                             Filter(self$has_value, names(self$api_specs))
                            },
 
-                           # Normalize a missing value category name (handle aliases)
-                           normalize_missing_category = function(category) {
-                             # If the category is already a valid type, return it
-                             if (category %in% self$api_specs$missing_data_codes$types) {
-                               return(category)
-                             }
-
-                             # Check if it's an alias for a known category
-                             for (valid_type in names(self$api_specs$missing_data_codes$aliases)) {
-                               aliases <- self$api_specs$missing_data_codes$aliases[[valid_type]]
-                               if (category %in% aliases) {
-                                 return(valid_type)
+                           # Streamlined substitutions
+                           process_substitutions = function() {
+                             if (self$get_value("mongo.database") == "${study_alias}") {
+                               study_alias <- self$get_value("study_alias")
+                               if (!is.null(study_alias)) {
+                                 self$config$mongo$database <- study_alias
+                               } else {
+                                 warning("Cannot substitute ${study_alias}: study_alias not defined")
                                }
                              }
-
-                             # If allow_custom is TRUE, return the original category
-                             if (self$api_specs$missing_data_codes$allow_custom) {
-                               return(category)
-                             }
-
-                             # Otherwise return NULL (invalid category)
-                             return(NULL)
                            },
 
-                           # Validate specific API configuration
+                           # Generic validation with custom validators
                            validate_config = function(api_type = NULL) {
-                             # If no API type specified, validate core config
-                             if (is.null(api_type)) {
-                               return(self$validate_core_config())
-                             }
-                             # Check if the API type is supported
+                             if (is.null(api_type)) return(self$validate_core_config())
+                             if (api_type == "missing_data_codes") return(self$validate_missing_data_codes())
+
+                             # Check if API type exists
                              if (!api_type %in% names(self$api_specs)) {
-                               stop("Unknown API type: '", api_type, "'. Valid options are: ",
-                                    paste(names(self$api_specs), collapse=", "))
+                               valid_options <- paste(names(self$api_specs), collapse = ", ")
+                               stop(paste("Unknown API type:", sQuote(api_type), ". Valid options are:", valid_options))
                              }
-                             # Check if this API is actually configured
-                             if (!self$has_value(api_type)) {
-                               # If the API section doesn't exist, skip validation but return TRUE
-                               # message("The '", api_type, "' section is not defined in config.yml, skipping validation.")
+
+                             if (!self$has_value(api_type)) return(TRUE)
+
+                             spec <- self$api_specs[[api_type]]
+                             errors <- character(0)
+
+                             # Check required fields
+                             errors <- c(errors, self$check_required_fields(api_type, spec$required))
+
+                             # Run custom validator if it exists
+                             if (!is.null(spec$validator)) {
+                               errors <- c(errors, spec$validator(self))
+                             }
+
+                             if (length(errors) > 0) {
+                               self$throw_error(api_type, errors)
+                             }
+
+                             TRUE
+                           },
+
+                           validate_core_config = function() {
+                             required <- c("study_alias", "identifier")
+                             missing <- Filter(function(field) !self$has_value(field), required)
+
+                             if (length(missing) > 0) {
+                               errors <- paste("Missing required", sQuote(missing), "setting in the root configuration")
+                               self$throw_error("Core", errors)
+                             }
+
+                             TRUE
+                           },
+
+                           validate_missing_data_codes = function() {
+                             config <- self$get_value("missing_data_codes")
+
+                             if (is.null(config)) {
+                               message("Note: No missing value categories defined. Default R NA values will be used.")
                                return(TRUE)
                              }
-                             all_errors <- c()
-                             # Get API specs
-                             specs <- self$api_specs[[api_type]]
-                             # Check required fields
-                             for (field in specs$required) {
-                               field_path <- paste0(api_type, ".", field)
-                               if (!self$has_value(field_path)) {
-                                 all_errors <- c(all_errors, paste("Missing '", field, "' setting in the ", api_type, " section"))
-                               }
-                             }
-                             # API-specific additional validations
-                             if (api_type == "mongo") {
-                               # Check if database is empty after substitution
-                               if (self$has_value("mongo.database") && nchar(self$get_value("mongo.database")) == 0) {
-                                 all_errors <- c(all_errors, "The 'database' setting cannot be empty")
-                               }
-                             } else if (api_type == "qualtrics") {
-                               # Check if survey_ids exists and is a list
-                               if (self$has_value("qualtrics.survey_ids")) {
-                                 survey_ids <- self$get_value("qualtrics.survey_ids")
-                                 if (!is.list(survey_ids)) {
-                                   all_errors <- c(all_errors, "The 'survey_ids' setting must be a nested structure")
-                                 } else {
-                                   # Check if there are any institutions defined
-                                   if (length(names(survey_ids)) == 0) {
-                                     all_errors <- c(all_errors, "No institutions defined in 'survey_ids'")
-                                   }
-                                 }
-                               }
-                             } else if (api_type == "redcap") {
-                               # Any redcap-specific validations
-                               if (self$has_value("redcap.superkey") && nchar(self$get_value("redcap.superkey")) == 0) {
-                                 all_errors <- c(all_errors, "The 'superkey' setting cannot be empty")
-                               }
-                               if (self$has_value("redcap.primary_key") && nchar(self$get_value("redcap.primary_key")) == 0) {
-                                 all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
-                               }
-                             } else if (api_type == "sql") {
-                               # SQL-specific validations
-                               # Check for primary_key setting if specified
-                               if (self$has_value("sql.primary_key") && nchar(self$get_value("sql.primary_key")) == 0) {
-                                 all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
-                               }
 
-                               # Check for superkey table if specified
-                               if (self$has_value("sql.superkey") && nchar(self$get_value("sql.superkey")) == 0) {
-                                 all_errors <- c(all_errors, "The 'superkey' setting cannot be empty")
-                               }
+                             errors <- character(0)
+                             categories <- names(config)
 
-                               # Check for pii_fields if specified
-                               if (self$has_value("sql.pii_fields")) {
-                                 pii_fields <- self$get_value("sql.pii_fields")
-                                 if (!is.vector(pii_fields) || !is.character(pii_fields)) {
-                                   all_errors <- c(all_errors, "The 'pii_fields' setting must be a character vector")
-                                 }
-                               }
-                             } else if (api_type == "missing_data_codes") {
-                               # Get the current missing_data_codes configuration
-                               missing_value_config <- self$get_value("missing_data_codes")
-
-                               # If any categories are defined, validate them
-                               if (!is.null(missing_value_config)) {
-                                 config_categories <- names(missing_value_config)
-
-                                 # More lenient validation when allow_custom is TRUE
-                                 if (!specs$allow_custom) {
-                                   # Check that all provided categories are valid or aliases of valid categories
-                                   valid_categories <- c()
-                                   unexpected_categories <- c()
-
-                                   for (category in config_categories) {
-                                     normalized_category <- self$normalize_missing_category(category)
-                                     if (!is.null(normalized_category)) {
-                                       valid_categories <- c(valid_categories, category)
-                                     } else {
-                                       unexpected_categories <- c(unexpected_categories, category)
-                                     }
-                                   }
-
-                                   if (length(unexpected_categories) > 0) {
-                                     known_aliases <- unlist(specs$aliases)
-                                     all_errors <- c(all_errors, paste0("Unexpected categories in missing_data_codes: ",
-                                                                        paste(unexpected_categories, collapse=", "),
-                                                                        ". Allowed categories are: ",
-                                                                        paste(c(specs$types, known_aliases), collapse=", ")))
-                                   }
-                                 }
-
-                                 # For each provided category, check its values
-                                 for (category in config_categories) {
-                                   category_values <- self$get_value(paste0("missing_data_codes.", category))
-                                   # Check if the category is a list or vector
-                                   if (!is.vector(category_values) && !is.list(category_values)) {
-                                     all_errors <- c(all_errors, paste0("The '", category, "' category must be a list or vector of values"))
-                                   }
-                                   # Check if the list has at least one value
-                                   if (length(category_values) == 0) {
-                                     all_errors <- c(all_errors, paste0("The '", category, "' category must contain at least one value"))
-                                   }
-                                 }
-
-                                 # Missing categories are ok - we'll use defaults
-                                 missing_categories <- setdiff(specs$types, config_categories)
-                                 if (length(missing_categories) > 0) {
-                                   message("Note: The following missing value categories are not defined and will use R's default NA: ",
-                                           paste(missing_categories, collapse=", "))
-                                 }
-                               } else {
-                                 # If missing_data_codes section is completely empty, just inform the user
-                                 message("Note: No missing value categories defined. Default R NA values will be used for all missing value types.")
+                             # Validate categories
+                             if (!self$missing_data_specs$allow_custom) {
+                               invalid <- Filter(function(cat) is.null(self$normalize_missing_category(cat)), categories)
+                               if (length(invalid) > 0) {
+                                 allowed <- paste(c(self$missing_data_specs$types, unlist(self$missing_data_specs$aliases)), collapse = ", ")
+                                 errors <- c(errors, paste("Invalid categories:", paste(invalid, collapse = ", "), ". Allowed:", allowed))
                                }
                              }
 
-                             # If we found any errors, report them all at once
-                             if (length(all_errors) > 0) {
-                               stop(api_type, " configuration errors in ", self$config_file, ":\n- ",
-                                    paste(all_errors, collapse="\n- "), call. = FALSE)
+                             # Validate category values
+                             for (cat in categories) {
+                               values <- self$get_value(paste0("missing_data_codes.", cat))
+                               if (!is.vector(values) && !is.list(values)) {
+                                 errors <- c(errors, paste("Category", sQuote(cat), "must be a vector or list"))
+                               }
+                               if (length(values) == 0) {
+                                 errors <- c(errors, paste("Category", sQuote(cat), "cannot be empty"))
+                               }
                              }
-                             # else {
-                             #   message("The ", api_type, " configuration in ", self$config_file, " is valid.")
-                             # }
-                             return(TRUE)
+
+                             if (length(errors) > 0) {
+                               self$throw_error("missing_data_codes", errors)
+                             }
+
+                             TRUE
                            },
 
-                           # Validate core configuration
-                           validate_core_config = function() {
-                             all_errors <- c()
-                             # Check required global fields
-                             required_fields <- c("study_alias", "identifier")
-                             for (field in required_fields) {
-                               if (!self$has_value(field)) {
-                                 all_errors <- c(all_errors, paste("Missing required '", field, "' setting in the root configuration"))
-                               }
+                           normalize_missing_category = function(category) {
+                             specs <- self$missing_data_specs
+
+                             if (category %in% specs$types) return(category)
+
+                             # Check aliases
+                             for (type in names(specs$aliases)) {
+                               if (category %in% specs$aliases[[type]]) return(type)
                              }
-                             # If we found any errors, report them all at once
-                             if (length(all_errors) > 0) {
-                               stop("Core configuration errors in ", self$config_file, ":\n- ",
-                                    paste(all_errors, collapse="\n- "), call. = FALSE)
-                             } else {
-                               # message("The core configuration in ", self$config_file, " is valid.")
-                             }
-                             return(TRUE)
+
+                             if (specs$allow_custom) category else NULL
                            },
 
-                           # Get missing value codes for a specific category
                            get_missing_data_codes = function(category = NULL) {
-                             # If no category specified, return all missing values
-                             if (is.null(category)) {
-                               return(self$get_value("missing_data_codes"))
+                             if (is.null(category)) return(self$get_value("missing_data_codes"))
+
+                             # Try direct path
+                             direct <- self$get_value(paste0("missing_data_codes.", category))
+                             if (!is.null(direct)) return(direct)
+
+                             # Try normalized
+                             normalized <- self$normalize_missing_category(category)
+                             if (!is.null(normalized) && normalized != category) {
+                               return(self$get_value(paste0("missing_data_codes.", normalized)))
                              }
 
-                             # If we have an exact match for the category, use it
-                             if (self$has_value(paste0("missing_data_codes.", category))) {
-                               values <- self$get_value(paste0("missing_data_codes.", category))
-                               if (!is.null(values)) {
-                                 return(values)
-                               }
-                             }
+                             NULL
+                           },
 
-                             # Try to normalize the category name (handle aliases)
-                             normalized_category <- self$normalize_missing_category(category)
-                             if (!is.null(normalized_category) && normalized_category != category) {
-                               # Check if the normalized category exists in config
-                               if (self$has_value(paste0("missing_data_codes.", normalized_category))) {
-                                 values <- self$get_value(paste0("missing_data_codes.", normalized_category))
-                                 if (!is.null(values)) {
-                                   return(values)
-                                 }
-                               }
-                             }
+                           # Helper methods
+                           check_required_fields = function(api_type, required_fields) {
+                             missing <- Filter(function(field) {
+                               !self$has_value(paste0(api_type, ".", field))
+                             }, required_fields)
 
-                             # If no values are defined for any variant, return NULL to indicate default NA should be used
-                             return(NULL)
+                             if (length(missing) > 0) {
+                               paste("Missing", sQuote(missing), "setting in the", api_type, "section")
+                             } else {
+                               character(0)
+                             }
+                           },
+
+                           throw_error = function(context, errors) {
+                             error_text <- paste("-", errors, collapse = "\n")
+                             stop(paste(context, "configuration errors in", self$config_file, ":\n", error_text), call. = FALSE)
                            }
                          )
 )
 
-# Create a function to validate configuration and return the config
+# Simplified helper functions
 validate_config <- function(api_type = NULL, config_file = "config.yml") {
   config_env <- ConfigEnv$new(config_file)
-  # If no specific API type is provided, just validate core config
-  if (is.null(api_type)) {
-    validation_result <- config_env$validate_core_config()
-  } else {
-    # If a specific API type is requested, validate just that one
-    validation_result <- config_env$validate_config(api_type)
-  }
-  # If validation passes, return the config
-  if (validation_result) {
-    return(config_env$config)
-  } else {
-    return(NULL)  # Or handle failure appropriately
-  }
+  config_env$validate_config(api_type)
+  config_env$config
 }
 
-# Helper function to get missing value codes
 get_missing_data_codes <- function(category = NULL, config_file = "config.yml") {
-  config_env <- ConfigEnv$new(config_file)
-  return(config_env$get_missing_data_codes(category))
+  ConfigEnv$new(config_file)$get_missing_data_codes(category)
 }
