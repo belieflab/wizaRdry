@@ -806,11 +806,22 @@ redcap.index <- function() {
       return(knitr::kable(forms_result$data, format = "simple"))
     } else {
       message("REDCap API returned an error: ", forms_result$status_message)
-      return(NULL)
+      message(sprintf(paste(
+        "Please verify:\n",
+        "1. Your REDCap user has 'API Export' and 'API Import/Update' rights\n",
+        "2. The API module is enabled for your REDCap project\n",
+        "3. Your API token and URI are correct in your secrets configuration"
+      )))
+      return(invisible(NULL))
     }
   }, error = function(e) {
-    message("Error connecting to REDCap: ", e$message)
-    return(NULL)
+    message("Issue connecting to REDCap: ", e$message)
+    stop(sprintf(paste(
+      "\nPlease verify:\n",
+      "1. Your REDCap user has 'API Export' and 'API Import/Update' rights\n",
+      "2. The API module is enabled for your REDCap project\n",
+      "3. Your API token and URI are correct in your secrets configuration"
+    )), call. = FALSE)
   }, warning = function(w) {
     message("Warning during REDCap connection: ", w$message)
   })
