@@ -43,6 +43,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                    join_primary_keys = TRUE, custom_query = NULL, max_rows = NULL,
                    date_format = NULL, batch_size = 1000, exclude_pii = TRUE,
                    interview_date = NULL, all = FALSE, schema = NULL) {
+
   # Check if required packages are available
   if (!requireNamespace("RODBC", quietly = TRUE)) {
     stop("Package 'RODBC' is needed for this function to work. Please install it.",
@@ -68,7 +69,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("conn")
+  conn_str <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -89,10 +90,12 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Establish database connection
-  channel <- NULL
+  channel <- -1  # Initialize to invalid state
+  result_data <- NULL
+
   tryCatch({
     channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1) {
+    if (channel == -1 || is.null(channel)) {
       stop("Failed to connect to database. Please check your connection settings.")
     }
 
@@ -114,6 +117,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     # Define the primary key information
     primary_key_column <- NULL
     superkey_table <- NULL
+
     if (join_primary_keys) {
       if (!is.null(config$sql$primary_key)) {
         primary_key_column <- config$sql$primary_key
@@ -121,6 +125,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
         message("Warning: Primary key not specified in config. Using default 'PARTICIPANTIDENTIFIER'")
         primary_key_column <- "PARTICIPANTIDENTIFIER"
       }
+
       if (!is.null(config$sql$superkey)) {
         superkey_table <- config$sql$superkey
       } else {
@@ -144,7 +149,6 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     table_exists <- FALSE
     if (!is.null(table_name)) {
       tables_list <- RODBC::sqlTables(channel)
-
       # Convert table name to uppercase for case-insensitive comparison
       # (Oracle typically stores object names in uppercase)
       upper_table_name <- toupper(table_name)
@@ -154,7 +158,6 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
         upper_schema <- toupper(schema)
         table_exists <- any(toupper(tables_list$TABLE_SCHEM) == upper_schema &
                               toupper(tables_list$TABLE_NAME) == upper_table_name)
-
         if (!table_exists) {
           # Try with exact case
           table_exists <- any(tables_list$TABLE_SCHEM == schema &
@@ -163,7 +166,6 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       } else {
         # Check if table exists in any schema
         table_exists <- any(toupper(tables_list$TABLE_NAME) == upper_table_name)
-
         # If table exists but no schema specified, get the schema
         if (table_exists) {
           schema_row <- tables_list[toupper(tables_list$TABLE_NAME) == upper_table_name, ]
@@ -180,9 +182,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     }
 
     # Build or execute SQL query
-    result_data <- NULL
     query <- NULL
-
     if (!is.null(custom_query)) {
       # Execute custom query directly
       query <- custom_query
@@ -208,22 +208,17 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     message(sprintf("Executing query: %s", query))
 
     # Execute the query
-    tryCatch({
-      result_data <- RODBC::sqlQuery(channel, query)
+    result_data <- RODBC::sqlQuery(channel, query)
 
-      # Check if result is an error message
-      if (is.character(result_data) && length(result_data) == 1) {
-        stop(paste("SQL error:", result_data))
-      }
+    # Check if result is an error message
+    if (is.character(result_data) && length(result_data) == 1) {
+      stop(paste("SQL error:", result_data))
+    }
 
-      # Ensure we have a data frame, even if empty
-      if (!is.data.frame(result_data)) {
-        result_data <- data.frame()
-      }
-
-    }, error = function(e) {
-      stop(paste("Error executing query:", e$message))
-    })
+    # Ensure we have a data frame, even if empty
+    if (!is.data.frame(result_data)) {
+      result_data <- data.frame()
+    }
 
     # Update progress bar
     for (i in 16:20) {
@@ -289,14 +284,15 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     }
 
   }, error = function(e) {
-    if (!is.null(channel)) {
-      RODBC::odbcClose(channel)
-    }
     stop(paste("Error:", e$message))
   }, finally = {
-    # Close the database connection
-    if (!is.null(channel)) {
-      RODBC::odbcClose(channel)
+    # Close the database connection - fixed the issue here
+    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+      tryCatch({
+        RODBC::odbcClose(channel)
+      }, error = function(e) {
+        # Silently ignore close errors
+      })
     }
   })
 
@@ -327,21 +323,22 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 #' @importFrom RODBC odbcConnect sqlTables odbcClose
 #' @export
 oracle.index <- function(schema = NULL) {
+
   # Validate secrets
   validate_secrets("sql")
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("conn")
+  conn_str <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
   # Connect to database
-  channel <- NULL
+  channel <- -1  # Initialize to invalid state
   tables <- NULL
 
   tryCatch({
     channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1) {
+    if (channel == -1 || is.null(channel)) {
       stop("Failed to connect to database")
     }
 
@@ -409,16 +406,19 @@ oracle.index <- function(schema = NULL) {
           schema, schema
         )
       }
-
       tables <- RODBC::sqlQuery(channel, query)
     }
 
   }, error = function(e) {
     message(paste("Error retrieving tables:", e$message))
-    return(NULL)
   }, finally = {
-    if (!is.null(channel)) {
-      RODBC::odbcClose(channel)
+    # Fixed connection close handling
+    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+      tryCatch({
+        RODBC::odbcClose(channel)
+      }, error = function(e) {
+        # Silently ignore close errors
+      })
     }
   })
 
@@ -437,7 +437,6 @@ oracle.index <- function(schema = NULL) {
 
     # Sort by schema and table name
     tables <- tables[order(tables$Schema, tables$Table), ]
-
     return(knitr::kable(tables, format = "simple"))
   } else {
     message("No tables found")
@@ -453,6 +452,7 @@ oracle.index <- function(schema = NULL) {
 #' @importFrom RODBC odbcConnect sqlColumns odbcClose
 #' @export
 oracle.dict <- function(table_name, schema = NULL) {
+
   if (is.null(table_name)) {
     stop("Table name is required")
   }
@@ -471,17 +471,17 @@ oracle.dict <- function(table_name, schema = NULL) {
   }
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("conn")
+  conn_str <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
   # Connect to database
-  channel <- NULL
+  channel <- -1  # Initialize to invalid state
   columns <- NULL
 
   tryCatch({
     channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1) {
+    if (channel == -1 || is.null(channel)) {
       stop("Failed to connect to database")
     }
 
@@ -493,6 +493,7 @@ oracle.dict <- function(table_name, schema = NULL) {
     })
 
     message(sprintf("Connected to %s database", db_info$DBMS.Name))
+
     is_oracle <- TRUE  # Always TRUE for oracle.dict
 
     # Try to get column information
@@ -506,14 +507,11 @@ oracle.dict <- function(table_name, schema = NULL) {
       }
     }, error = function(e) {
       message(paste("Error using sqlColumns:", e$message))
-
       # For Oracle, fall back to direct query
       if (is_oracle) {
         message("Trying direct Oracle query for column information...")
-
         # Try with uppercase table name for Oracle
         upper_table <- toupper(table_name)
-
         oracle_query <- if (!is.null(schema)) {
           # With schema
           upper_schema <- toupper(schema)
@@ -536,7 +534,6 @@ oracle.dict <- function(table_name, schema = NULL) {
             upper_table
           )
         }
-
         columns <- RODBC::sqlQuery(channel, oracle_query)
         if (is.character(columns) && length(columns) == 1) {
           # Error message
@@ -555,11 +552,14 @@ oracle.dict <- function(table_name, schema = NULL) {
 
   }, error = function(e) {
     message(paste("Error retrieving columns for table", table_name, ":", e$message))
-    return(NULL)
   }, finally = {
-    # Close connection if it was opened
-    if (!is.null(channel)) {
-      RODBC::odbcClose(channel)
+    # Fixed connection close handling
+    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+      tryCatch({
+        RODBC::odbcClose(channel)
+      }, error = function(e) {
+        # Silently ignore close errors
+      })
     }
   })
 
@@ -577,7 +577,6 @@ oracle.dict <- function(table_name, schema = NULL) {
       message("Warning: Column metadata format is non-standard")
       return(columns)
     }
-
     return(knitr::kable(columns, format = "simple"))
   } else {
     message(paste("No columns found for table", table_name))
@@ -594,6 +593,7 @@ oracle.dict <- function(table_name, schema = NULL) {
 #' @importFrom RODBC odbcConnect sqlQuery odbcClose
 #' @export
 oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
+
   if (is.null(query) || !is.character(query) || length(query) != 1) {
     stop("A valid SQL query string is required")
   }
@@ -603,7 +603,7 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
   config <- validate_config("sql")
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("conn")
+  conn_str <- get_secret("host")
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -631,12 +631,12 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
   }
 
   # Connect to database
-  channel <- NULL
+  channel <- -1  # Initialize to invalid state
   result <- NULL
 
   tryCatch({
     channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1) {
+    if (channel == -1 || is.null(channel)) {
       stop("Failed to connect to database")
     }
 
@@ -680,14 +680,15 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
 
   }, error = function(e) {
     message(paste("Error executing query:", e$message))
-    if (!is.null(channel)) {
-      RODBC::odbcClose(channel)
-    }
     stop(paste("Oracle Error:", e$message))
   }, finally = {
-    # Close connection if it was opened
-    if (!is.null(channel)) {
-      RODBC::odbcClose(channel)
+    # Fixed connection close handling
+    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+      tryCatch({
+        RODBC::odbcClose(channel)
+      }, error = function(e) {
+        # Silently ignore close errors
+      })
     }
   })
 
@@ -702,6 +703,7 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
   # Add schema prefix to table names if specified
   table_with_schema <- table_name
   superkey_with_schema <- superkey_table
+
   if (!is.null(schema)) {
     if (!grepl("\\.", table_name)) {
       table_with_schema <- paste0(schema, ".", table_name)
@@ -774,6 +776,7 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
   if (!is.null(superkey_with_schema) && !is.null(primary_key_column)) {
     # Determine join type based on 'all' parameter
     join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
+
     # Join with superkey table
     from_clause <- sprintf(
       "FROM %s %s %s %s %s ON %s.%s = %s.%s",
@@ -838,6 +841,7 @@ process_date_fields <- function(df, date_format = NULL) {
   # Identify potential date columns by name pattern
   date_patterns <- c("date", "dt", "timestamp")
   potential_date_cols <- character(0)
+
   for (pattern in date_patterns) {
     found_cols <- grep(pattern, names(df), value = TRUE, ignore.case = TRUE)
     potential_date_cols <- c(potential_date_cols, found_cols)
@@ -891,7 +895,6 @@ process_date_fields <- function(df, date_format = NULL) {
 #' Parse dates in various formats
 #'
 #' @param date_strings Vector of date strings to parse
-#'
 #' @return Vector of Date objects
 #' @noRd
 parseAnyDate <- function(date_strings) {
@@ -912,17 +915,14 @@ parseAnyDate <- function(date_strings) {
     if (requireNamespace("lubridate", quietly = TRUE)) {
       # Try ISO format (YYYY-MM-DD)
       parsed <- lubridate::ymd(valid_strings, quiet = TRUE)
-
       # If that fails, try US format (MM/DD/YYYY)
       if (all(is.na(parsed))) {
         parsed <- lubridate::mdy(valid_strings, quiet = TRUE)
       }
-
       # If that fails, try European format (DD/MM/YYYY)
       if (all(is.na(parsed))) {
         parsed <- lubridate::dmy(valid_strings, quiet = TRUE)
       }
-
       parsed
     } else {
       # Fallback if lubridate is not available
@@ -942,7 +942,6 @@ parseAnyDate <- function(date_strings) {
 #'
 #' @param df The data frame to filter
 #' @param interview_date The interview date filter value
-#'
 #' @return The filtered data frame
 #' @noRd
 filter_by_interview_date <- function(df, interview_date) {
@@ -986,7 +985,6 @@ filter_by_interview_date <- function(df, interview_date) {
 #'
 #' @param df The data frame to filter
 #' @param cols_to_check List of column names to check for non-NA values
-#'
 #' @return The filtered data frame
 #' @noRd
 filter_by_column_values <- function(df, cols_to_check) {
@@ -1051,7 +1049,6 @@ formatDuration <- function(duration) {
   } else {
     mins <- floor(secs / 60)
     remaining_secs <- round(secs %% 60, 1)
-
     if (remaining_secs > 0) {
       return(sprintf("%d minutes and %.1f seconds", mins, remaining_secs))
     } else {
@@ -1117,7 +1114,6 @@ completeLoadingAnimation <- function(pb) {
 #'
 #' @param df The data frame to process
 #' @param config The configuration containing missing value definitions
-#'
 #' @return The processed data frame
 #' @noRd
 handle_missing_values <- function(df, config) {
@@ -1153,7 +1149,6 @@ handle_missing_values <- function(df, config) {
               matches <- sum(mask, na.rm = TRUE)
               df[[col]][mask] <- NA
               transformed_count <- transformed_count + matches
-
               # Track which columns were affected
               if (!(col %in% transformed_cols)) {
                 transformed_cols <- c(transformed_cols, col)
@@ -1170,7 +1165,6 @@ handle_missing_values <- function(df, config) {
               matches <- sum(mask, na.rm = TRUE)
               df[[col]][mask] <- NA
               transformed_count <- transformed_count + matches
-
               # Track which columns were affected
               if (!(col %in% transformed_cols)) {
                 transformed_cols <- c(transformed_cols, col)
