@@ -114,42 +114,35 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       Sys.sleep(0.05)
     }
 
-    # Define the primary key information
+    # Define the primary key information with proper validation
     primary_key_column <- NULL
     superkey_table <- NULL
 
     if (join_primary_keys) {
-      # Check if config is valid and has sql section
-      if (!is.null(config) && is.list(config) && "sql" %in% names(config) && is.list(config$sql)) {
-        if ("primary_key" %in% names(config$sql)) {
-          primary_key_column <- config$sql$primary_key
-        } else {
-          message("Warning: Primary key not specified in config. Using default 'PARTICIPANTIDENTIFIER'")
-          primary_key_column <- "PARTICIPANTIDENTIFIER"
-        }
-
-        if ("superkey" %in% names(config$sql)) {
-          superkey_table <- config$sql$superkey
-        } else {
-          message("Warning: Superkey table not specified in config. Join with primary keys disabled.")
-          join_primary_keys <- FALSE
-        }
+      # Check config structure like your SQL functions do
+      if (!is.null(config) && !is.null(config$sql) && !is.null(config$sql$primary_key)) {
+        primary_key_column <- config$sql$primary_key
       } else {
-        message("Warning: Invalid config structure. Join with primary keys disabled.")
+        message("Warning: Primary key not specified in config. Using default 'PARTICIPANTIDENTIFIER'")
+        primary_key_column <- "PARTICIPANTIDENTIFIER"
+      }
+
+      if (!is.null(config) && !is.null(config$sql) && !is.null(config$sql$superkey)) {
+        superkey_table <- config$sql$superkey
+      } else {
+        message("Warning: Superkey table not specified in config. Join with primary keys disabled.")
         join_primary_keys <- FALSE
       }
     }
 
-    # Determine fields to exclude based on PII settings
+    # Determine fields to exclude based on PII settings with proper validation
     pii_fields <- character(0)
-    if (exclude_pii && !is.null(config) && is.list(config) && "sql" %in% names(config) && is.list(config$sql)) {
-      if ("pii_fields" %in% names(config$sql)) {
-        pii_fields <- config$sql$pii_fields
-        if (length(pii_fields) > 0) {
-          message(sprintf("Will exclude %d PII fields: %s",
-                          length(pii_fields),
-                          paste(pii_fields, collapse = ", ")))
-        }
+    if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
+      pii_fields <- config$sql$pii_fields
+      if (length(pii_fields) > 0) {
+        message(sprintf("Will exclude %d PII fields: %s",
+                        length(pii_fields),
+                        paste(pii_fields, collapse = ", ")))
       }
     }
 
@@ -615,16 +608,14 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
-  # Get PII fields configuration if needed
+  # Get PII fields configuration if needed with proper validation
   pii_fields <- NULL
-  if (exclude_pii && !is.null(config) && is.list(config) && "sql" %in% names(config) && is.list(config$sql)) {
-    if ("pii_fields" %in% names(config$sql)) {
-      pii_fields <- config$sql$pii_fields
-      if (length(pii_fields) > 0) {
-        message(sprintf("Will exclude %d PII fields if present in results: %s",
-                        length(pii_fields),
-                        paste(pii_fields, collapse=", ")))
-      }
+  if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
+    pii_fields <- config$sql$pii_fields
+    if (length(pii_fields) > 0) {
+      message(sprintf("Will exclude %d PII fields if present in results: %s",
+                      length(pii_fields),
+                      paste(pii_fields, collapse=", ")))
     }
   }
 
@@ -683,8 +674,8 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
       }
     }
 
-    # Apply missing value handling if configured
-    if (!is.null(config) && is.list(config) && "missing_data_codes" %in% names(config) && nrow(result) > 0) {
+    # Apply missing value handling if configured with proper validation
+    if (!is.null(config) && !is.null(config$missing_data_codes) && nrow(result) > 0) {
       result <- handle_missing_values(result, config)
     }
 
@@ -1210,7 +1201,7 @@ get_missing_data_codes <- function() {
   # Get configuration
   config <- validate_config("sql")
 
-  # Return missing data codes if configured
+  # Return missing data codes if configured with proper validation
   if (!is.null(config) && is.list(config) && "missing_data_codes" %in% names(config)) {
     return(config$missing_data_codes)
   }
