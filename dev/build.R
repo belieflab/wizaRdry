@@ -6,7 +6,7 @@ remove.packages("wizaRdry")
 rstudioapi::restartSession()
 
 # install devtools to usethis
-install.packages("devtools")
+if(!require(devtools)) {install.packages("devtools")}; library(devtools)
 
 # load dependencies
 usethis::use_package("config")
@@ -30,9 +30,6 @@ usethis::use_package("beepr")
 usethis::use_build_ignore(".github")
 usethis::use_build_ignore("dev")
 usethis::use_package("RODBC")
-
-# syncs all functions from dev (belieflab/api) to wizaRdry
-# source("dev/sync.R")
 
 # Generate documentation from roxygen comments
 devtools::document()

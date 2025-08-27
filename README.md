@@ -9,7 +9,7 @@
 
 ## A Magical Framework for Collaborative & Reproducible Data Analysis
 
-The 'wizaRdry' package provides a comprehensive data analysis framework specifically designed for NIH-funded computational psychiatry, neuroscience, and psychology research with built-in NIH Data Archive (NDA) integration.
+The **wizaRdry** package provides a comprehensive data analysis framework specifically designed for NIH-funded computational psychiatry, neuroscience, and psychology research with built-in NIH Data Archive (NDA) integration.
 
 ## Installation
 
@@ -87,7 +87,7 @@ baseUrls <- c("BASE_URL_1", "BASE_URL_2")
 # MongoDB
 connectionString <- "mongodb://your-connection-string"
 
-# SQL Server
+# SQL
 conn <- "BASE_URL"
 uid <- "USERNAME"
 pwd <- "PASSWORD"
@@ -304,3 +304,4 @@ R package version 0.1.0. https://github.com/belieflab/wizaRdry
 ## License
 
 MIT © [Joshua Kenney](LICENSE.md)
+# Test

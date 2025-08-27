@@ -11,7 +11,7 @@ safe_readline <- function(prompt, default = "", allow_exit = TRUE) {
     readline(prompt)
   }, interrupt = function(i) { # Interrupt handling. This part only gets called if Ctrl + C is pressed
     if (allow_exit) {
-      message("\nOperation cancelled by user. Exiting...")
+      message("\nOperation canceled by user. Exiting...")
       invokeRestart("abort") # At this point, the abort should cause nda() to exit at the highest level
     } else {
       message("\nInterrupt received. Using default value.")
@@ -32,9 +32,6 @@ safe_readline <- function(prompt, default = "", allow_exit = TRUE) {
 
   return(result)
 }
-
-# STEP 1: Add these 3 functions to your code (before ndaValidator function)
-
 # STEP 1: Add these 3 functions to your code (before ndaValidator function)
 
 # Enhanced parse_array_string function to handle your specific array formats
@@ -1040,8 +1037,152 @@ standardize_age <- function(df, verbose = TRUE, limited_dataset = limited_datase
   return(df)
 }
 
+# Calculate Jaro-Winkler similarity between two strings
+calculate_jaro_winkler <- function(str1, str2) {
+  # Convert to lowercase for comparison
+  str1 <- tolower(str1)
+  str2 <- tolower(str2)
+
+  # Handle exact matches first
+  if (str1 == str2) return(1.0)
+  if (nchar(str1) == 0 || nchar(str2) == 0) return(0.0)
+
+  # Parse structure names for scientific patterns
+  parse_nda_name <- function(name) {
+    # Remove version numbers (01, 02, etc.)
+    base <- gsub("\\d+$", "", name)
+    # Split on underscores
+    parts <- unlist(strsplit(base, "[_-]"))
+
+    list(
+      base = base,
+      parts = parts,
+      has_suffix = grepl("\\d+$", name),
+      suffix = if(grepl("\\d+$", name)) gsub(".*?(\\d+)$", "\\1", name) else ""
+    )
+  }
+
+  comp1 <- parse_nda_name(str1)
+  comp2 <- parse_nda_name(str2)
+
+  # Jaro-Winkler similarity algorithm implementation
+  jaro_winkler <- function(s1, s2, prefix_weight = 0.1) {
+    if (s1 == s2) return(1.0)
+    if (nchar(s1) == 0 || nchar(s2) == 0) return(0.0)
+
+    len1 <- nchar(s1)
+    len2 <- nchar(s2)
+
+    # Calculate match window
+    match_window <- floor(max(len1, len2) / 2) - 1
+    if (match_window < 0) match_window <- 0
+
+    # Track matches
+    s1_matches <- rep(FALSE, len1)
+    s2_matches <- rep(FALSE, len2)
+    matches <- 0
+    transpositions <- 0
+
+    # Find matches within the window
+    for (i in 1:len1) {
+      start <- max(1, i - match_window)
+      end <- min(len2, i + match_window)
+
+      for (j in start:end) {
+        if (s2_matches[j] || substr(s1, i, i) != substr(s2, j, j)) next
+        s1_matches[i] <- TRUE
+        s2_matches[j] <- TRUE
+        matches <- matches + 1
+        break
+      }
+    }
+
+    if (matches == 0) return(0.0)
+
+    # Count transpositions
+    k <- 1
+    for (i in 1:len1) {
+      if (!s1_matches[i]) next
+      while (!s2_matches[k]) k <- k + 1
+      if (substr(s1, i, i) != substr(s2, k, k)) transpositions <- transpositions + 1
+      k <- k + 1
+    }
+
+    # Calculate Jaro similarity
+    jaro <- (matches/len1 + matches/len2 + (matches - transpositions/2)/matches) / 3
+
+    # Add Winkler prefix bonus
+    prefix_length <- 0
+    max_prefix <- min(len1, len2, 4)
+    for (i in 1:max_prefix) {
+      if (substr(s1, i, i) == substr(s2, i, i)) {
+        prefix_length <- prefix_length + 1
+      } else {
+        break
+      }
+    }
+
+    return(jaro + (prefix_weight * prefix_length * (1 - jaro)))
+  }
+
+  # Start with Jaro-Winkler base similarity
+  base_score <- jaro_winkler(str1, str2)
+
+  # Scientific naming bonuses
+  bonuses <- 0
+
+  # 1. Substring containment bonus (e.g., "fomo" in "fomo01")
+  if (nchar(comp1$base) > 0 && nchar(comp2$base) > 0) {
+    if (grepl(comp1$base, comp2$base, fixed = TRUE) || grepl(comp2$base, comp1$base, fixed = TRUE)) {
+      shorter_len <- min(nchar(comp1$base), nchar(comp2$base))
+      longer_len <- max(nchar(comp1$base), nchar(comp2$base))
+      bonuses <- bonuses + (shorter_len / longer_len) * 0.15  # Reduced from 0.25
+    }
+  }
+
+  # 2. Version number bonus (both have numbers, or one is subset of other)
+  if (comp1$has_suffix && comp2$has_suffix) {
+    if (comp1$suffix == comp2$suffix) {
+      bonuses <- bonuses + 0.08  # Reduced from 0.15
+    }
+  } else if (comp1$has_suffix || comp2$has_suffix) {
+    # One has version, one doesn't - check if base names match
+    base1 <- comp1$base
+    base2 <- comp2$base
+    if (base1 == base2 || base1 == str2 || base2 == str1) {
+      bonuses <- bonuses + 0.12  # Reduced from 0.2
+    }
+  }
+
+  # 3. Common scientific abbreviations
+  scientific_abbrevs <- list(
+    demo = c("demographic", "demographics"),
+    behav = c("behavioral", "behaviour", "behavior"),
+    cog = c("cognitive", "cognition"),
+    psych = c("psychological", "psychology"),
+    neuro = c("neurological", "neuroscience"),
+    clin = c("clinical"),
+    fam = c("family", "familial")
+  )
+
+  # Check if either string is an abbreviation of the other
+  for (abbrev in names(scientific_abbrevs)) {
+    full_terms <- scientific_abbrevs[[abbrev]]
+    if ((str1 == abbrev && any(sapply(full_terms, function(x) grepl(x, str2)))) ||
+        (str2 == abbrev && any(sapply(full_terms, function(x) grepl(x, str1))))) {
+      bonuses <- bonuses + 0.2  # Reduced from 0.3
+      break
+    }
+  }
+
+  # Combine base score with bonuses, cap at 1.0
+  final_score <- min(1.0, base_score + bonuses)
+
+  return(final_score)
+}
+
 # Calculate Levenshtein distance similarity between two strings
-calculate_similarity <- function(str1, str2) {
+calculate_levenshtein <- function(str1, str2) {
   # Convert to lowercase
   str1 <- tolower(str1)
   str2 <- tolower(str2)
@@ -1246,7 +1387,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
       # Calculate similarity scores
       similarities <- sapply(valid_fields, function(name) {
         # Calculate direct similarity
-        calculate_similarity(field, name)
+        calculate_levenshtein(field, name)
       })
 
       # Store all similarity scores
@@ -1923,6 +2064,74 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       }
     }
 
+    # Check for invalid GUID values
+    if(verbose) message("\n\nChecking for invalid GUID values...")
+
+    # First, create a list to store the specific issues
+    guid_issues <- list(
+      invalid_length = character(0),
+      duplicate_guids = list(),
+      valid = TRUE
+    )
+
+    # Check 1: GUID length validation (must be exactly 12 characters)
+    subjectkeys <- as.character(df$subjectkey)
+    invalid_length_mask <- nchar(subjectkeys) != 12 & !is.na(subjectkeys) # Create a boolean to see if there are any GUIDs that are not 12 characters long
+
+    if(any(invalid_length_mask)) {
+      guid_issues$invalid_length <- unique(subjectkeys[invalid_length_mask]) # Store the GUIDs that are not 12 characters long
+      guid_issues$valid <- FALSE # Set valid flag for GUIDs to FALSE
+
+      if(verbose) {
+        cat(sprintf("\n  ERROR: %d GUIDs with invalid length (must be 12 characters):", length(guid_issues$invalid_length)))
+        cat(sprintf("\n    %s", paste(head(guid_issues$invalid_length, 10), collapse=", ")))
+        if(length(guid_issues$invalid_length) > 10) {
+          cat(sprintf(" (and %d more)", length(guid_issues$invalid_length) - 10))
+        }
+      }
+    }
+
+    # Check 2: GUID uniqueness per src_subject_id
+    # Use aggregate to get unique src_subject_ids per GUID in one pass
+    valid_rows <- !is.na(df$subjectkey) & !is.na(df$src_subject_id)
+    if(any(valid_rows)) {
+      guid_src_unique <- stats::aggregate(df$src_subject_id[valid_rows],
+                                  by = list(GUID = df$subjectkey[valid_rows]),
+                                  FUN = function(x) length(unique(x)))
+
+      # Find GUIDs with more than one unique src_subject_id
+      problematic_guids <- guid_src_unique$GUID[guid_src_unique$x > 1]
+
+      if(length(problematic_guids) > 0) {
+        guid_issues$valid <- FALSE
+
+        # Only for problematic GUIDs, get the actual src_subject_id values
+        for(guid in problematic_guids) {
+          src_ids <- unique(df$src_subject_id[df$subjectkey == guid & !is.na(df$subjectkey)])
+          guid_issues$duplicate_guids[[guid]] <- src_ids
+        }
+
+        if(verbose) {
+          cat(sprintf("\n  ERROR: %d GUIDs used with multiple src_subject_ids:",
+                    length(problematic_guids))) # Show the user the # of GUIDs with multiple src_subject_ids
+          for(guid in head(problematic_guids, 5)) {
+            cat(sprintf("\n    '%s' -> %s", guid,
+                      paste(guid_issues$duplicate_guids[[guid]], collapse=", "))) # Show the invalid GUID and associated src_subject_ids
+          }
+          if(length(problematic_guids) > 5) {
+            cat(sprintf("\n    (and %d more problematic GUIDs)", length(problematic_guids) - 5))
+          }
+        }
+      }
+    }
+
+    # Update the the valid flag for results based on GUID issues
+    # Store the GUID issues list in results for later use in the summary
+    if(guid_issues$valid == FALSE) {
+      results$valid <- FALSE
+      results$guid_validation <- guid_issues # Store length issue GUIDs and duplicate GUIDs in results
+    }
+
     # Check required fields
     missing_required <- required_fields[!required_fields %in% df_cols]
     if(length(missing_required) > 0) {
@@ -2057,6 +2266,29 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         if(length(results$unknown_fields) > 10) {
           message(sprintf("  ... and %d more", length(results$unknown_fields) - 10))
+        }
+      }
+
+      # If GUID issues were found, report them
+      if(length(results$guid_validation) > 0) {
+        # First report the top 10 GUIDs with invalid length (if any)
+        if(length(results$guid_validation$invalid_length) > 0) {
+          message(sprintf("- GUIDs with invalid length found (must be 12 characters): %d (%s)",
+                          length(results$guid_validation$invalid_length),
+                          paste(head(results$guid_validation$invalid_length, 10), collapse=", ")))
+          if(length(results$guid_validation$invalid_length) > 10) {
+            message(sprintf("  ... and %d more", length(results$guid_validation$invalid_length) - 10))
+          }
+        }
+
+        # Report the top 10 GUIDs with multiple src_subject_ids (if any)
+        if(length(results$guid_validation$duplicate_guids) > 0) {
+            message(sprintf("- Non-unique GUIDs found: %d (%s)",
+                            length(results$guid_validation$duplicate_guids),
+                            paste(head(names(results$guid_validation$duplicate_guids), 10), collapse=", ")))
+          if(length(results$guid_validation$duplicate_guids) > 10) {
+            message(sprintf("  ... and %d more", length(results$guid_validation$duplicate_guids) - 10))
+          }
         }
       }
 
@@ -2784,7 +3016,8 @@ ndaValidator <- function(measure_name,
                          verbose = TRUE,
                          debug = FALSE,
                          auto_drop_unknown = FALSE,
-                         interactive_mode = TRUE) {
+                         interactive_mode = TRUE,
+                         modified_structure = NULL) {
   tryCatch({
     # Initialize a list to track all columns to be removed
     all_columns_to_drop <- character(0)
@@ -2832,10 +3065,33 @@ ndaValidator <- function(measure_name,
     # Save the cleaned dataframe
     assign(measure_name, df, envir = .wizaRdry_env)
 
-    # Get structure name and fetch elements
+    # Get structure name and fetch/use elements
     structure_name <- measure_name
-    message("\n\nFetching ", structure_name, " Data Structure from NDA API...")
-    elements <- fetch_structure_elements(structure_name, nda_base_url)
+
+    if (!is.null(modified_structure)) {
+      # Use the enhanced structure that was passed in
+      message("\n\nUsing enhanced NDA structure with ndar_subject01 definitions...")
+      elements <- modified_structure$dataElements
+
+      if (is.null(elements) || nrow(elements) == 0) {
+        stop("Enhanced structure contains no dataElements")
+      }
+
+      message(sprintf("Enhanced structure contains %d field definitions", nrow(elements)))
+
+      # Show what key fields are now defined
+      key_fields <- c("race", "phenotype", "phenotype_description", "twins_study", "sibling_study")
+      enhanced_fields <- intersect(key_fields, elements$name)
+      if (length(enhanced_fields) > 0) {
+        message(sprintf("Enhanced with ndar_subject01 definitions for: %s",
+                        paste(enhanced_fields, collapse = ", ")))
+      }
+
+    } else {
+      # Original logic: fetch from API
+      message("\n\nFetching ", structure_name, " Data Structure from NDA API...")
+      elements <- fetch_structure_elements(structure_name, nda_base_url)
+    }
 
     if (is.null(elements) || nrow(elements) == 0) {
       stop("No elements found in the structure definition")
@@ -2927,16 +3183,20 @@ ndaValidator <- function(measure_name,
       fields_to_drop <- setdiff(validation_results$unknown_fields_dropped, renamed_fields)
       all_columns_to_drop <- c(all_columns_to_drop, fields_to_drop)
     }
-
     # Provide an attribute to the validation result with the processed dataframe
     # This allows the calling function to access the updated dataframe
     validation_results$df <- df
+
+    # Store NDA structure as an attribute
+    attr(validation_results, "nda_structure") <- list(
+      shortName = structure_name,
+      dataElements = elements
+    )
 
     # Final check for missing required values
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
       if(verbose) message("\nValidation FAILED: Required fields are missing or contain NA values")
     }
-
     return(validation_results)
   }, error = function(e) {
     message("Error in ndaValidator: ", e$message)

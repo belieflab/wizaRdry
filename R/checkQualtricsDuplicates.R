@@ -19,7 +19,9 @@
 #'       It checks for duplicates based on 'src_subject_id' combined with 'visit' or 'week' columns.
 #'       The function will stop and throw an error if the necessary columns are not present.
 #' @noRd
-checkQualtricsDuplicates <- function(measure_alias, measure_type) {
+
+checkQualtricsDuplicates <- function(measure_alias, measure_type, verbose = TRUE) {
+  
   # Ensure required packages are loaded
 
   # Generate the name of the dataframe and get it
@@ -51,6 +53,7 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type) {
             if (base::nrow(df_duplicates) == 0) {
               message("No duplicates found!")
             }
+
             tryCatch({
               testthat::test_that("Check for Qualtrics duplicates", {
                 testthat::expect_true(base::nrow(df_duplicates) == 0,
@@ -65,7 +68,9 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type) {
             })
 
             # Optionally view the offending records in RStudio's data viewer
-            # View(df_duplicates)
+            if (verbose) {
+              View(df_duplicates, title = paste0("Duplicates: ", measure_alias))
+            }
           }
         }
       }
