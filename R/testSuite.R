@@ -29,26 +29,26 @@
 #' @importFrom utils head
 #' @noRd
 testSuite <- function(measure_alias, measure_type, script_path, super_key) {
-  
   # Get identifier from config
   config <- validate_config()
   identifier <- config$identifier
-  
+
   # List of NDA required variables
-  nda_required_variables <- c("src_subject_id", "phenotype", "site", "arm", "visit", "week", 
+  nda_required_variables <- c("src_subject_id", "phenotype", "site", "arm", "visit", "week",
                               "subjectkey", "sex", "interview_date", "interview_age", "state")
-  
+
   # Perform generic tests
   checkQualtricsDuplicates(measure_alias, measure_type) # and give allow to View them in a table
   cleanDataFrameExists(measure_alias, measure_type) #checkin_clean x
   checkColumnPrefix(measure_alias, measure_type, nda_required_variables) # checkin_distress
-  
+
+
   # perform nda-specific tests
   if (identifier == "src_subject_id") {
     ndaRequiredVariablesExist(measure_alias, measure_type, nda_required_variables) # do Nda req variables exist
     checkInterviewAge(measure_alias) # <240 >860
   }
-  
+
   if (exists(measure_alias)) {
     message("Raw data found. Looking for super keys...")
     # Check for presence of super_key variables in the raw data
@@ -59,7 +59,7 @@ testSuite <- function(measure_alias, measure_type, script_path, super_key) {
       candidate_keys <- checkKeys(paste0(measure_alias, "_clean"), candidate_keys, "clean")
     }
   }
-  
-  
+
+
   # ...add additional functions here, making sure they pass in measure_alias and measure_type
 }

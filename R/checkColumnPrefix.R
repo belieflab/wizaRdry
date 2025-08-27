@@ -17,24 +17,29 @@
 #'       The actual dataset name is expected to be the measure alias suffixed with '_clean'.
 #' @noRd
 checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variables) {
-  
-  
+
+
   # Construct dataframe name based on measure_alias
   df_name <- paste0(measure_alias, "_clean")
-  
+
   # Fetch the dataframe
   df <- base::get(df_name)
-  
+
   # Determine columns to check based on measure_type
   if (measure_type == "qualtrics") {
     non_nda_cols <- dplyr::setdiff(colnames(df), c(nda_required_variables, "ResponseId"))
   } else if (measure_type=="redcap") {
-    non_nda_cols <- dplyr::setdiff(colnames(df), c(nda_required_variables, "int_start", 
+    non_nda_cols <- dplyr::setdiff(colnames(df), c(nda_required_variables, "int_start",
                                             "int_end"))
   } else {
     non_nda_cols <- dplyr::setdiff(colnames(df), nda_required_variables)
   }
-  
+
+  actual_non_conform <- non_nda_cols[!grepl(paste0("^", measure_alias, "_"), non_nda_cols)]
+  is_conforming <- length(actual_non_conform) == 0
+  if (is_conforming) {
+    message("Columns have correct naming convention")
+  }
   tryCatch({
     # Check naming convention for non-NDA columns
     test_that("Check column naming convention", {
@@ -42,7 +47,7 @@ checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variable
       is_conforming <- length(actual_non_conform) == 0
       expect_true(
         is_conforming,
-        info = paste0("SCRIPT ERROR: The following non-NDA columns in '", df_name, 
+        info = paste0("SCRIPT ERROR: The following non-NDA columns in '", df_name,
                      "' do not follow the correct naming convention starting with '", measure_alias, "_':\n",
                      paste(actual_non_conform, collapse = ", "))
       )

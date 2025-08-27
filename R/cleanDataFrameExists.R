@@ -17,22 +17,25 @@
 #'       but is not currently used.
 #' @noRd
 cleanDataFrameExists <- function(measure_alias, measure_type) {
-  
-  
+
+
   # append _clean to the measure in question
   output_df_name <- paste0(measure_alias, "_clean")
-  
+
+  if (exists(output_df_name)){
+    message("Clean data frame exists")
+  }
   tryCatch({
-    
+
     test_that("Clean df exists", {
-      
+
       # Check if the expected output_df_name is created
-      testthat::expect_true(exists(output_df_name), 
+      testthat::expect_true(exists(output_df_name),
                                                info = paste("SCRIPT ERROR: The script did not create '", output_df_name, "' dataframe."))
     })
-    
+
   }, error = function(e) {
     message("The script did not create a'", output_df_name, "' dataframe.", e$message)
   })
-  
+
 }
