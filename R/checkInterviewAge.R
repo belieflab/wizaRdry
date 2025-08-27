@@ -19,22 +19,24 @@
 #'       The function throws an error if the 'interview_age' falls outside the specified range.
 #' @noRd
 checkInterviewAge <- function(measure_alias) {
-  
-  
+
   months_in_a_year <- 12
   # define age range
   min_age <- 12 * months_in_a_year  # 144 months
   max_age <- 70 * months_in_a_year  # 840 months
-  
+
   # Construct the expected dataframe name
   output_df_name <- paste0(measure_alias, "_clean")
-  
+
   # Retrieve the dataframe based on constructed name
   df_clean <- base::get(output_df_name)  # specify the environment if needed
-  
+
   # age checker
   rows_not_meeting_condition <- df_clean$src_subject_id[df_clean$interview_age < min_age | df_clean$interview_age > max_age]
-  
+
+  if  (all(df_clean$interview_age >= min_age & df_clean$interview_age <= max_age)) {
+    message(paste0("Check interview_age is between ", min_age, " and ", max_age))
+  }
   tryCatch({
     # Perform tests
     test_that(paste0("Check interview_age is between ", min_age, " and ", max_age), {
