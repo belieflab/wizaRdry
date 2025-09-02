@@ -170,6 +170,18 @@ processCaprData <- function(df, instrument_name) {
     df <- df[, !names(df) %in% existing_columns_to_remove, drop = FALSE]
   }
   
+  # Standardize phenotype and sex values
+  if ("phenotype" %in% names(df)) {
+    df$phenotype <- tolower(df$phenotype)
+    message("Converted phenotype values to lowercase")
+  }
+  
+  if ("sex" %in% names(df)) {
+    df$sex <- ifelse(df$sex == "Male", "M", 
+                     ifelse(df$sex == "Female", "F", df$sex))
+    message("Recoded sex values: Male -> M, Female -> F")
+  }
+  
   # Reorder columns to put calculated/important fields first
   calculated_fields <- c("phenotype", "site", "visit", "interview_date", "int_diff")
   existing_calculated_fields <- intersect(names(df), calculated_fields)
