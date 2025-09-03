@@ -26,6 +26,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       base::get0(measure_name)
     }, error = function(e) NULL)
   }
+  
+  # Load missing data codes from config if available
+  missing_data_codes <- NULL
+  tryCatch({
+    config_env <- ConfigEnv$new("config.yml")
+    missing_data_codes <- config_env$get_missing_data_codes()
+  }, error = function(e) {
+    # Silently fail if config can't be loaded
+    missing_data_codes <- NULL
+  })
 
   # Handle both character vector and list formats
   if (is.character(submission_template)) {
@@ -113,6 +123,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     clean_data <- data_vector[!is.na(data_vector)]
     total_count <- length(data_vector)
     valid_count <- length(clean_data)
+    missing_count <- total_count - valid_count
 
     if (valid_count == 0) {
       return(list(
@@ -121,8 +132,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         size = 255,
         valueRange = "",
         required = "Recommended",
-        notes = paste0("Field contains only NA values (", total_count, " total rows)."),
-        aliases = ""
+        notes = paste0("Field contains only NA values (", total_count, " total rows). Missing: 100%"),
+        aliases = "",
+        missing_info = list(
+          missing_count = missing_count,
+          missing_percentage = 100.0,
+          total_count = total_count
+        )
       ))
     }
 
@@ -161,8 +177,26 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     unique_vals <- unique(clean_data)
     unique_count <- length(unique_vals)
     value_range <- ""
+    
+    # Detect user-defined missing value codes from config and data
+    user_defined_codes <- character(0)
+    if (data_type %in% c("Integer", "Float") && !is.null(missing_data_codes)) {
+      # Check for missing data codes defined in config
+      for (category in names(missing_data_codes)) {
+        if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+          category_values <- missing_data_codes[[category]]
+          if (is.character(category_values) || is.numeric(category_values)) {
+            for (code in category_values) {
+              if (as.numeric(code) %in% data_vector) {
+                user_defined_codes <- c(user_defined_codes, as.character(code))
+              }
+            }
+          }
+        }
+      }
+    }
 
-    if (data_type %in% c("Integer", "Float")) {
+    if (data_type == "Integer") {
       min_val <- min(clean_data, na.rm = TRUE)
       max_val <- max(clean_data, na.rm = TRUE)
 
@@ -172,12 +206,29 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         sorted_vals <- sort(unique_vals)
         value_range <- paste(sorted_vals, collapse = ";")
       } else {
-        # Use range notation for continuous data
-        if (data_type == "Integer") {
-          value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
-        } else {
-          value_range <- paste0(round(min_val, 3), "::", round(max_val, 3))
-        }
+        # Use range notation for integer data
+        value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
+      }
+      
+      # Append user-defined missing value codes if they exist
+      if (length(user_defined_codes) > 0) {
+        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
+      }
+    } else if (data_type == "Float") {
+      # For float variables, don't create value ranges - they're continuous
+      # Just note the number of unique values
+      if (unique_count <= 20) {
+        # If few unique values, list them
+        sorted_vals <- sort(unique_vals)
+        value_range <- paste(sorted_vals, collapse = ";")
+      } else {
+        # For many values, just note it's continuous
+        value_range <- "Continuous numeric data"
+      }
+      
+      # Append user-defined missing value codes if they exist
+      if (length(user_defined_codes) > 0) {
+        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
       }
     } else {
       # For categorical/string data, list unique values (up to 20)
@@ -198,10 +249,32 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
     # Generate comprehensive notes
     completeness_pct <- round((valid_count / total_count) * 100, 1)
+    missing_pct <- round((missing_count / total_count) * 100, 1)
 
     notes_parts <- c()
     notes_parts <- c(notes_parts, paste0("Computed field - ", unique_count, " unique values"))
     notes_parts <- c(notes_parts, paste0(completeness_pct, "% complete (", valid_count, "/", total_count, " non-NA)"))
+    notes_parts <- c(notes_parts, paste0(missing_pct, "% missing (", missing_count, "/", total_count, " NA values)"))
+    
+    # Document user-defined missing value codes if they exist
+    if (length(user_defined_codes) > 0 && !is.null(missing_data_codes)) {
+      code_descriptions <- character(0)
+      for (code in user_defined_codes) {
+        # Find which category this code belongs to
+        for (category in names(missing_data_codes)) {
+          if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+            category_values <- missing_data_codes[[category]]
+            if (as.numeric(code) %in% category_values) {
+              code_descriptions <- c(code_descriptions, paste0(code, " = ", category))
+              break
+            }
+          }
+        }
+      }
+      if (length(code_descriptions) > 0) {
+        notes_parts <- c(notes_parts, paste0("User-defined codes: ", paste(code_descriptions, collapse = ", ")))
+      }
+    }
 
     if (data_type %in% c("Integer", "Float")) {
       mean_val <- round(mean(clean_data, na.rm = TRUE), 3)
@@ -225,7 +298,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       valueRange = value_range,
       required = required,
       aliases = "",
-      notes = notes
+      notes = notes,
+      missing_info = list(
+        missing_count = missing_count,
+        missing_percentage = missing_pct,
+        total_count = total_count
+      )
     ))
   }
 
@@ -339,6 +417,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         matched_fields = 0,
         unmatched_fields = 0,
         computed_fields = 0,
+        modified_fields = 0,
         warnings = character(0)
       )
     )
@@ -353,11 +432,137 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # Field found in NDA structure
       nda_field <- nda_lookup[[column_name]]
 
+      # Get missing value information for existing fields
+      missing_info <- NULL
+      field_data <- NULL
+      field_exists_in_data <- FALSE
+      
+      if (!is.null(data_frame) && column_name %in% names(data_frame)) {
+        field_data <- data_frame[[column_name]]
+        field_exists_in_data <- TRUE
+        total_count <- length(field_data)
+        missing_count <- sum(is.na(field_data))
+        missing_percentage <- round((missing_count / total_count) * 100, 1)
+        
+        missing_info <- list(
+          missing_count = missing_count,
+          missing_percentage = missing_percentage,
+          total_count = total_count
+        )
+      }
+
+      # Check if this existing field has missing value codes that aren't in the original NDA value range
+      is_modified_structure <- FALSE
+      updated_value_range <- NULL
+      modification_notes <- NULL
+      
+      if (field_exists_in_data && !is.null(missing_data_codes)) {
+        original_value_range <- if ("valueRange" %in% names(nda_field)) nda_field$valueRange else ""
+        field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
+        
+        # Only check numeric fields for missing value codes
+        if (field_type %in% c("Integer", "Float")) {
+          # Detect missing value codes in the data
+          user_defined_codes <- character(0)
+          for (category in names(missing_data_codes)) {
+            if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+              category_values <- missing_data_codes[[category]]
+              if (is.character(category_values) || is.numeric(category_values)) {
+                for (code in category_values) {
+                  if (as.numeric(code) %in% field_data) {
+                    user_defined_codes <- c(user_defined_codes, as.character(code))
+                  }
+                }
+              }
+            }
+          }
+          
+          # Check if any of these codes are not in the original value range
+          if (length(user_defined_codes) > 0) {
+            original_codes <- character(0)
+            if (original_value_range != "") {
+              # Parse original value range to extract individual codes
+              range_parts <- trimws(strsplit(original_value_range, ";")[[1]])
+              for (part in range_parts) {
+                if (!grepl("::", part)) {  # Skip range notation
+                  original_codes <- c(original_codes, part)
+                }
+              }
+            }
+            
+            # Find new codes that aren't in the original
+            new_codes <- setdiff(user_defined_codes, original_codes)
+            if (length(new_codes) > 0) {
+              is_modified_structure <- TRUE
+              
+              # Create updated value range
+              if (original_value_range == "") {
+                updated_value_range <- paste(new_codes, collapse = ";")
+              } else {
+                updated_value_range <- paste0(original_value_range, ";", paste(new_codes, collapse = ";"))
+              }
+              
+              # Create modification notes
+              code_descriptions <- character(0)
+              for (code in new_codes) {
+                for (category in names(missing_data_codes)) {
+                  if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+                    category_values <- missing_data_codes[[category]]
+                    if (as.numeric(code) %in% category_values) {
+                      code_descriptions <- c(code_descriptions, paste0(code, " = ", category))
+                      break
+                    }
+                  }
+                }
+              }
+              modification_notes <- paste0("Modified structure: Added missing value codes: ", paste(code_descriptions, collapse = ", "))
+            }
+          }
+        }
+      }
+
+      # Determine source and metadata based on whether structure was modified
+      if (is_modified_structure) {
+        source <- "nda_modified"
+        # Use updated value range
+        validation_rules <- list(
+          min_value = if ("minimum" %in% names(nda_field)) nda_field$minimum else NULL,
+          max_value = if ("maximum" %in% names(nda_field)) nda_field$maximum else NULL,
+          allowed_values = updated_value_range,
+          pattern = if ("pattern" %in% names(nda_field)) nda_field$pattern else NULL
+        )
+        
+        # Update NDA metadata with modified value range
+        modified_nda_metadata <- nda_field
+        modified_nda_metadata$valueRange <- updated_value_range
+        if (!is.null(modification_notes)) {
+          modified_nda_metadata$notes <- paste0(if ("notes" %in% names(nda_field)) nda_field$notes else "", 
+                                               if ("notes" %in% names(nda_field) && nda_field$notes != "") " | " else "",
+                                               modification_notes)
+        }
+        
+        nda_metadata_to_use <- modified_nda_metadata
+        data_definition$metadata$validation_summary$modified_fields <-
+          (data_definition$metadata$validation_summary$modified_fields %||% 0) + 1
+      } else {
+        source <- "nda_validated"
+        # Use original validation rules and metadata
+        validation_rules <- list(
+          min_value = if ("minimum" %in% names(nda_field)) nda_field$minimum else NULL,
+          max_value = if ("maximum" %in% names(nda_field)) nda_field$maximum else NULL,
+          allowed_values = if ("valueRange" %in% names(nda_field)) nda_field$valueRange else NULL,
+          pattern = if ("pattern" %in% names(nda_field)) nda_field$pattern else NULL
+        )
+        nda_metadata_to_use <- nda_field
+        data_definition$metadata$validation_summary$matched_fields <-
+          data_definition$metadata$validation_summary$matched_fields + 1
+      }
+
       data_definition$fields[[column_name]] <- list(
         name = column_name,
         selection_order = i,
         selected_for_submission = TRUE,
-        source = "nda_validated",
+        source = source,
 
         # Copy NDA metadata
         data_type = if ("type" %in% names(nda_field)) nda_field$type else "unknown",
@@ -365,19 +570,18 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         required = if ("required" %in% names(nda_field)) as.logical(nda_field$required) else FALSE,
 
         # Validation rules
-        validation_rules = list(
-          min_value = if ("minimum" %in% names(nda_field)) nda_field$minimum else NULL,
-          max_value = if ("maximum" %in% names(nda_field)) nda_field$maximum else NULL,
-          allowed_values = if ("valueRange" %in% names(nda_field)) nda_field$valueRange else NULL,
-          pattern = if ("pattern" %in% names(nda_field)) nda_field$pattern else NULL
-        ),
+        validation_rules = validation_rules,
 
         # Additional NDA metadata
-        nda_metadata = nda_field
+        nda_metadata = nda_metadata_to_use,
+        
+        # Missing value information
+        missing_info = missing_info,
+        
+        # Modification information
+        is_modified = is_modified_structure,
+        modification_notes = modification_notes
       )
-
-      data_definition$metadata$validation_summary$matched_fields <-
-        data_definition$metadata$validation_summary$matched_fields + 1
 
     } else {
       # Field not found in NDA structure - compute metadata from data
@@ -431,7 +635,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         ),
         computed = TRUE,
         exists_in_data = field_exists_in_data,
-        warning = warning_msg
+        warning = warning_msg,
+        missing_info = computed_metadata$missing_info
       )
 
       data_definition$metadata$validation_summary$unmatched_fields <-
@@ -447,19 +652,57 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     matched_fields = data_definition$metadata$validation_summary$matched_fields,
     unmatched_fields = data_definition$metadata$validation_summary$unmatched_fields,
     computed_fields = data_definition$metadata$validation_summary$computed_fields,
+    modified_fields = data_definition$metadata$validation_summary$modified_fields,
     match_percentage = round(
       (data_definition$metadata$validation_summary$matched_fields / length(selected_columns)) * 100,
       2
     )
   )
+  
+  # Add missing value summary across all fields
+  total_missing_count <- 0
+  total_rows <- 0
+  fields_with_missing <- 0
+  
+  for (field_name in names(data_definition$fields)) {
+    field <- data_definition$fields[[field_name]]
+    if (!is.null(field$missing_info)) {
+      total_missing_count <- total_missing_count + field$missing_info$missing_count
+      total_rows <- max(total_rows, field$missing_info$total_count)
+      if (field$missing_info$missing_count > 0) {
+        fields_with_missing <- fields_with_missing + 1
+      }
+    }
+  }
+  
+  if (total_rows > 0) {
+    data_definition$summary$missing_data_summary <- list(
+      total_missing_values = total_missing_count,
+      total_data_points = total_rows * length(selected_columns),
+      overall_missing_percentage = round((total_missing_count / (total_rows * length(selected_columns))) * 100, 1),
+      fields_with_missing = fields_with_missing,
+      total_fields = length(selected_columns)
+    )
+  }
 
   # Print summary
   cat("\n=== Data Definition Summary ===\n")
   cat("Measure:", measure_name, "\n")
   cat("Selected fields:", length(selected_columns), "\n")
   cat("Matched with NDA:", data_definition$summary$matched_fields, "\n")
+  cat("Modified NDA structures:", data_definition$summary$modified_fields, "\n")
   cat("Computed from data:", data_definition$summary$computed_fields, "\n")
   cat("Match percentage:", paste0(data_definition$summary$match_percentage, "%"), "\n")
+  
+  # Print missing value summary
+  if (!is.null(data_definition$summary$missing_data_summary)) {
+    missing_summary <- data_definition$summary$missing_data_summary
+    cat("\n=== Missing Data Summary ===\n")
+    cat("Total missing values:", missing_summary$total_missing_values, "\n")
+    cat("Total data points:", missing_summary$total_data_points, "\n")
+    cat("Overall missing percentage:", paste0(missing_summary$overall_missing_percentage, "%"), "\n")
+    cat("Fields with missing data:", missing_summary$fields_with_missing, "/", missing_summary$total_fields, "\n")
+  }
 
   if (length(data_definition$metadata$validation_summary$warnings) > 0) {
     cat("\nInfo:\n")
@@ -682,6 +925,29 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                }, error = function(e) "")
              })
 
+             # Extract missing value information
+             missing_counts <- sapply(field_names, function(fname) {
+               tryCatch({
+                 x <- data_definition$fields[[fname]]
+                 if (!is.null(x$missing_info) && "missing_count" %in% names(x$missing_info)) {
+                   as.character(x$missing_info$missing_count %||% "0")
+                 } else {
+                   "0"
+                 }
+               }, error = function(e) "0")
+             })
+
+             missing_percentages <- sapply(field_names, function(fname) {
+               tryCatch({
+                 x <- data_definition$fields[[fname]]
+                 if (!is.null(x$missing_info) && "missing_percentage" %in% names(x$missing_info)) {
+                   paste0(as.character(x$missing_info$missing_percentage %||% "0"), "%")
+                 } else {
+                   "0%"
+                 }
+               }, error = function(e) "0%")
+             })
+
              # Create data frame with explicit length checking
              fields_df <- data.frame(
                ElementName = element_names,
@@ -692,6 +958,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                ValueRange = value_ranges,
                Notes = notes,
                Aliases = aliases,
+               MissingCount = missing_counts,
+               MissingPercentage = missing_percentages,
                stringsAsFactors = FALSE
              )
 
