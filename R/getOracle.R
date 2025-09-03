@@ -327,6 +327,7 @@ oracle.index <- function(schema = NULL) {
 
   # Validate secrets
   validate_secrets("sql")
+  config <- validate_config("sql")
 
   # Get connection parameters using get_secret
   conn_str <- get_secret("host")
@@ -460,6 +461,7 @@ oracle.dict <- function(table_name, schema = NULL) {
 
   # Validate secrets
   validate_secrets("sql")
+  config <- validate_config("sql")
 
   # Parse table_name to extract schema if not provided separately
   if (is.null(schema) && grepl("\\.", table_name)) {
