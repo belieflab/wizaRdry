@@ -918,7 +918,16 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                tryCatch({
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$aliases %||% "")
+                   alias_val <- x$nda_metadata$aliases %||% ""
+                   # If it's a vector, join with commas; if it's already a string, use as-is
+                   if (is.vector(alias_val) && length(alias_val) > 1) {
+                     paste(alias_val, collapse = ", ")
+                   } else if (is.character(alias_val) && length(alias_val) == 1) {
+                     # Remove c() syntax if present
+                     gsub("^c\\(|\\)$", "", alias_val)
+                   } else {
+                     as.character(alias_val)
+                   }
                  } else {
                    ""
                  }
