@@ -232,20 +232,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     # All computed fields are marked as "Recommended" (requirement 3)
     required <- "Recommended"
 
-    # Generate notes - keep it simple for Float fields
-    if (data_type == "Float") {
-      # For Float fields, keep notes minimal
-      notes_parts <- c()
-    } else {
-      # For other data types, provide comprehensive notes
-      completeness_pct <- round((valid_count / total_count) * 100, 1)
-      missing_pct <- round((missing_count / total_count) * 100, 1)
-
-      notes_parts <- c()
-      notes_parts <- c(notes_parts, paste0("Computed field - ", unique_count, " unique values"))
-      notes_parts <- c(notes_parts, paste0(completeness_pct, "% complete (", valid_count, "/", total_count, " non-NA)"))
-      notes_parts <- c(notes_parts, paste0(missing_pct, "% missing (", missing_count, "/", total_count, " NA values)"))
-    }
+    # Keep notes minimal for all field types
+    notes_parts <- c()
     
     # Document user-defined missing value codes if they exist
     if (length(user_defined_codes) > 0 && !is.null(missing_data_codes)) {
