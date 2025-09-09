@@ -344,7 +344,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
 
     # Generic patterns based on data characteristics
-    if (data_type %in% c("Integer", "Float")) {
+    if (data_type == "Integer") {
       unique_count <- length(unique(data_vector[!is.na(data_vector)]))
       min_val <- min(data_vector, na.rm = TRUE)
       max_val <- max(data_vector, na.rm = TRUE)
@@ -354,6 +354,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       } else {
         return(paste0("Numeric measurement (range: ", min_val, "-", max_val, ")"))
       }
+    } else if (data_type == "Float") {
+      # For Float fields, don't generate generic "Numeric measurement" placeholder
+      # Let other parts of the code handle meaningful descriptions
+      return("")
     } else {
       unique_count <- length(unique(data_vector[!is.na(data_vector)]))
       if (unique_count <= 5) {
