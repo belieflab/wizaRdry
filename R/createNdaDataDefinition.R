@@ -377,6 +377,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   existing_fields <- character(0)
   missing_fields <- character(0)
 
+  # Include ALL NDA fields plus any user-added fields
+  # This ensures modified data definitions include all original NDA fields
+  all_nda_fields <- names(nda_lookup)
+  user_added_fields <- selected_columns[!selected_columns %in% all_nda_fields]
+  
   if (!is.null(data_frame)) {
     existing_fields <- selected_columns[selected_columns %in% names(data_frame)]
     missing_fields <- selected_columns[!selected_columns %in% names(data_frame)]
@@ -385,8 +390,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     existing_fields <- selected_columns
   }
 
-  # Reorder: existing fields first, then missing ones
-  ordered_columns <- c(existing_fields, missing_fields)
+  # Include ALL NDA fields (even if not in current data) plus user-added fields
+  ordered_columns <- c(existing_fields, missing_fields, all_nda_fields[!all_nda_fields %in% selected_columns])
 
   # Initialize data definition structure
   data_definition <- list(

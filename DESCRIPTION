@@ -1,6 +1,6 @@
 Package: wizaRdry
 Title: A Magical Framework for Collaborative & Reproducible Data Analysis
-Version: 0.4.5
+Version: 0.4.6
 Authors@R: c(
     person("Joshua G.", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
     person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
