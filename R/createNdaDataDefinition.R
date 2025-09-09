@@ -958,8 +958,6 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                ValueRange = value_ranges,
                Notes = notes,
                Aliases = aliases,
-               MissingCount = missing_counts,
-               MissingPercentage = missing_percentages,
                stringsAsFactors = FALSE
              )
 
