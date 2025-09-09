@@ -200,35 +200,20 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       min_val <- min(clean_data, na.rm = TRUE)
       max_val <- max(clean_data, na.rm = TRUE)
 
-      # If small number of unique values, list them; otherwise use range
-      if (unique_count <= 20) {
-        # Sort numeric values
-        sorted_vals <- sort(unique_vals)
-        value_range <- paste(sorted_vals, collapse = ";")
-      } else {
-        # Use range notation for integer data
-        value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
-      }
+      # Always use range notation for integer data (less restrictive)
+      value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
       
       # Append user-defined missing value codes if they exist
       if (length(user_defined_codes) > 0) {
         value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
       }
     } else if (data_type == "Float") {
-      # For float variables, don't create value ranges - they're continuous
-      # Just note the number of unique values
-      if (unique_count <= 20) {
-        # If few unique values, list them
-        sorted_vals <- sort(unique_vals)
-        value_range <- paste(sorted_vals, collapse = ";")
-      } else {
-        # For many values, just note it's continuous
-        value_range <- "Continuous numeric data"
-      }
+      # For float variables, keep it simple - no value ranges
+      value_range <- ""
       
-      # Append user-defined missing value codes if they exist
+      # Only append user-defined missing value codes if they exist
       if (length(user_defined_codes) > 0) {
-        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
+        value_range <- paste(user_defined_codes, collapse = ";")
       }
     } else {
       # For categorical/string data, list unique values (up to 20)
@@ -247,14 +232,20 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     # All computed fields are marked as "Recommended" (requirement 3)
     required <- "Recommended"
 
-    # Generate comprehensive notes
-    completeness_pct <- round((valid_count / total_count) * 100, 1)
-    missing_pct <- round((missing_count / total_count) * 100, 1)
+    # Generate notes - keep it simple for Float fields
+    if (data_type == "Float") {
+      # For Float fields, keep notes minimal
+      notes_parts <- c()
+    } else {
+      # For other data types, provide comprehensive notes
+      completeness_pct <- round((valid_count / total_count) * 100, 1)
+      missing_pct <- round((missing_count / total_count) * 100, 1)
 
-    notes_parts <- c()
-    notes_parts <- c(notes_parts, paste0("Computed field - ", unique_count, " unique values"))
-    notes_parts <- c(notes_parts, paste0(completeness_pct, "% complete (", valid_count, "/", total_count, " non-NA)"))
-    notes_parts <- c(notes_parts, paste0(missing_pct, "% missing (", missing_count, "/", total_count, " NA values)"))
+      notes_parts <- c()
+      notes_parts <- c(notes_parts, paste0("Computed field - ", unique_count, " unique values"))
+      notes_parts <- c(notes_parts, paste0(completeness_pct, "% complete (", valid_count, "/", total_count, " non-NA)"))
+      notes_parts <- c(notes_parts, paste0(missing_pct, "% missing (", missing_count, "/", total_count, " NA values)"))
+    }
     
     # Document user-defined missing value codes if they exist
     if (length(user_defined_codes) > 0 && !is.null(missing_data_codes)) {
@@ -276,11 +267,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
 
-    if (data_type %in% c("Integer", "Float")) {
+    if (data_type == "Integer") {
       mean_val <- round(mean(clean_data, na.rm = TRUE), 3)
       sd_val <- round(stats::sd(clean_data, na.rm = TRUE), 3)
       notes_parts <- c(notes_parts, paste0("Mean: ", mean_val, ", SD: ", sd_val))
     }
+    # For Float fields, skip statistical information to keep them clean
 
     if (unique_count <= 10 && data_type == "String") {
       # For categorical data with few categories, show frequency
@@ -861,11 +853,11 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "size" %in% names(x$nda_metadata)) {
                    size_val <- x$nda_metadata$size
-                   if (is.null(size_val) || is.na(size_val)) NA else as.numeric(size_val)
+                   if (is.null(size_val) || is.na(size_val)) "" else as.numeric(size_val)
                  } else {
-                   NA
+                   ""
                  }
-               }, error = function(e) NA)
+               }, error = function(e) "")
              })
 
              required_vals <- sapply(field_names, function(fname) {
@@ -896,7 +888,9 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                tryCatch({
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "valueRange" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$valueRange %||% "")
+                   val_range <- x$nda_metadata$valueRange %||% ""
+                   # Clean up NA values and convert to empty string
+                   if (is.na(val_range) || val_range == "NA") "" else as.character(val_range)
                  } else {
                    ""
                  }
@@ -907,7 +901,9 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                tryCatch({
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "notes" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$notes %||% "")
+                   notes_val <- x$nda_metadata$notes %||% ""
+                   # Clean up NA values and convert to empty string
+                   if (is.na(notes_val) || notes_val == "NA" || notes_val == "character(0)") "" else as.character(notes_val)
                  } else {
                    ""
                  }
