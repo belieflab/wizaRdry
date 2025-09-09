@@ -235,6 +235,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     # Keep notes minimal for all field types
     notes_parts <- c()
     
+    # Calculate missing percentage for missing_info (still needed)
+    missing_pct <- round((missing_count / total_count) * 100, 1)
+    
     # Document user-defined missing value codes if they exist
     if (length(user_defined_codes) > 0 && !is.null(missing_data_codes)) {
       code_descriptions <- character(0)
