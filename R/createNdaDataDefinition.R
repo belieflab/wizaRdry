@@ -381,9 +381,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # 1. New fields (not in NDA)
   # 2. Modified fields (in NDA but changed)
   # Exclude unchanged NDA fields
+  # IMPORTANT: ndar_subject01 variables can NEVER be modified
   
   all_nda_fields <- names(nda_lookup)
   user_added_fields <- selected_columns[!selected_columns %in% all_nda_fields]
+  
+  # Identify ndar_subject01 variables that should never be modified
+  ndar_subject01_fields <- all_nda_fields[grepl("^ndar_subject01", all_nda_fields)]
   
   if (!is.null(data_frame)) {
     existing_fields <- selected_columns[selected_columns %in% names(data_frame)]
@@ -451,7 +455,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       updated_value_range <- NULL
       modification_notes <- NULL
       
-      if (field_exists_in_data && !is.null(missing_data_codes)) {
+      # IMPORTANT: ndar_subject01 variables can NEVER be modified
+      if (column_name %in% ndar_subject01_fields) {
+        # Force ndar_subject01 fields to remain unchanged
+        is_modified_structure <- FALSE
+      } else if (field_exists_in_data && !is.null(missing_data_codes)) {
         original_value_range <- if ("valueRange" %in% names(nda_field)) nda_field$valueRange else ""
         field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
         
