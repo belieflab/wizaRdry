@@ -888,6 +888,26 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     }
 
+    # Normalize specific values prior to validation (e.g., race mapping)
+    # Difference between NIH reporting and ndar_subject01
+    if (!is.null(df) && is.data.frame(df) && "race" %in% names(df)) {
+      # Ensure character for safe replacement
+      if (is.factor(df$race)) df$race <- as.character(df$race)
+      df$race <- trimws(df$race)
+      # Map NDA-disallowed label to allowed value
+      idx <- which(!is.na(df$race) & df$race == "Native Hawaiian or Pacific Islander")
+      if (length(idx) > 0) {
+        df$race[idx] <- "Hawaiian or Pacific Islander"
+        # Propagate updates to environments used downstream
+        base::assign(measure, df, envir = globalenv())
+        base::assign(measure, df, envir = origin_env)
+        if (exists(".wizaRdry_env")) {
+          base::assign(measure, df, envir = .wizaRdry_env)
+        }
+        message(sprintf("Normalized %d 'race' value(s) to 'Hawaiian or Pacific Islander'", length(idx)))
+      }
+    }
+
     # show missing data that needs filled
     if (DEBUG) message("[DEBUG] Checking for missing data in required fields")
     missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
