@@ -1012,14 +1012,27 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
                    alias_val <- x$nda_metadata$aliases %||% ""
-                   # If it's a vector, join with commas; if it's already a string, use as-is
-                   if (is.vector(alias_val) && length(alias_val) > 1) {
+                   
+                   # Handle different alias formats
+                   if (is.null(alias_val) || is.na(alias_val) || alias_val == "" || alias_val == "character(0)") {
+                     ""
+                   } else if (is.vector(alias_val) && length(alias_val) > 0) {
+                     # If it's a vector with elements, join with commas
                      paste(alias_val, collapse = ", ")
                    } else if (is.character(alias_val) && length(alias_val) == 1) {
-                     # Remove c() syntax if present
-                     gsub("^c\\(|\\)$", "", alias_val)
+                     # If it's a string, clean up R syntax
+                     cleaned <- gsub("^c\\(|\\)$", "", alias_val)
+                     # Remove quotes around individual items and clean up
+                     cleaned <- gsub('"([^"]*)"', "\\1", cleaned)
+                     # Split by comma and clean up whitespace, then rejoin
+                     if (nchar(cleaned) > 0) {
+                       items <- trimws(strsplit(cleaned, ",")[[1]])
+                       paste(items, collapse = ", ")
+                     } else {
+                       ""
+                     }
                    } else {
-                     as.character(alias_val)
+                     ""
                    }
                  } else {
                    ""

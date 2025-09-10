@@ -2270,7 +2270,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
       results$valid <- FALSE
       results$missing_required <- c(results$missing_required, missing_required)
       if(verbose) {
-        cat("\n\nMissing required fields:")
+        cat("\n\nMissing data for required elements:")
         cat(sprintf("\n  %s", paste(missing_required, collapse=", ")))
       }
     } else if(verbose) {
