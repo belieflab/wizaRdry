@@ -373,10 +373,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   }
 
-  # Sort selected columns: existing fields first, then missing ones
-  existing_fields <- character(0)
-  missing_fields <- character(0)
-
   # For modified data definitions, focus ONLY on changes:
   # 1. New fields (not in NDA)
   # 2. Modified fields (in NDA but changed)
@@ -389,16 +385,106 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # Identify ndar_subject01 variables that should never be modified
   ndar_subject01_fields <- all_nda_fields[grepl("^ndar_subject01", all_nda_fields)]
   
+  # Initialize lists for different field categories
+  new_fields <- character(0)
+  modified_fields <- character(0)
+  unchanged_fields <- character(0)
+  
   if (!is.null(data_frame)) {
-    existing_fields <- selected_columns[selected_columns %in% names(data_frame)]
-    missing_fields <- selected_columns[!selected_columns %in% names(data_frame)]
+    # Categorize fields based on whether they exist in data and NDA
+    for (field in selected_columns) {
+      if (field %in% names(data_frame)) {
+        if (field %in% all_nda_fields) {
+          # Field exists in both data and NDA - check if it's modified
+          if (field %in% ndar_subject01_fields) {
+            # ndar_subject01 fields can never be modified
+            unchanged_fields <- c(unchanged_fields, field)
+          } else {
+            # Check if this field has actual modifications
+            is_modified <- FALSE
+            
+            # Check for missing value code modifications
+            if (!is.null(missing_data_codes)) {
+              field_data <- data_frame[[field]]
+              field_type <- if ("type" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$type else "String"
+              
+              if (field_type %in% c("Integer", "Float")) {
+                # Check if field has missing value codes not in original NDA range
+                original_value_range <- if ("valueRange" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$valueRange else ""
+                
+                # Detect missing value codes in the data
+                user_defined_codes <- character(0)
+                for (category in names(missing_data_codes)) {
+                  if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+                    category_values <- missing_data_codes[[category]]
+                    if (is.character(category_values) || is.numeric(category_values)) {
+                      for (code in category_values) {
+                        if (as.numeric(code) %in% field_data) {
+                          user_defined_codes <- c(user_defined_codes, as.character(code))
+                        }
+                      }
+                    }
+                  }
+                }
+                
+                # Check if any of these codes are not in the original value range
+                if (length(user_defined_codes) > 0) {
+                  original_codes <- character(0)
+                  if (original_value_range != "") {
+                    # Parse original value range to extract individual codes
+                    range_parts <- trimws(strsplit(original_value_range, ";")[[1]])
+                    for (part in range_parts) {
+                      if (!grepl("::", part)) {  # Skip range notation
+                        original_codes <- c(original_codes, part)
+                      }
+                    }
+                  }
+                  
+                  # Find new codes that aren't in the original
+                  new_codes <- setdiff(user_defined_codes, original_codes)
+                  if (length(new_codes) > 0) {
+                    is_modified <- TRUE
+                  }
+                }
+              }
+            }
+            
+            if (is_modified) {
+              modified_fields <- c(modified_fields, field)
+            } else {
+              unchanged_fields <- c(unchanged_fields, field)
+            }
+          }
+        } else {
+          # Field exists in data but not in NDA - it's new
+          new_fields <- c(new_fields, field)
+        }
+      } else {
+        # Field doesn't exist in data - skip it
+        next
+      }
+    }
   } else {
-    # If no data frame available, keep original order
-    existing_fields <- selected_columns
+    # If no data frame available, treat all selected columns as new
+    new_fields <- selected_columns
   }
 
   # Only include fields that are new or modified (focus on changes only)
-  ordered_columns <- c(existing_fields, missing_fields)
+  ordered_columns <- c(new_fields, modified_fields)
+  
+  # Report what's being included in the data definition
+  if (length(new_fields) > 0) {
+    message(sprintf("Including %d new fields in data definition: %s", 
+                    length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+  }
+  if (length(modified_fields) > 0) {
+    message(sprintf("Including %d modified fields in data definition: %s", 
+                    length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
+  }
+  if (length(unchanged_fields) > 0) {
+    message(sprintf("Excluding %d unchanged NDA fields from data definition: %s", 
+                    length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
+  }
 
   # Initialize data definition structure
   data_definition <- list(

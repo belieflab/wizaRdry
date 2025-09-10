@@ -1415,15 +1415,36 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
           rename_field <- TRUE
           if(interactive_mode) {
             rename_input <- safe_readline(
-              prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n): ",
+              prompt = sprintf("Rename '%s' to '%s' (similarity: %.2f%%)? (y/n/m for manual): ",
                                field, best_match, best_score * 100),
               default = "y"
             )
             # Check to make sure the input is a valid response
-            while (!tolower(rename_input) %in% c("y", "n")){
-              rename_input <- readline(prompt = "Please enter either y or n: ")
+            while (!tolower(rename_input) %in% c("y", "n", "m")){
+              rename_input <- readline(prompt = "Please enter y, n, or m for manual entry: ")
             }
-            rename_field <- tolower(rename_input) %in% c("y", "yes")
+            
+            if(tolower(rename_input) == "m") {
+              # User wants to enter a field name manually
+              manual_input <- safe_readline(
+                prompt = sprintf("Enter the NDA field name for '%s': ", field),
+                default = ""
+              )
+              # Validate that the manual input is not empty
+              while(manual_input == "" || is.na(manual_input)) {
+                manual_input <- safe_readline(
+                  prompt = sprintf("Please enter a valid field name for '%s': ", field),
+                  default = ""
+                )
+              }
+              best_match <- manual_input
+              rename_field <- TRUE
+              if(verbose) {
+                cat(sprintf("Using manual field name: '%s'\n", best_match))
+              }
+            } else {
+              rename_field <- tolower(rename_input) %in% c("y", "yes")
+            }
           }
 
           # Check value range compatibility before renaming
@@ -1508,18 +1529,36 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
           selected_match <- NULL
           if(interactive_mode) {
             rename_input <- safe_readline(
-              prompt = sprintf("Select match for '%s' (1-5 to select, or press Enter to skip): ", field),
+              prompt = sprintf("Select match for '%s' (1-5 to select, 'm' for manual entry, or press Enter to skip): ", field),
               default = "0"
             )
-            # First check that the input is valid
-            while (!grepl("^[0-5]$",rename_input)){
-              rename_input <- safe_readline(prompt = 'Please enter a number 1-5 or press Enter to skip: ', default='0')
+            # Check if input is valid (number 1-5, 'm' for manual, or empty for skip)
+            while (!grepl("^[0-5]$|^[mM]$|^$", rename_input)){
+              rename_input <- safe_readline(prompt = 'Please enter a number 1-5, "m" for manual entry, or press Enter to skip: ', default='0')
             }
+            
             # Check if input is a number between 1-5
             if(grepl("^[1-5]$", rename_input)) {
               match_idx <- as.integer(rename_input)
               if(match_idx <= length(top_matches)) {
                 selected_match <- names(top_matches)[match_idx]
+              }
+            } else if(grepl("^[mM]$", rename_input)) {
+              # User wants to enter a field name manually
+              manual_input <- safe_readline(
+                prompt = sprintf("Enter the NDA field name for '%s': ", field),
+                default = ""
+              )
+              # Validate that the manual input is not empty
+              while(manual_input == "" || is.na(manual_input)) {
+                manual_input <- safe_readline(
+                  prompt = sprintf("Please enter a valid field name for '%s': ", field),
+                  default = ""
+                )
+              }
+              selected_match <- manual_input
+              if(verbose) {
+                cat(sprintf("Using manual field name: '%s'\n", selected_match))
               }
             }
 
