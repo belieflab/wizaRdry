@@ -23,7 +23,7 @@ cleanDataFrameExists <- function(measure_alias, measure_type) {
   output_df_name <- paste0(measure_alias, "_clean")
 
   if (exists(output_df_name)){
-    message("Clean data frame exists")
+    base::cat("Clean data frame exists: ")
   }
   tryCatch({
 

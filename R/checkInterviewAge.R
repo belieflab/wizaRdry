@@ -33,10 +33,28 @@ checkInterviewAge <- function(measure_alias) {
 
   # age checker
   rows_not_meeting_condition <- df_clean$src_subject_id[df_clean$interview_age < min_age | df_clean$interview_age > max_age]
+  rows_not_meeting_condition_notNA <- df_clean$src_subject_id[df_clean$interview_age[base::which(!base::is.na(df_clean$interview_age))] < min_age | df_clean$interview_age[base::which(!base::is.na(df_clean$interview_age))] > max_age]
 
-  if  (all(df_clean$interview_age >= min_age & df_clean$interview_age <= max_age)) {
-    message(paste0("Check interview_age is between ", min_age, " and ", max_age))
-  }
+  if (base::any(base::is.na(df_clean$interview_age))) {
+    if (all(df_clean$interview_age[base::which(!base::is.na(df_clean$interview_age))] >= min_age & df_clean$interview_age[base::which(!base::is.na(df_clean$interview_age))] <= max_age)) {
+      base::cat("Check interview_age is between ", min_age, " and ", max_age, ": ", sep = "")
+    }
+    tryCatch({
+      # Perform tests
+      test_that(paste0("Check interview_age is between ", min_age, " and ", max_age), {
+        testthat::expect_true(
+          all(df_clean$interview_age[base::which(!base::is.na(df_clean$interview_age))] >= min_age & df_clean$interview_age[base::which(!base::is.na(df_clean$interview_age))] <= max_age),
+          info = paste("DATA ERROR: All values in 'interview_age' should be greater than ", min_age, " and less than ", max_age, ". src_subject_id not meeting condition:", paste(rows_not_meeting_condition_notNA, collapse = ", "))
+        )
+      })
+    }, error = function(e) {
+      message(e$message)
+    })
+    base::cat("NA values found while checking interview age!")
+  } else {
+    if (all(df_clean$interview_age >= min_age & df_clean$interview_age <= max_age)) {
+      base::cat("Check interview_age is between ", min_age, " and ", max_age, ": ", sep = "")
+    }
   tryCatch({
     # Perform tests
     test_that(paste0("Check interview_age is between ", min_age, " and ", max_age), {
@@ -48,4 +66,7 @@ checkInterviewAge <- function(measure_alias) {
   }, error = function(e) {
     message("The following subjects have out of range ages:",rows_not_meeting_condition, e$message)
   })
+  }
 }
+# in the case where there are NA values in interview_age column, we should not be using testthat to check normally
+# for the condition bc it will flag NA values
