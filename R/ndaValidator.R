@@ -1458,7 +1458,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
             
             if(!range_check$compatible) {
               if(verbose) {
-                cat(sprintf("\n⚠️  VALUE RANGE CONFLICT DETECTED:\n"))
+                cat(sprintf("\n***  VALUE RANGE CONFLICT DETECTED:\n"))
                 cat(sprintf("   Source field '%s' range: %s\n", field, source_range))
                 cat(sprintf("   Target field '%s' range: %s\n", best_match, target_range))
                 cat(sprintf("   %s\n", range_check$message))
@@ -1573,7 +1573,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
               
               if(!range_check$compatible) {
                 if(verbose) {
-                  cat(sprintf("\n⚠️  VALUE RANGE CONFLICT DETECTED:\n"))
+                  cat(sprintf("\n***  VALUE RANGE CONFLICT DETECTED:\n"))
                   cat(sprintf("   Source field '%s' range: %s\n", field, source_range))
                   cat(sprintf("   Target field '%s' range: %s\n", selected_match, target_range))
                   cat(sprintf("   %s\n", range_check$message))
