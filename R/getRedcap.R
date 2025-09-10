@@ -221,6 +221,12 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     }
   })
 
+  # Determine if the requested instrument is the configured superkey form
+  is_superkey_request <- FALSE
+  if (!is.null(config$redcap$superkey)) {
+    is_superkey_request <- identical(trimws(instrument_name), trimws(config$redcap$superkey))
+  }
+
   # First get metadata to identify PII fields
   metadata <- NULL
   pii_fields <- c()
@@ -335,8 +341,11 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     super_key_cols <- setdiff(super_key_cols, pii_fields)
   }
 
-  # 3. Process superkey data to ensure it's available for all subjects regardless of event
-  if ("redcap_event_name" %in% names(superkey_response$data)) {
+  # If the requested instrument IS the superkey, return it directly without joins/propagation
+  if (is_superkey_request) {
+    message("Requested instrument matches configured superkey; returning without joins or propagation.")
+    df <- instrument_response$data
+  } else if ("redcap_event_name" %in% names(superkey_response$data)) {
     # First, ensure the primary key exists in the superkey data
     if (!(config$redcap$primary_key %in% names(superkey_response$data))) {
       stop(sprintf("Primary key '%s' not found in superkey data", config$redcap$primary_key))
@@ -374,7 +383,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
         }
       }
     }
-  } else {
+  } else if (!is_superkey_request) {
     # If no redcap_event_name, just use the superkey data as is, but only the allowed columns
     allowed_cols <- intersect(names(superkey_response$data), super_key_cols)
 
@@ -387,14 +396,14 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   }
 
   # FIXED: Merge the consolidated superkey with the instrument data
-  # Check for empty data frames first
-  if (nrow(consolidated_superkey) == 0) {
+  # If superkey requested, we already set df above; otherwise proceed with merge logic
+  if (!exists("df", inherits = FALSE) && nrow(consolidated_superkey) == 0) {
     message("Warning: Consolidated superkey is empty. Using instrument data as is.")
     df <- instrument_response$data
-  } else if (nrow(instrument_response$data) == 0) {
+  } else if (!exists("df", inherits = FALSE) && nrow(instrument_response$data) == 0) {
     message("Warning: Instrument data is empty. Using consolidated superkey as is.")
     df <- consolidated_superkey
-  } else if ("redcap_event_name" %in% names(instrument_response$data)) {
+  } else if (!exists("df", inherits = FALSE) && "redcap_event_name" %in% names(instrument_response$data)) {
     # Keep the original event names from the instrument data
     df <- instrument_response$data
 
@@ -427,7 +436,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
         }
       }
     }
-  } else {
+  } else if (!exists("df", inherits = FALSE)) {
     # Standard merge if there's no event name in the instrument data
     message("Performing standard merge of superkey and instrument data")
     # Make sure at least the primary key is in both data frames
