@@ -22,7 +22,7 @@
 #' @param schema Optional schema name to use for table qualification
 #'
 #' @return A data frame containing the requested SQL data
-#' @importFrom RODBC odbcConnect odbcGetInfo sqlTables sqlQuery odbcClose
+#' @importFrom odbc dbConnect dbGetInfo dbListTables dbGetQuery dbDisconnect
 #' @export
 #' @examples
 #' \dontrun{
@@ -45,8 +45,8 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                    interview_date = NULL, all = FALSE, schema = NULL) {
 
   # Check if required packages are available
-  if (!requireNamespace("RODBC", quietly = TRUE)) {
-    stop("Package 'RODBC' is needed for this function to work. Please install it.",
+  if (!requireNamespace("odbc", quietly = TRUE)) {
+    stop("Package 'odbc' is needed for this function to work. Please install it.",
          call. = FALSE)
   }
 
@@ -69,7 +69,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("host")
+  dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -90,23 +90,26 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Establish database connection
-  channel <- -1  # Initialize to invalid state
+  channel <- NULL
   result_data <- NULL
 
   tryCatch({
-    channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1 || is.null(channel)) {
+    channel <- odbc::dbConnect(odbc::odbc(),
+                              dsn = dsn,
+                              UID = user_id,
+                              PWD = password)
+    if (is.null(channel)) {
       stop("Failed to connect to database. Please check your connection settings.")
     }
 
     # Get database type information for diagnostic purposes
     db_info <- tryCatch({
-      RODBC::odbcGetInfo(channel)
+      odbc::dbGetInfo(channel)
     }, error = function(e) {
-      list(DBMS.Name = "Oracle")  # Default to Oracle since we're using the oracle function
+      list(dbms.name = "Oracle")  # Default to Oracle since we're using the oracle function
     })
 
-    message(sprintf("Connected to %s database", db_info$DBMS.Name))
+    message(sprintf("Connected to %s database", db_info$dbms.name))
 
     # Update progress bar
     for (i in 11:15) {
@@ -149,7 +152,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     # Check if table exists and get correct schema if needed
     table_exists <- FALSE
     if (!is.null(table_name)) {
-      tables_list <- RODBC::sqlTables(channel)
+      tables_list <- odbc::dbListTables(channel, schema_name = schema)
       # Convert table name to uppercase for case-insensitive comparison
       # (Oracle typically stores object names in uppercase)
       upper_table_name <- toupper(table_name)
@@ -157,23 +160,17 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       if (!is.null(schema)) {
         # Check if table exists in specified schema
         upper_schema <- toupper(schema)
-        table_exists <- any(toupper(tables_list$TABLE_SCHEM) == upper_schema &
-                              toupper(tables_list$TABLE_NAME) == upper_table_name)
+        table_exists <- any(toupper(tables_list) == upper_table_name)
         if (!table_exists) {
           # Try with exact case
-          table_exists <- any(tables_list$TABLE_SCHEM == schema &
-                                tables_list$TABLE_NAME == table_name)
+          table_exists <- any(tables_list == table_name)
         }
       } else {
         # Check if table exists in any schema
-        table_exists <- any(toupper(tables_list$TABLE_NAME) == upper_table_name)
+        table_exists <- any(toupper(tables_list) == upper_table_name)
         # If table exists but no schema specified, get the schema
         if (table_exists) {
-          schema_row <- tables_list[toupper(tables_list$TABLE_NAME) == upper_table_name, ]
-          if (nrow(schema_row) > 0) {
-            schema <- schema_row$TABLE_SCHEM[1]
-            message(sprintf("Found table in schema: %s", schema))
-          }
+          message(sprintf("Found table: %s", table_name))
         }
       }
 
@@ -209,7 +206,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     message(sprintf("Executing query: %s", query))
 
     # Execute the query
-    result_data <- RODBC::sqlQuery(channel, query)
+    result_data <- odbc::dbGetQuery(channel, query)
 
     # Check if result is an error message
     if (is.character(result_data) && length(result_data) == 1) {
@@ -288,9 +285,9 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     stop(paste("Error:", e$message))
   }, finally = {
     # Close the database connection - fixed the issue here
-    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+    if (!is.null(channel)) {
       tryCatch({
-        RODBC::odbcClose(channel)
+        odbc::dbDisconnect(channel)
       }, error = function(e) {
         # Silently ignore close errors
       })
@@ -321,7 +318,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 #'
 #' @param schema Optional schema name to filter tables
 #' @return A data frame with table information
-#' @importFrom RODBC odbcConnect sqlTables odbcClose
+#' @importFrom odbc dbConnect dbListTables dbDisconnect
 #' @export
 oracle.index <- function(schema = NULL) {
 
@@ -330,28 +327,31 @@ oracle.index <- function(schema = NULL) {
   config <- validate_config("sql")
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("host")
+  dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
   # Connect to database
-  channel <- -1  # Initialize to invalid state
+  channel <- NULL
   tables <- NULL
 
   tryCatch({
-    channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1 || is.null(channel)) {
+    channel <- odbc::dbConnect(odbc::odbc(),
+                              dsn = dsn,
+                              UID = user_id,
+                              PWD = password)
+    if (is.null(channel)) {
       stop("Failed to connect to database")
     }
 
     # Get database type for diagnostics
     db_info <- tryCatch({
-      RODBC::odbcGetInfo(channel)
+      odbc::dbGetInfo(channel)
     }, error = function(e) {
-      list(DBMS.Name = "Oracle")  # Default to Oracle since we're using oracle.index
+      list(dbms.name = "Oracle")  # Default to Oracle since we're using oracle.index
     })
 
-    message(sprintf("Connected to %s database", db_info$DBMS.Name))
+    message(sprintf("Connected to %s database", db_info$dbms.name))
 
     # Oracle-specific handling
     is_oracle <- TRUE  # Always TRUE for oracle.index
@@ -359,34 +359,24 @@ oracle.index <- function(schema = NULL) {
     # Get table list
     if (is.null(schema)) {
       # Get all tables
-      tables <- RODBC::sqlTables(channel)
+      tables <- odbc::dbListTables(channel)
       message("Retrieving tables from all schemas")
     } else {
       # Get tables from specific schema
       # Note: Oracle treats schema name as case-sensitive
-      tables <- RODBC::sqlTables(channel, schema = schema)
+      tables <- odbc::dbListTables(channel, schema_name = schema)
       message(sprintf("Retrieving tables from schema: %s", schema))
 
       # If no tables found, try uppercase (Oracle often stores schemas in uppercase)
-      if (is_oracle && (is.null(tables) || nrow(tables) == 0)) {
+      if (is_oracle && (is.null(tables) || length(tables) == 0)) {
         upper_schema <- toupper(schema)
-        tables <- RODBC::sqlTables(channel, schema = upper_schema)
+        tables <- odbc::dbListTables(channel, schema_name = upper_schema)
         message(sprintf("Trying uppercase schema: %s", upper_schema))
       }
     }
 
-    # If no tables found, try with catalog parameter for some ODBC drivers
-    if (is.null(tables) || nrow(tables) == 0) {
-      message("No tables found. Trying with catalog parameter...")
-      if (is.null(schema)) {
-        tables <- RODBC::sqlTables(channel, catalog = db_info$DBMS.Name)
-      } else {
-        tables <- RODBC::sqlTables(channel, catalog = db_info$DBMS.Name, schema = schema)
-      }
-    }
-
     # If still no tables, try direct query for Oracle
-    if (is_oracle && (is.null(tables) || nrow(tables) == 0)) {
+    if (is_oracle && (is.null(tables) || length(tables) == 0)) {
       message("Trying direct Oracle query to list tables...")
       if (is.null(schema)) {
         # Query all accessible tables in Oracle
@@ -408,16 +398,16 @@ oracle.index <- function(schema = NULL) {
           schema, schema
         )
       }
-      tables <- RODBC::sqlQuery(channel, query)
+      tables <- odbc::dbGetQuery(channel, query)
     }
 
   }, error = function(e) {
     message(paste("Error retrieving tables:", e$message))
   }, finally = {
     # Fixed connection close handling
-    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+    if (!is.null(channel)) {
       tryCatch({
-        RODBC::odbcClose(channel)
+        odbc::dbDisconnect(channel)
       }, error = function(e) {
         # Silently ignore close errors
       })
@@ -425,25 +415,40 @@ oracle.index <- function(schema = NULL) {
   })
 
   # Format the result
-  if (!is.null(tables) && nrow(tables) > 0) {
-    # Keep only relevant columns
-    if (all(c("TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE") %in% names(tables))) {
-      tables <- tables[, c("TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE")]
-    } else if (ncol(tables) >= 3) {
-      # Handle case where column names might be different
-      colnames(tables)[1:3] <- c("Schema", "Table", "Type")
+  if (!is.null(tables) && length(tables) > 0) {
+    # If tables is a character vector (from dbListTables), convert to data frame
+    if (is.character(tables)) {
+      tables_df <- data.frame(
+        Schema = rep(ifelse(is.null(schema), "Unknown", schema), length(tables)),
+        Table = tables,
+        Type = rep("TABLE", length(tables)),
+        stringsAsFactors = FALSE
+      )
+    } else if (is.data.frame(tables)) {
+      # Keep only relevant columns
+      if (all(c("TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE") %in% names(tables))) {
+        tables_df <- tables[, c("TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE")]
+        names(tables_df) <- c("Schema", "Table", "Type")
+      } else if (ncol(tables) >= 3) {
+        # Handle case where column names might be different
+        tables_df <- tables[, 1:3]
+        names(tables_df) <- c("Schema", "Table", "Type")
+      } else {
+        tables_df <- tables
+      }
+    } else {
+      tables_df <- data.frame()
     }
 
-    # Rename columns for clarity
-    names(tables) <- c("Schema", "Table", "Type")
-
     # Sort by schema and table name
-    tables <- tables[order(tables$Schema, tables$Table), ]
-    return(knitr::kable(tables, format = "simple"))
-  } else {
-    message("No tables found")
-    return(NULL)
+    if (nrow(tables_df) > 0) {
+      tables_df <- tables_df[order(tables_df$Schema, tables_df$Table), ]
+      return(knitr::kable(tables_df, format = "simple"))
+    }
   }
+  
+  message("No tables found")
+  return(NULL)
 }
 
 #' Get Oracle table columns/metadata
@@ -451,7 +456,7 @@ oracle.index <- function(schema = NULL) {
 #' @param table_name Name of the table to get metadata for
 #' @param schema Optional schema name
 #' @return A data frame with column information
-#' @importFrom RODBC odbcConnect sqlColumns odbcClose
+#' @importFrom odbc dbConnect dbListFields dbGetQuery dbDisconnect
 #' @export
 oracle.dict <- function(table_name, schema = NULL) {
 
@@ -474,28 +479,31 @@ oracle.dict <- function(table_name, schema = NULL) {
   }
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("host")
+  dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
   # Connect to database
-  channel <- -1  # Initialize to invalid state
+  channel <- NULL
   columns <- NULL
 
   tryCatch({
-    channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1 || is.null(channel)) {
+    channel <- odbc::dbConnect(odbc::odbc(),
+                              dsn = dsn,
+                              UID = user_id,
+                              PWD = password)
+    if (is.null(channel)) {
       stop("Failed to connect to database")
     }
 
     # Get database type for diagnostics
     db_info <- tryCatch({
-      RODBC::odbcGetInfo(channel)
+      odbc::dbGetInfo(channel)
     }, error = function(e) {
-      list(DBMS.Name = "Oracle")  # Default to Oracle for oracle.dict
+      list(dbms.name = "Oracle")  # Default to Oracle for oracle.dict
     })
 
-    message(sprintf("Connected to %s database", db_info$DBMS.Name))
+    message(sprintf("Connected to %s database", db_info$dbms.name))
 
     is_oracle <- TRUE  # Always TRUE for oracle.dict
 
@@ -503,13 +511,25 @@ oracle.dict <- function(table_name, schema = NULL) {
     tryCatch({
       if (!is.null(schema)) {
         # With schema
-        columns <- RODBC::sqlColumns(channel, table_name, schema = schema)
+        columns <- odbc::dbListFields(channel, name = table_name, schema_name = schema)
       } else {
         # Without schema
-        columns <- RODBC::sqlColumns(channel, table_name)
+        columns <- odbc::dbListFields(channel, name = table_name)
+      }
+      
+      # Convert to data frame format
+      if (!is.null(columns) && length(columns) > 0) {
+        columns_df <- data.frame(
+          Column = columns,
+          Type = rep("Unknown", length(columns)),
+          Size = rep(NA, length(columns)),
+          Nullable = rep("Unknown", length(columns)),
+          stringsAsFactors = FALSE
+        )
+        columns <- columns_df
       }
     }, error = function(e) {
-      message(paste("Error using sqlColumns:", e$message))
+      message(paste("Error using dbListFields:", e$message))
       # For Oracle, fall back to direct query
       if (is_oracle) {
         message("Trying direct Oracle query for column information...")
@@ -537,7 +557,7 @@ oracle.dict <- function(table_name, schema = NULL) {
             upper_table
           )
         }
-        columns <- RODBC::sqlQuery(channel, oracle_query)
+        columns <- odbc::dbGetQuery(channel, oracle_query)
         if (is.character(columns) && length(columns) == 1) {
           # Error message
           message(paste("Oracle query error:", columns))
@@ -557,9 +577,9 @@ oracle.dict <- function(table_name, schema = NULL) {
     message(paste("Error retrieving columns for table", table_name, ":", e$message))
   }, finally = {
     # Fixed connection close handling
-    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+    if (!is.null(channel)) {
       tryCatch({
-        RODBC::odbcClose(channel)
+        odbc::dbDisconnect(channel)
       }, error = function(e) {
         # Silently ignore close errors
       })
@@ -593,7 +613,7 @@ oracle.dict <- function(table_name, schema = NULL) {
 #' @param exclude_pii Default TRUE to remove all fields marked as identifiable
 #' @param schema Optional schema name to qualify table names in the query
 #' @return A data frame with the query results
-#' @importFrom RODBC odbcConnect sqlQuery odbcClose
+#' @importFrom odbc dbConnect dbGetQuery dbDisconnect
 #' @export
 oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
 
@@ -606,7 +626,7 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
   config <- validate_config("sql")
 
   # Get connection parameters using get_secret
-  conn_str <- get_secret("host")
+  dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
 
@@ -634,26 +654,29 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
   }
 
   # Connect to database
-  channel <- -1  # Initialize to invalid state
+  channel <- NULL
   result <- NULL
 
   tryCatch({
-    channel <- RODBC::odbcConnect(conn_str, uid = user_id, pwd = password, believeNRows = FALSE)
-    if (channel == -1 || is.null(channel)) {
+    channel <- odbc::dbConnect(odbc::odbc(),
+                              dsn = dsn,
+                              UID = user_id,
+                              PWD = password)
+    if (is.null(channel)) {
       stop("Failed to connect to database")
     }
 
     # Get database info for diagnostics
     db_info <- tryCatch({
-      RODBC::odbcGetInfo(channel)
+      odbc::dbGetInfo(channel)
     }, error = function(e) {
-      list(DBMS.Name = "Oracle")  # Default to Oracle for oracle.query
+      list(dbms.name = "Oracle")  # Default to Oracle for oracle.query
     })
 
-    message(sprintf("Connected to %s database", db_info$DBMS.Name))
+    message(sprintf("Connected to %s database", db_info$dbms.name))
 
     # Execute query
-    result <- RODBC::sqlQuery(channel, query)
+    result <- odbc::dbGetQuery(channel, query)
 
     # Check if result is an error message
     if (is.character(result) && length(result) == 1) {
@@ -686,9 +709,9 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
     stop(paste("Oracle Error:", e$message))
   }, finally = {
     # Fixed connection close handling
-    if (!is.null(channel) && is.numeric(channel) && channel != -1) {
+    if (!is.null(channel)) {
       tryCatch({
-        RODBC::odbcClose(channel)
+        odbc::dbDisconnect(channel)
       }, error = function(e) {
         # Silently ignore close errors
       })
@@ -1209,4 +1232,97 @@ get_missing_data_codes <- function() {
   }
 
   return(NULL)
+}
+
+#' Test Oracle database connection
+#'
+#' Tests the connection to the Oracle database using the configured DSN and credentials.
+#' This is a simple connectivity test that doesn't perform any data operations.
+#'
+#' @return A logical value indicating whether the connection was successful
+#' @importFrom odbc dbConnect dbDisconnect
+#' @export
+#' @examples
+#' \dontrun{
+#' # Test the Oracle connection
+#' if (oracle.test()) {
+#'   message("Oracle connection successful!")
+#' } else {
+#'   message("Oracle connection failed!")
+#' }
+#' }
+oracle.test <- function() {
+  
+  # Check if required packages are available
+  if (!requireNamespace("odbc", quietly = TRUE)) {
+    message("Package 'odbc' is needed for this function to work. Please install it.")
+    return(FALSE)
+  }
+  
+  # Validate secrets
+  tryCatch({
+    validate_secrets("sql")
+  }, error = function(e) {
+    message("Error validating secrets: ", e$message)
+    return(FALSE)
+  })
+  
+  # Get connection parameters using get_secret
+  dsn <- get_secret("host")  # This should be the DSN name
+  user_id <- get_secret("uid")
+  password <- get_secret("pwd")
+  
+  # Validate that we have the required connection parameters
+  if (is.null(dsn) || is.null(user_id) || is.null(password)) {
+    message("Missing connection parameters. Please check your secrets configuration.")
+    return(FALSE)
+  }
+  
+  # Test the connection
+  channel <- NULL
+  connection_successful <- FALSE
+  
+  tryCatch({
+    message(sprintf("Testing connection to DSN: %s", dsn))
+    
+    # Attempt to connect
+    channel <- odbc::dbConnect(odbc::odbc(),
+                              dsn = dsn,
+                              UID = user_id,
+                              PWD = password)
+    
+    if (is.null(channel)) {
+      message("Connection failed: channel is null")
+      return(FALSE)
+    }
+    
+    # Get database info to confirm connection is working
+    db_info <- tryCatch({
+      odbc::dbGetInfo(channel)
+    }, error = function(e) {
+      message("Warning: Could not retrieve database info: ", e$message)
+      list(dbms.name = "Oracle")
+    })
+    
+    message(sprintf("Successfully connected to %s database", db_info$dbms.name))
+    connection_successful <- TRUE
+    
+  }, error = function(e) {
+    message("Connection failed: ", e$message)
+    connection_successful <- FALSE
+  }, finally = {
+    # Always try to close the connection
+    if (!is.null(channel)) {
+      tryCatch({
+        odbc::dbDisconnect(channel)
+        if (connection_successful) {
+          message("Connection closed successfully")
+        }
+      }, error = function(e) {
+        message("Warning: Error closing connection: ", e$message)
+      })
+    }
+  })
+  
+  return(connection_successful)
 }
