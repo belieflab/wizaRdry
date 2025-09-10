@@ -36,9 +36,8 @@ checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variable
   }
 
   actual_non_conform <- non_nda_cols[!grepl(paste0("^", measure_alias, "_"), non_nda_cols)]
-  is_conforming <- length(actual_non_conform) == 0
-  if (is_conforming) {
-    message("Columns have correct naming convention")
+  if (length(actual_non_conform) == 0) {
+    base::cat("Columns have correct naming convention ")
   }
   tryCatch({
     # Check naming convention for non-NDA columns

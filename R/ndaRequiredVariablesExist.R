@@ -52,7 +52,7 @@ ndaRequiredVariablesExist <- function(measure_alias, measure_type, nda_required_
   missing_vars <- dplyr::setdiff(adjusted_nda_required, colnames(df_clean))
 
   if (length(missing_vars) == 0) {
-    message("nda required variables exist!")
+    base::cat("nda required variables exist: ")
   }
   tryCatch({
     test_that("Check for missing NDA required variables", {
