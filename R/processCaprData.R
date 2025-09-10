@@ -162,7 +162,7 @@ processCaprData <- function(df, instrument_name) {
   }
   
   # Clean up CAPR-specific columns that are no longer needed
-  columns_to_remove <- c("subject_dob", "group_status", "int_start", "int_end")
+  columns_to_remove <- c("subject_dob", "group_status")
   existing_columns_to_remove <- intersect(names(df), columns_to_remove)
   
   if (length(existing_columns_to_remove) > 0) {
