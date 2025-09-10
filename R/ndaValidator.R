@@ -1426,6 +1426,44 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
             rename_field <- tolower(rename_input) %in% c("y", "yes")
           }
 
+          # Check value range compatibility before renaming
+          if(rename_field) {
+            # Get value ranges for both fields
+            source_range <- get_field_value_range(field, elements)
+            target_range <- get_field_value_range(best_match, elements)
+            
+            # Check if value ranges are compatible
+            range_check <- check_value_range_compatibility(source_range, target_range, field, best_match, verbose)
+            
+            if(!range_check$compatible) {
+              if(verbose) {
+                cat(sprintf("\n⚠️  VALUE RANGE CONFLICT DETECTED:\n"))
+                cat(sprintf("   Source field '%s' range: %s\n", field, source_range))
+                cat(sprintf("   Target field '%s' range: %s\n", best_match, target_range))
+                cat(sprintf("   %s\n", range_check$message))
+                cat(sprintf("   Recommendation: %s\n", range_check$recommendation))
+              }
+              
+              # Ask user if they want to proceed despite the conflict
+              if(interactive_mode) {
+                proceed_input <- safe_readline(
+                  prompt = sprintf("Proceed with rename despite value range conflict? (y/n): "),
+                  default = "n"
+                )
+                while (!tolower(proceed_input) %in% c("y", "n")){
+                  proceed_input <- readline(prompt = "Please enter either y or n: ")
+                }
+                rename_field <- tolower(proceed_input) %in% c("y", "yes")
+              } else {
+                # In non-interactive mode, skip the rename if there's a conflict
+                rename_field <- FALSE
+                if(verbose) {
+                  cat("Skipping rename due to value range conflict (non-interactive mode)\n")
+                }
+              }
+            }
+          }
+          
           if(rename_field) {
             if(verbose) {
               message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
@@ -1487,18 +1525,73 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
 
             # If user selected a match
             if(!is.null(selected_match)) {
-              if(verbose) {
-                message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
-                                field, selected_match, top_matches[match_idx] * 100))
+              # Check value range compatibility before renaming
+              source_range <- get_field_value_range(field, elements)
+              target_range <- get_field_value_range(selected_match, elements)
+              
+              # Check if value ranges are compatible
+              range_check <- check_value_range_compatibility(source_range, target_range, field, selected_match, verbose)
+              
+              if(!range_check$compatible) {
+                if(verbose) {
+                  cat(sprintf("\n⚠️  VALUE RANGE CONFLICT DETECTED:\n"))
+                  cat(sprintf("   Source field '%s' range: %s\n", field, source_range))
+                  cat(sprintf("   Target field '%s' range: %s\n", selected_match, target_range))
+                  cat(sprintf("   %s\n", range_check$message))
+                  cat(sprintf("   Recommendation: %s\n", range_check$recommendation))
+                }
+                
+                # Ask user if they want to proceed despite the conflict
+                if(interactive_mode) {
+                  proceed_input <- safe_readline(
+                    prompt = sprintf("Proceed with rename despite value range conflict? (y/n): "),
+                    default = "n"
+                  )
+                  while (!tolower(proceed_input) %in% c("y", "n")){
+                    proceed_input <- readline(prompt = "Please enter either y or n: ")
+                  }
+                  if(tolower(proceed_input) %in% c("y", "yes")) {
+                    # Proceed with rename
+                    if(verbose) {
+                      message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
+                                      field, selected_match, top_matches[match_idx] * 100))
+                    }
+                    field_data <- df[[field]]
+                    df[[selected_match]] <- field_data
+                    # Track rename
+                    renamed$renamed_fields <- c(renamed$renamed_fields, field)
+                    renamed$renames <- c(renamed$renames,
+                                         sprintf("%s -> %s (%.2f%%)",
+                                                 field, selected_match, top_matches[match_idx] * 100))
+                  } else {
+                    # Skip rename due to conflict
+                    if(verbose) {
+                      cat("Skipping rename due to value range conflict\n")
+                    }
+                    selected_match <- NULL  # Reset to trigger drop/keep logic
+                  }
+                } else {
+                  # In non-interactive mode, skip the rename if there's a conflict
+                  if(verbose) {
+                    cat("Skipping rename due to value range conflict (non-interactive mode)\n")
+                  }
+                  selected_match <- NULL  # Reset to trigger drop/keep logic
+                }
+              } else {
+                # Value ranges are compatible, proceed with rename
+                if(verbose) {
+                  message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
+                                  field, selected_match, top_matches[match_idx] * 100))
+                }
+                # Use [[ ]] to safely handle special characters in field names
+                field_data <- df[[field]]
+                df[[selected_match]] <- field_data
+                # Track rename
+                renamed$renamed_fields <- c(renamed$renamed_fields, field)
+                renamed$renames <- c(renamed$renames,
+                                     sprintf("%s -> %s (%.2f%%)",
+                                             field, selected_match, top_matches[match_idx] * 100))
               }
-              # Use [[ ]] to safely handle special characters in field names
-              field_data <- df[[field]]
-              df[[selected_match]] <- field_data
-              # Track rename
-              renamed$renamed_fields <- c(renamed$renamed_fields, field)
-              renamed$renames <- c(renamed$renames,
-                                   sprintf("%s -> %s (%.2f%%)",
-                                           field, selected_match, top_matches[match_idx] * 100))
             } else {
               # Ask if we should drop the field
               drop_input <- safe_readline(
@@ -3253,6 +3346,198 @@ check_special_values <- function(measure_name, verbose = TRUE) {
   }
 
   return(invisible(special_value_cols))
+}
+
+#' Get field value range from NDA elements
+#'
+#' @param field_name Name of the field
+#' @param elements NDA data elements
+#' @return Value range string or "No range specified"
+#' @noRd
+get_field_value_range <- function(field_name, elements) {
+  if (is.null(elements) || nrow(elements) == 0) {
+    return("No range specified")
+  }
+  
+  # Find the field in elements
+  field_idx <- which(elements$name == field_name)
+  if (length(field_idx) == 0) {
+    return("No range specified")
+  }
+  
+  # Get the value range
+  value_range <- elements$valueRange[field_idx[1]]
+  if (is.null(value_range) || is.na(value_range) || value_range == "") {
+    return("No range specified")
+  }
+  
+  return(as.character(value_range))
+}
+
+#' Check if two value ranges are compatible for renaming
+#'
+#' @param source_range Value range of source field
+#' @param target_range Value range of target field
+#' @param source_field Name of source field
+#' @param target_field Name of target field
+#' @param verbose Whether to print verbose output
+#' @return List with compatibility check results
+#' @noRd
+check_value_range_compatibility <- function(source_range, target_range, source_field, target_field, verbose = FALSE) {
+  
+  # If either range is missing, they're compatible
+  if (source_range == "No range specified" || target_range == "No range specified") {
+    return(list(
+      compatible = TRUE,
+      message = "One or both fields have no value range specified",
+      recommendation = "Proceed with caution - ranges cannot be validated"
+    ))
+  }
+  
+  # If ranges are identical, they're compatible
+  if (source_range == target_range) {
+    return(list(
+      compatible = TRUE,
+      message = "Value ranges are identical",
+      recommendation = "Safe to rename"
+    ))
+  }
+  
+  # Parse the ranges to extract numeric ranges and special codes
+  source_parts <- parse_value_range(source_range)
+  target_parts <- parse_value_range(target_range)
+  
+  # Check if both have numeric ranges
+  if (!is.null(source_parts$numeric_range) && !is.null(target_parts$numeric_range)) {
+    source_min <- source_parts$numeric_range$min
+    source_max <- source_parts$numeric_range$max
+    target_min <- target_parts$numeric_range$min
+    target_max <- target_parts$numeric_range$max
+    
+    # Check if ranges overlap significantly
+    overlap_min <- max(source_min, target_min)
+    overlap_max <- min(source_max, target_max)
+    overlap_size <- max(0, overlap_max - overlap_min + 1)
+    
+    source_size <- source_max - source_min + 1
+    target_size <- target_max - target_min + 1
+    
+    # Calculate overlap percentage
+    overlap_percentage <- overlap_size / min(source_size, target_size) * 100
+    
+    if (overlap_percentage >= 80) {
+      return(list(
+        compatible = TRUE,
+        message = sprintf("Numeric ranges overlap by %.1f%% - likely compatible", overlap_percentage),
+        recommendation = "Proceed with rename"
+      ))
+    } else if (overlap_percentage >= 50) {
+      return(list(
+        compatible = FALSE,
+        message = sprintf("Numeric ranges overlap by only %.1f%% - potential conflict", overlap_percentage),
+        recommendation = "Consider creating a new field instead of renaming"
+      ))
+    } else {
+      return(list(
+        compatible = FALSE,
+        message = sprintf("Numeric ranges have minimal overlap (%.1f%%) - likely incompatible", overlap_percentage),
+        recommendation = "Create a new field instead of renaming"
+      ))
+    }
+  }
+  
+  # Handle cases where we have only special codes (no numeric range)
+  # Special codes (like 888, 999, -777) are placeholders and don't affect compatibility
+  source_missing <- source_parts$missing_codes
+  target_missing <- target_parts$missing_codes
+  
+  # If both have missing codes, they're compatible (special codes are placeholders)
+  if (!is.null(source_missing) && !is.null(target_missing)) {
+    return(list(
+      compatible = TRUE,
+      message = "Both fields have special codes (placeholders) - compatible",
+      recommendation = "Proceed with rename"
+    ))
+  }
+  
+  # If one has missing codes and the other doesn't, that's compatible
+  # Special codes are placeholders and don't restrict the valid data range
+  if ((!is.null(source_missing) && is.null(target_missing)) || 
+      (is.null(source_missing) && !is.null(target_missing))) {
+    return(list(
+      compatible = TRUE,
+      message = "Special codes are placeholders and don't affect compatibility",
+      recommendation = "Proceed with rename"
+    ))
+  }
+  
+  # If neither has numeric ranges nor special codes, they're compatible
+  if (is.null(source_parts$numeric_range) && is.null(target_parts$numeric_range) &&
+      is.null(source_missing) && is.null(target_missing)) {
+    return(list(
+      compatible = TRUE,
+      message = "Neither field has defined ranges - compatible",
+      recommendation = "Proceed with rename"
+    ))
+  }
+  
+  # If we get here, ranges are different and potentially incompatible
+  return(list(
+    compatible = FALSE,
+    message = "Value ranges are significantly different",
+    recommendation = "Create a new field instead of renaming to avoid data loss"
+  ))
+}
+
+#' Parse a value range string to extract numeric ranges and missing codes
+#'
+#' @param value_range Value range string (e.g., "0::6;999=missing")
+#' @return List with parsed components
+#' @noRd
+parse_value_range <- function(value_range) {
+  if (is.null(value_range) || is.na(value_range) || value_range == "") {
+    return(list(numeric_range = NULL, missing_codes = NULL))
+  }
+  
+  # Split by semicolon
+  parts <- trimws(strsplit(value_range, ";")[[1]])
+  
+  numeric_range <- NULL
+  missing_codes <- NULL
+  
+  for (part in parts) {
+    if (grepl("::", part)) {
+      # This is a numeric range (e.g., "0::6")
+      range_parts <- strsplit(part, "::")[[1]]
+      if (length(range_parts) == 2) {
+        min_val <- as.numeric(range_parts[1])
+        max_val <- as.numeric(range_parts[2])
+        if (!is.na(min_val) && !is.na(max_val)) {
+          numeric_range <- list(min = min_val, max = max_val)
+        }
+      }
+    } else if (grepl("=", part)) {
+      # This is a missing code with meaning (e.g., "999=missing")
+      code_parts <- strsplit(part, "=")[[1]]
+      if (length(code_parts) == 2) {
+        code <- trimws(code_parts[1])
+        meaning <- trimws(code_parts[2])
+        if (grepl("missing|na|not.*applicable", meaning, ignore.case = TRUE)) {
+          if (is.null(missing_codes)) missing_codes <- character(0)
+          missing_codes <- c(missing_codes, code)
+        }
+      }
+    } else {
+      # This is a standalone special code (e.g., "888", "-777", "999")
+      # Check if it's a numeric value that could be a special code
+      if (grepl("^-?\\d+$", part)) {
+        if (is.null(missing_codes)) missing_codes <- character(0)
+        missing_codes <- c(missing_codes, part)
+      }
+    }
+  }
+  
+  return(list(numeric_range = numeric_range, missing_codes = missing_codes))
 }
 
 
