@@ -29,7 +29,7 @@ usethis::use_package("haven")
 usethis::use_package("beepr")
 usethis::use_build_ignore(".github")
 usethis::use_build_ignore("dev")
-usethis::use_package("RODBC")
+usethis::use_package("odbc")
 
 # Generate documentation from roxygen comments
 devtools::document()
