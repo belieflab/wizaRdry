@@ -229,10 +229,9 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                 })
 
                 if (length(similarities) > 0) {
-                  # Get top matches but handle possible errors
+                  # Get all matches sorted by similarity (let pagination handle display)
                   top_matches <- tryCatch({
-                    sorted_similarities <- sort(similarities, decreasing = TRUE)
-                    head(sorted_similarities, 5)
+                    sort(similarities, decreasing = TRUE)
                   }, error = function(e) {
                     message("Error sorting similarities: ", e$message)
                     return(numeric(0))
