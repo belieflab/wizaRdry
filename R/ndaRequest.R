@@ -240,25 +240,65 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
 
                   if (length(top_matches) > 0 && top_matches[1] > 0.7) {
                     message("Data structure name not found in NDA dictionary. Did you mean one of these?")
-                    for (i in seq_along(top_matches)) {
-                      match_name <- names(top_matches)[i]
-                      match_score <- top_matches[i]
-                      message(sprintf("%d. %s (%.1f%% match)", i, match_name, match_score * 100))
-                    }
-
-                    use_suggested <- readline(prompt = "Use one of these instead? (select number or press Enter to keep original): ")
-                    while (use_suggested != "" && (!grepl("^[0-9]+$", use_suggested) ||
-                                                   as.numeric(use_suggested) < 1 || as.numeric(use_suggested) > length(top_matches))) {
-                      use_suggested <- readline(prompt = sprintf("Please enter a number between 1 and %d, or press Enter to keep original: ", length(top_matches)))
-                    }
-
-                    if (grepl("^[0-9]+$", use_suggested)) {
-                      selection <- as.numeric(use_suggested)
-                      if (selection >= 1 && selection <= length(top_matches)) {
-                        script_name <- names(top_matches)[selection]
-                        message(sprintf("Using '%s' instead", script_name))
-                        return(script_name)
+                    # Paginated selector: show 5 at a time, support n(ext)/p(rev)/m(anual)/number
+                    page_size <- 5
+                    total <- length(top_matches)
+                    page <- 1
+                    repeat {
+                      start_idx <- (page - 1) * page_size + 1
+                      end_idx <- min(page * page_size, total)
+                      cat(sprintf("\nShowing matches %d-%d of %d:\n", start_idx, end_idx, total))
+                      for (i in seq(start_idx, end_idx)) {
+                        local_num <- i - start_idx + 1
+                        match_name <- names(top_matches)[i]
+                        match_score <- top_matches[i]
+                        message(sprintf("%d. %s (%.1f%% match)", local_num, match_name, match_score * 100))
                       }
+                      prompt_msg <- "Select 1-5, 'n' next, 'p' prev, 'm' manual, Enter keep original, Esc quit: "
+                      use_suggested <- tryCatch({
+                        readline(prompt = prompt_msg)
+                      }, interrupt = function(e) {
+                        message("Interactive selection cancelled (Esc pressed). Keeping original.")
+                        ""  # Treat as keep original
+                      })
+                      # Keep original if empty
+                      if (use_suggested == "") {
+                        break
+                      }
+                      # Manual entry
+                      if (tolower(use_suggested) == "m") {
+                        manual <- readline(prompt = "Enter NDA structure shortName manually (or Enter to cancel): ")
+                        if (nzchar(manual)) {
+                          script_name <- manual
+                          message(sprintf("Using '%s' (manual entry)", script_name))
+                          return(script_name)
+                        } else {
+                          next
+                        }
+                      }
+                      # Next/Prev navigation
+                      if (tolower(use_suggested) == "n") {
+                        if (end_idx < total) page <- page + 1 else message("Already at last page")
+                        next
+                      }
+                      if (tolower(use_suggested) == "p") {
+                        if (page > 1) page <- page - 1 else message("Already at first page")
+                        next
+                      }
+                      # Numeric selection within current page
+                      if (grepl("^[0-9]+$", use_suggested)) {
+                        selection_local <- as.numeric(use_suggested)
+                        if (!is.na(selection_local) && selection_local >= 1 && selection_local <= (end_idx - start_idx + 1)) {
+                          global_index <- start_idx + selection_local - 1
+                          script_name <- names(top_matches)[global_index]
+                          message(sprintf("Using '%s' instead", script_name))
+                          return(script_name)
+                        } else {
+                          message(sprintf("Please enter a number between 1 and %d", (end_idx - start_idx + 1)))
+                          next
+                        }
+                      }
+                      message("Invalid input. Please choose 1-5, 'n', 'p', 'm', or Enter.")
                     }
                   } else {
                     message(sprintf("Warning: '%s' not found in NDA data dictionary and no close matches found", script_name))
