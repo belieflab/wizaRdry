@@ -1583,7 +1583,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
               
               # Next/Prev navigation
               if (tolower(rename_input) == "n") {
-                if (end_idx < total) {
+                if (page * page_size < total) {
                   page <- page + 1
                 } else {
                   message("Already at last page.")

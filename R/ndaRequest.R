@@ -278,11 +278,19 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                       }
                       # Next/Prev navigation
                       if (tolower(use_suggested) == "n") {
-                        if (end_idx < total) page <- page + 1 else message("Already at last page")
+                        if (page * page_size < total) {
+                          page <- page + 1
+                        } else {
+                          message("Already at last page")
+                        }
                         next
                       }
                       if (tolower(use_suggested) == "p") {
-                        if (page > 1) page <- page - 1 else message("Already at first page")
+                        if (page > 1) {
+                          page <- page - 1
+                        } else {
+                          message("Already at first page")
+                        }
                         next
                       }
                       # Numeric selection within current page
