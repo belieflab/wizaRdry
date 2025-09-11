@@ -1550,14 +1550,14 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
               
               prompt_msg <- sprintf("Select 1-5, 'n' next, 'p' prev, 'm' manual, Enter skip, Esc quit: ")
               rename_input <- tryCatch({
-                safe_readline(prompt = prompt_msg, default = "0")
+                safe_readline(prompt = prompt_msg, default = "")
               }, interrupt = function(e) {
                 message("Interactive selection cancelled (Esc pressed). Skipping field.")
                 ""  # Treat as skip
               })
               
-              # Skip if empty
-              if (rename_input == "") {
+              # Skip if empty or just whitespace
+              if (is.null(rename_input) || rename_input == "" || trimws(rename_input) == "") {
                 break
               }
               
