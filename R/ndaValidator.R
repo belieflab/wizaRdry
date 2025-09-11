@@ -1396,7 +1396,9 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
       if(verbose) {
         cat(sprintf("\nField: %s\n", field))
         cat("Top matches:\n")
-        top_matches <- head(sort(similarities, decreasing = TRUE), 5)
+        # Get all matches sorted by similarity
+        all_matches <- sort(similarities, decreasing = TRUE)
+        top_matches <- head(all_matches, 5)  # Keep original logic for high confidence
         for(i in seq_along(top_matches)) {
           cat(sprintf("%d. %s (%.2f%% match)\n",
                       i,
@@ -1524,42 +1526,97 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
           if(verbose) {
             cat(sprintf("No automatic rename - best match below 90%% threshold\n"))
           }
-          # Present top 5 matches as options
-          top_matches <- head(sort(similarities, decreasing = TRUE), 5)
+          # Present paginated matches as options
+          all_matches <- sort(similarities, decreasing = TRUE)
           selected_match <- NULL
           if(interactive_mode) {
-            rename_input <- safe_readline(
-              prompt = sprintf("Select match for '%s' (1-5 to select, 'm' for manual entry, or press Enter to skip): ", field),
-              default = "0"
-            )
-            # Check if input is valid (number 1-5, 'm' for manual, or empty for skip)
-            while (!grepl("^[0-5]$|^[mM]$|^$", rename_input)){
-              rename_input <- safe_readline(prompt = 'Please enter a number 1-5, "m" for manual entry, or press Enter to skip: ', default='0')
-            }
+            # Interactive pagination for field matches
+            page_size <- 5
+            total <- length(all_matches)
+            page <- 1
             
-            # Check if input is a number between 1-5
-            if(grepl("^[1-5]$", rename_input)) {
-              match_idx <- as.integer(rename_input)
-              if(match_idx <= length(top_matches)) {
-                selected_match <- names(top_matches)[match_idx]
+            repeat {
+              start_idx <- (page - 1) * page_size + 1
+              end_idx <- min(page * page_size, total)
+              
+              cat(sprintf("\nField: %s\n", field))
+              cat(sprintf("Top matches %d-%d of %d:\n", start_idx, end_idx, total))
+              for (i in seq(start_idx, end_idx)) {
+                local_num <- i - start_idx + 1
+                match_name <- names(all_matches)[i]
+                match_score <- all_matches[i]
+                cat(sprintf("%d. %s (%.2f%% match)\n", local_num, match_name, match_score * 100))
               }
-            } else if(grepl("^[mM]$", rename_input)) {
-              # User wants to enter a field name manually
-              manual_input <- safe_readline(
-                prompt = sprintf("Enter the NDA field name for '%s': ", field),
-                default = ""
-              )
-              # Validate that the manual input is not empty
-              while(manual_input == "" || is.na(manual_input)) {
+              
+              prompt_msg <- sprintf("Select 1-5, 'n' next, 'p' prev, 'm' manual, Enter skip, Esc quit: ")
+              rename_input <- tryCatch({
+                safe_readline(prompt = prompt_msg, default = "0")
+              }, interrupt = function(e) {
+                message("Interactive selection cancelled (Esc pressed). Skipping field.")
+                ""  # Treat as skip
+              })
+              
+              # Skip if empty
+              if (rename_input == "") {
+                break
+              }
+              
+              # Manual entry
+              if (tolower(rename_input) == "m") {
                 manual_input <- safe_readline(
-                  prompt = sprintf("Please enter a valid field name for '%s': ", field),
+                  prompt = sprintf("Enter the NDA field name for '%s': ", field),
                   default = ""
                 )
+                # Validate that the manual input is not empty
+                while(manual_input == "" || is.na(manual_input)) {
+                  manual_input <- safe_readline(
+                    prompt = sprintf("Please enter a valid field name for '%s': ", field),
+                    default = ""
+                  )
+                }
+                selected_match <- manual_input
+                if(verbose) {
+                  cat(sprintf("Using manual field name: '%s'\n", selected_match))
+                }
+                break
               }
-              selected_match <- manual_input
-              if(verbose) {
-                cat(sprintf("Using manual field name: '%s'\n", selected_match))
+              
+              # Next/Prev navigation
+              if (tolower(rename_input) == "n") {
+                if (end_idx < total) {
+                  page <- page + 1
+                } else {
+                  message("Already at last page.")
+                }
+                next
               }
+              
+              if (tolower(rename_input) == "p") {
+                if (page > 1) {
+                  page <- page - 1
+                } else {
+                  message("Already at first page.")
+                }
+                next
+              }
+              
+              # Number selection
+              if (grepl("^[1-5]$", rename_input)) {
+                match_idx <- as.integer(rename_input)
+                if (match_idx >= 1 && match_idx <= (end_idx - start_idx + 1)) {
+                  global_index <- start_idx + match_idx - 1
+                  selected_match <- names(all_matches)[global_index]
+                  if(verbose) {
+                    cat(sprintf("Selected: %s (%.2f%% match)\n", selected_match, all_matches[global_index] * 100))
+                  }
+                  break
+                } else {
+                  message(sprintf("Please enter a number between 1 and %d", (end_idx - start_idx + 1)))
+                  next
+                }
+              }
+              
+              message("Invalid input. Choose 1-5, 'n', 'p', 'm', or Enter.")
             }
 
             # If user selected a match
@@ -1593,7 +1650,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                     # Proceed with rename
                     if(verbose) {
                       message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
-                                      field, selected_match, top_matches[match_idx] * 100))
+                                      field, selected_match, all_matches[selected_match] * 100))
                     }
                     field_data <- df[[field]]
                     df[[selected_match]] <- field_data
@@ -1601,7 +1658,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                     renamed$renamed_fields <- c(renamed$renamed_fields, field)
                     renamed$renames <- c(renamed$renames,
                                          sprintf("%s -> %s (%.2f%%)",
-                                                 field, selected_match, top_matches[match_idx] * 100))
+                                                 field, selected_match, all_matches[selected_match] * 100))
                   } else {
                     # Skip rename due to conflict
                     if(verbose) {
@@ -1620,7 +1677,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                 # Value ranges are compatible, proceed with rename
                 if(verbose) {
                   message(sprintf("\nRENAMING: '%s' to '%s' (similarity: %.2f%%)\n",
-                                  field, selected_match, top_matches[match_idx] * 100))
+                                  field, selected_match, all_matches[selected_match] * 100))
                 }
                 # Use [[ ]] to safely handle special characters in field names
                 field_data <- df[[field]]
@@ -1629,7 +1686,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                 renamed$renamed_fields <- c(renamed$renamed_fields, field)
                 renamed$renames <- c(renamed$renames,
                                      sprintf("%s -> %s (%.2f%%)",
-                                             field, selected_match, top_matches[match_idx] * 100))
+                                             field, selected_match, all_matches[selected_match] * 100))
               }
             } else {
               # Ask if we should drop the field
