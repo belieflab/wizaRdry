@@ -37,6 +37,52 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     missing_data_codes <- NULL
   })
 
+  # Build optional description maps from external sources (REDCap/Qualtrics)
+  redcap_label_map <- NULL
+  qualtrics_label_map <- NULL
+
+  # Attempt to fetch REDCap metadata and map field_name -> field_label
+  try({
+    # Prefer using the provided data_frame if it carries instrument attribute
+    if (is.data.frame(data_frame) && !is.null(attr(data_frame, "redcap_instrument"))) {
+      rc_meta <- redcap.dict(data_frame)
+    } else {
+      rc_meta <- redcap.dict(measure_name)
+    }
+    if (is.data.frame(rc_meta) && all(c("field_name", "field_label") %in% names(rc_meta))) {
+      # Create a named vector mapping field names to labels
+      redcap_label_map <- rc_meta$field_label
+      names(redcap_label_map) <- rc_meta$field_name
+    }
+  }, silent = TRUE)
+
+  # Attempt to fetch Qualtrics column map and map variable -> question text
+  try({
+    # qualtrics.dict accepts either a data frame or an alias
+    if (is.data.frame(data_frame)) {
+      q_map <- qualtrics.dict(data_frame)
+    } else {
+      q_map <- qualtrics.dict(measure_name)
+    }
+    if (is.data.frame(q_map)) {
+      # Heuristically identify variable and question-text columns
+      var_cols <- c("VariableName", "variable", "Variable", "col_name", "column", "Column", "name", "Name")
+      txt_cols <- c("QuestionText", "question_text", "Question", "Label", "label", "Description", "description")
+      var_col <- var_cols[var_cols %in% names(q_map)]
+      txt_col <- txt_cols[txt_cols %in% names(q_map)]
+      if (length(var_col) > 0 && length(txt_col) > 0) {
+        var_col <- var_col[1]
+        txt_col <- txt_col[1]
+        # Filter out NAs and create mapping
+        valid_rows <- !is.na(q_map[[var_col]]) & !is.na(q_map[[txt_col]])
+        if (any(valid_rows)) {
+          qualtrics_label_map <- q_map[[txt_col]][valid_rows]
+          names(qualtrics_label_map) <- q_map[[var_col]][valid_rows]
+        }
+      }
+    }
+  }, silent = TRUE)
+
   # Handle both character vector and list formats
   if (is.character(submission_template)) {
     submission_template <- list(columns = submission_template)
@@ -67,6 +113,61 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   } else {
     stop("Could not extract selected columns from submission_template")
   }
+
+  # Define fields that should never be included as new or modified structures
+  # They can still be included only if part of essential ndar_subject01 and unchanged
+  excluded_from_change <- c("state", "lost_to_followup", "lost_to_follow-up")
+  
+  # Get essential NDA fields dynamically from ndar_subject01 API
+  # This ensures we always have the current required elements with complete metadata
+  essential_nda_fields <- tryCatch({
+    # Try to get required field metadata from the global environment or nda_structure
+    required_metadata <- NULL
+    
+    # First, try to get from nda_structure if it contains ndar_subject01 data
+    if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
+      required_elements <- nda_structure$dataElements[nda_structure$dataElements$required == "Required", ]
+      if (nrow(required_elements) > 0) {
+        required_metadata <- required_elements
+      }
+    }
+    
+    # If not found in nda_structure, try to fetch from API directly
+    if (is.null(required_metadata)) {
+      message("Fetching current ndar_subject01 required elements from NDA API...")
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+      
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            required_metadata <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
+          }
+        }
+      }
+    }
+    
+    # Extract field names from metadata
+    if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
+      field_names <- required_metadata$name
+      message(sprintf("Found %d required ndar_subject01 elements: %s", 
+                      length(field_names), paste(head(field_names, 5), collapse = ", ")))
+      field_names
+    } else {
+      # Fallback to essential fields if API fails
+      message("Using fallback essential fields list")
+      c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+        "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name")
+    }
+  }, error = function(e) {
+    message("Error fetching ndar_subject01 elements: ", e$message)
+    message("Using fallback essential fields list")
+    c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+      "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name")
+  })
 
   # Convert to character vector if needed
   if (is.data.frame(selected_columns)) {
@@ -393,6 +494,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   if (!is.null(data_frame)) {
     # Categorize fields based on whether they exist in data and NDA
     for (field in selected_columns) {
+      # Skip change categorization for excluded fields: force unchanged
+      if (field %in% excluded_from_change) {
+        if (field %in% names(data_frame) && field %in% all_nda_fields) {
+          unchanged_fields <- c(unchanged_fields, field)
+        }
+        next
+      }
       if (field %in% names(data_frame)) {
         if (field %in% all_nda_fields) {
           # Field exists in both data and NDA - check if it's modified
@@ -457,7 +565,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           }
         } else {
           # Field exists in data but not in NDA - it's new
-          new_fields <- c(new_fields, field)
+          if (!(field %in% excluded_from_change)) {
+            new_fields <- c(new_fields, field)
+          } else {
+            unchanged_fields <- c(unchanged_fields, field)
+          }
         }
       } else {
         # Field doesn't exist in data - skip it
@@ -466,11 +578,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   } else {
     # If no data frame available, treat all selected columns as new
-    new_fields <- selected_columns
+    new_fields <- setdiff(selected_columns, excluded_from_change)
   }
 
-  # Only include fields that are new or modified (focus on changes only)
-  ordered_columns <- c(new_fields, modified_fields)
+  # Include fields that are new, modified, OR essential NDA fields
+  # Essential NDA fields are always included even if unchanged
+  essential_fields <- intersect(selected_columns, essential_nda_fields)
+  ordered_columns <- c(new_fields, modified_fields, essential_fields)
   
   # Report what's being included in the data definition
   if (length(new_fields) > 0) {
@@ -480,6 +594,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   if (length(modified_fields) > 0) {
     message(sprintf("Including %d modified fields in data definition: %s", 
                     length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
+  }
+  if (length(essential_fields) > 0) {
+    message(sprintf("Including %d essential NDA fields in data definition: %s", 
+                    length(essential_fields), paste(head(essential_fields, 5), collapse = ", ")))
   }
   if (length(unchanged_fields) > 0) {
     message(sprintf("Excluding %d unchanged NDA fields from data definition: %s", 
@@ -647,6 +765,32 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           data_definition$metadata$validation_summary$matched_fields + 1
       }
 
+      # Determine final description with fallback hierarchy:
+      # 1) NDA description (if present and non-empty)
+      # 2) REDCap field_label (if available) - ONLY for non-ndar_subject01 fields
+      # 3) Qualtrics question text (if available) - ONLY for non-ndar_subject01 fields
+      # 4) Keep as empty (will be handled downstream)
+      nda_desc <- if ("description" %in% names(nda_field)) nda_field$description else ""
+      fallback_desc <- nda_desc
+      if (is.null(fallback_desc) || identical(fallback_desc, "") || is.na(fallback_desc)) {
+        # Only apply external fallbacks for non-ndar_subject01 fields
+        if (!column_name %in% ndar_subject01_fields) {
+          if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
+            fallback_desc <- as.character(redcap_label_map[[column_name]])
+          } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+            fallback_desc <- as.character(qualtrics_label_map[[column_name]])
+          } else {
+            fallback_desc <- ""
+          }
+          # If we found a fallback, also enrich nda_metadata to carry it through export
+          if (!identical(fallback_desc, "")) {
+            nda_metadata_to_use$description <- fallback_desc
+          }
+        } else {
+          fallback_desc <- ""
+        }
+      }
+
       data_definition$fields[[column_name]] <- list(
         name = column_name,
         selection_order = i,
@@ -655,7 +799,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
         # Copy NDA metadata
         data_type = if ("type" %in% names(nda_field)) nda_field$type else "unknown",
-        description = if ("description" %in% names(nda_field)) nda_field$description else "",
+        description = fallback_desc,
         required = if ("required" %in% names(nda_field)) as.logical(nda_field$required) else FALSE,
 
         # Validation rules
@@ -687,6 +831,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # Compute metadata
       computed_metadata <- compute_field_metadata(column_name, column_data)
 
+      # Apply external fallback descriptions to computed fields when available
+      computed_desc <- computed_metadata$description
+      if (is.null(computed_desc) || identical(computed_desc, "") || is.na(computed_desc)) {
+        if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
+          computed_desc <- as.character(redcap_label_map[[column_name]])
+        } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+          computed_desc <- as.character(qualtrics_label_map[[column_name]])
+        }
+      }
+
       # Adjust warning message based on whether field exists in data
       if (field_exists_in_data) {
         warning_msg <- paste("Column", column_name, "not found in NDA data structure - computing metadata from data")
@@ -703,7 +857,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         selected_for_submission = TRUE,
         source = if (field_exists_in_data) "computed_from_data" else "template_only",
         data_type = computed_metadata$data_type,
-        description = computed_metadata$description,
+        description = computed_desc,
         required = computed_metadata$required == "Required",
         validation_rules = list(
           min_value = NULL,
@@ -717,7 +871,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           type = computed_metadata$data_type,
           size = computed_metadata$size,
           required = computed_metadata$required,
-          description = computed_metadata$description,
+          description = computed_desc,
           valueRange = computed_metadata$valueRange,
           notes = computed_metadata$notes,
           aliases = computed_metadata$aliases
