@@ -731,11 +731,28 @@ mongo.index <- function(database = NULL) {
     withCallingHandlers(
       expr,
       warning = function(w) {
-        if (grepl(pattern, w$message, fixed = TRUE)) {
+        # Check for multiple patterns that might indicate endSessions warning
+        if (grepl(pattern, w$message, fixed = TRUE) ||
+            grepl("endSessions", w$message, fixed = TRUE) ||
+            grepl("Feature not supported", w$message, fixed = TRUE)) {
           invokeRestart("muffleWarning")
         }
       }
     )
+  }
+
+  # Function to detect if we're connecting to DocumentDB vs MongoDB
+  detectDatabaseType <- function(connectionString) {
+    # DocumentDB typically uses different host patterns or connection strings
+    # Check for common DocumentDB indicators
+    if (grepl("docdb|documentdb", connectionString, ignore.case = TRUE)) {
+      return("documentdb")
+    }
+    # Check for AWS DocumentDB cluster endpoints (they often contain 'docdb')
+    if (grepl("amazonaws\\.com.*docdb", connectionString, ignore.case = TRUE)) {
+      return("documentdb")
+    }
+    return("mongodb")
   }
 
   validate_secrets("mongo")
@@ -755,6 +772,10 @@ mongo.index <- function(database = NULL) {
   sink(temp)
   result <- NULL
 
+  # Detect database type to handle warnings appropriately
+  db_type <- detectDatabaseType(connectionString)
+  message(sprintf("Detected database type: %s", db_type))
+
   # Create a direct connection to the database without specifying a collection
   tryCatch({
     # Use suppressSpecificWarning to handle the endSessions warning
@@ -773,19 +794,49 @@ mongo.index <- function(database = NULL) {
       result <- collections$cursor$firstBatch$name
 
       # Try to disconnect with warning suppression
-      suppressWarnings(base_connection$disconnect())
+      suppressSpecificWarning({
+        base_connection$disconnect()
+      }, "endSessions")
 
       # Force garbage collection to clean up any lingering connections
       rm(base_connection)
       invisible(gc(verbose = FALSE))
     }, "endSessions")
 
+    # Additional suppression for any remaining warnings
+    suppressWarnings({
+      # This should catch any warnings that slip through
+    })
+
     sink()
     unlink(temp)
 
+    # Display collections in a nice format
+    if (length(result) > 0) {
+      message(sprintf("Available %s Collections:", toupper(database)))
+      message("===================================")
+
+      # Calculate adaptive padding based on longest collection name
+      max_name_length <- max(nchar(result))
+      padding_width <- max(max_name_length + 2, 15)  # At least 15 chars, or longest name + 2
+
+      # Display collections in columns (4 per row)
+      for (i in seq(1, length(result), by = 4)) {
+        row_collections <- result[i:min(i + 3, length(result))]
+        # Pad shorter names to align columns with adaptive width
+        padded_names <- sprintf(paste0("%-", padding_width, "s"), row_collections)
+        message(paste(padded_names, collapse = " "))
+      }
+
+      message("")
+      message(sprintf("Total: %d collections", length(result)))
+    } else {
+      message("No collections found in the database.")
+    }
+
     # Restore previous warning setting
     options(old_warn)
-    return(result)
+    invisible(result)  # Use invisible() to prevent console printing
 
   }, error = function(e) {
     sink()
