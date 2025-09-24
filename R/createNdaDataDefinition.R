@@ -150,6 +150,86 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     gsub("<br>", " ", x, fixed = TRUE)
   }
 
+  # Helper: enrich REDCap checkbox children (e.g., parent___1 or parent_other)
+  # Using parent field's label and choices to derive description/valueRange/notes
+  rc_enrich_checkbox_child <- function(column_name, rc_meta) {
+    out <- list(description = NULL, valueRange = NULL, notes = NULL, data_type = NULL, size = NULL)
+    if (is.null(rc_meta) || !is.data.frame(rc_meta) || !all(c("field_name", "field_type") %in% names(rc_meta))) return(out)
+
+    parent <- NULL
+    suffix <- NULL
+    if (grepl("___", column_name, fixed = TRUE)) {
+      parent <- sub("___.*$", "", column_name)
+      suffix <- sub("^.*___", "", column_name)
+    } else if (grepl("_other$", column_name)) {
+      parent <- sub("_other$", "", column_name)
+      suffix <- "other"
+    }
+
+    # Attempt to infer parent via branching_logic if name heuristic fails
+    if ((is.null(parent) || !(parent %in% rc_meta$field_name)) && "branching_logic" %in% names(rc_meta)) {
+      this_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+      if (nrow(this_row) == 1) {
+        bl <- as.character(this_row$branching_logic %||% "")
+        m <- regmatches(bl, regexpr("\\[([A-Za-z0-9_]+)\\(", bl, perl = TRUE))
+        if (length(m) == 1 && nzchar(m)) {
+          parent_candidate <- sub("^\\[", "", m)
+          parent_candidate <- sub("\\($", "", parent_candidate)
+          if (parent_candidate %in% rc_meta$field_name) parent <- parent_candidate
+        }
+      }
+    }
+
+    if (is.null(parent) || parent == "") return(out)
+
+    parent_row <- rc_meta[rc_meta$field_name == parent, , drop = FALSE]
+    if (nrow(parent_row) != 1) return(out)
+    if (!identical(as.character(parent_row$field_type), "checkbox")) return(out)
+
+    parent_label <- as.character(parent_row$field_label %||% "")
+    parent_label <- rc_clean_label(parent_label)
+    choices <- as.character(parent_row$select_choices_or_calculations %||% "")
+
+    # Build map from coded value -> label
+    choice_map <- list()
+    if (nzchar(choices)) {
+      parts <- strsplit(choices, "\\|")[[1]]
+      for (p in trimws(parts)) {
+        kv <- strsplit(p, ",")[[1]]
+        if (length(kv) >= 2) {
+          key <- trimws(kv[1])
+          val <- trimws(paste(kv[-1], collapse = ","))
+          val <- rc_clean_label(val)
+          choice_map[[key]] <- val
+        }
+      }
+    }
+
+    # Numeric child like parent___1
+    if (!is.null(suffix) && grepl("^[0-9]+$", suffix)) {
+      label <- choice_map[[suffix]] %||% parent_label
+      out$description <- label
+      out$valueRange <- "0;1"
+      out$notes <- "0=No;1=Yes"
+      # Per current expectation: keep as String with Size 255
+      out$data_type <- "String"
+      out$size <- 255
+      return(out)
+    }
+
+    # Other text child
+    if (!is.null(suffix) && identical(tolower(suffix), "other")) {
+      out$description <- paste0(parent_label, ": If you selected 'other', please describe.")
+      out$valueRange <- ""
+      out$notes <- ""
+      out$data_type <- "String"
+      out$size <- 255
+      return(out)
+    }
+
+    out
+  }
+
   # Helper: parse REDCap choices -> numeric codes only for ValueRange + mapping text for Notes
   rc_parse_choices_codes_and_notes <- function(choices_string) {
     if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
@@ -1059,6 +1139,27 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         }
       }
       
+      # REDCap checkbox child handling: derive from parent metadata first
+      if (exists("rc_meta") && is.data.frame(rc_meta)) {
+        cbx <- rc_enrich_checkbox_child(column_name, rc_meta)
+        if (!is.null(cbx$description) && cbx$description != "") {
+          computed_desc <- cbx$description
+        }
+        if (!is.null(cbx$valueRange)) {
+          computed_metadata$valueRange <- cbx$valueRange
+        }
+        if (!is.null(cbx$notes) && cbx$notes != "") {
+          existing_notes <- computed_metadata$notes %||% ""
+          computed_metadata$notes <- paste0(existing_notes, ifelse(existing_notes != "", " | ", ""), cbx$notes)
+        }
+        if (!is.null(cbx$data_type) && cbx$data_type != "") {
+          computed_metadata$data_type <- cbx$data_type
+        }
+        if (!is.null(cbx$size)) {
+          computed_metadata$size <- cbx$size
+        }
+      }
+
       # Enhance computed ValueRange with RedCap choices if available
       computed_value_range <- computed_metadata$valueRange
       if ((is.null(computed_value_range) || computed_value_range == "" || is.na(computed_value_range)) &&
