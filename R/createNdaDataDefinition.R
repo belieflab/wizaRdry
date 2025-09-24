@@ -373,7 +373,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         size = 255,
         valueRange = "",
         required = "Recommended",
-        notes = "Field not found in dataset. Default metadata applied.",
+        notes = "",
         aliases = ""
       ))
     }
@@ -612,6 +612,33 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         return(paste0("Text field (", unique_count, " unique values)"))
       }
     }
+  }
+
+  # Map REDCap field_type/validation to NDA data type
+  rc_map_redcap_to_nda_type <- function(meta_row, current_type = NULL) {
+    if (is.null(meta_row) || nrow(meta_row) == 0) return(current_type %||% "String")
+    ftype <- as.character(meta_row$field_type %||% "")
+    vtype <- as.character(meta_row$text_validation_type_or_show_slider_number %||% "")
+
+    # Choice-based
+    if (ftype %in% c("radio", "dropdown", "checkbox")) return("Integer")
+
+    # Numeric validations
+    if (nzchar(vtype)) {
+      if (grepl("^integer$", vtype, ignore.case = TRUE)) return("Integer")
+      if (grepl("^(number|float|decimal)$", vtype, ignore.case = TRUE)) return("Float")
+      if (grepl("^slider|show_slider_number", vtype, ignore.case = TRUE)) return("Integer")
+      if (grepl("date|datetime", vtype, ignore.case = TRUE)) return("Date")
+      if (grepl("zipcode|email|phone", vtype, ignore.case = TRUE)) return("String")
+    }
+
+    # Calculated fields numeric
+    if (ftype %in% c("calc")) return("Float")
+
+    # Text default
+    if (ftype %in% c("text", "notes")) return(current_type %||% "String")
+
+    return(current_type %||% "String")
   }
 
   # For modified data definitions, focus ONLY on changes:
@@ -1007,10 +1034,15 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
       # Apply external fallback descriptions to computed fields when available
       computed_desc <- computed_metadata$description
-      if (is.null(computed_desc) || identical(computed_desc, "") || is.na(computed_desc)) {
-        if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
-          computed_desc <- as.character(redcap_label_map[[column_name]])
-        } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+      rc_label <- NULL
+      if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
+        rc_label <- as.character(redcap_label_map[[column_name]])
+        rc_label <- rc_clean_label(rc_label)
+      }
+      if (!is.null(rc_label) && nzchar(rc_label)) {
+        computed_desc <- rc_label
+      } else if (is.null(computed_desc) || identical(computed_desc, "") || is.na(computed_desc)) {
+        if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
           computed_desc <- as.character(qualtrics_label_map[[column_name]])
         }
       }
@@ -1047,6 +1079,14 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # Clean description for <br>
       if (!is.null(computed_desc) && computed_desc != "") {
         computed_desc <- rc_clean_label(computed_desc)
+      }
+
+      # Apply REDCap-to-NDA type mapping for computed fields if metadata available
+      if (exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
+        rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+        if (nrow(rc_row) == 1) {
+          computed_metadata$data_type <- rc_map_redcap_to_nda_type(rc_row, computed_metadata$data_type %||% "String")
+        }
       }
 
       # Adjust warning message based on whether field exists in data
@@ -1336,7 +1376,11 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                tryCatch({
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "description" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$description %||% "")
+                  desc_val <- as.character(x$nda_metadata$description %||% "")
+                  # Strip boilerplate
+                  desc_val <- gsub("^Missing field: ", "", desc_val)
+                  desc_val <- gsub("^Empty field: ", "", desc_val)
+                  desc_val
                  } else {
                    as.character(x$description %||% "")
                  }
@@ -1363,6 +1407,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                    notes_val <- x$nda_metadata$notes %||% ""
                    # Clean up NA values and convert to empty string
                    if (is.na(notes_val) || notes_val == "NA" || notes_val == "character(0)") "" else as.character(notes_val)
+                 } else if (!is.null(x$notes)) {
+                   as.character(x$notes %||% "")
                  } else {
                    ""
                  }
