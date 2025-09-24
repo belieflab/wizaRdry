@@ -951,14 +951,15 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       nda_desc <- if ("description" %in% names(nda_field)) nda_field$description else ""
       fallback_desc <- nda_desc
       if (is.null(fallback_desc) || identical(fallback_desc, "") || is.na(fallback_desc)) {
-        # Only apply external fallbacks for non-ndar_subject01 fields
-        if (!column_name %in% ndar_subject01_fields) {
+        # Only apply external fallbacks for fields NOT matched to NDA
+        if (!(column_name %in% names(nda_lookup))) {
           if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
-            fallback_desc <- rc_clean_label(as.character(redcap_label_map[[column_name]]))
+            fallback_desc <- as.character(redcap_label_map[[column_name]])
           } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
             fallback_desc <- as.character(qualtrics_label_map[[column_name]])
-          } else {
-            fallback_desc <- ""
+          }
+          if (!is.null(fallback_desc) && fallback_desc != "") {
+            fallback_desc <- rc_clean_label(fallback_desc)
           }
           # If we found a fallback, also enrich nda_metadata to carry it through export
           if (!identical(fallback_desc, "")) {
@@ -968,9 +969,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           fallback_desc <- ""
         }
       }
-      
-      # Enhance ValueRange/Notes with REDCap choices when available and not an ndar_subject01 field
-      if (!column_name %in% ndar_subject01_fields && !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
+
+      # Enrich ValueRange/Notes from REDCap choices ONLY for non-NDA fields
+      if (!(column_name %in% names(nda_lookup)) && !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
         redcap_choices <- redcap_choices_map[[column_name]]
         if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
           parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
@@ -988,9 +989,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           }
         }
       }
-      
+
       # If still no ValueRange, attempt to derive from validation/type where possible using REDCap metadata row
-      if (!column_name %in% ndar_subject01_fields && (is.null(nda_metadata_to_use$valueRange) || nda_metadata_to_use$valueRange == "" || is.na(nda_metadata_to_use$valueRange))) {
+      if (!(column_name %in% names(nda_lookup)) && (is.null(nda_metadata_to_use$valueRange) || nda_metadata_to_use$valueRange == "" || is.na(nda_metadata_to_use$valueRange))) {
         if (exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
           rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
           if (nrow(rc_row) == 1) {
@@ -1102,9 +1103,24 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
       # Adjust warning message based on whether field exists in data
       if (field_exists_in_data) {
-        warning_msg <- paste("Column", column_name, "not found in NDA data structure - computing metadata from data")
+        # Determine enrichment source
+        enrichment <- if (exists("rc_meta") && is.data.frame(rc_meta) && column_name %in% rc_meta$field_name) {
+          "from REDCap"
+        } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+          "from Qualtrics"
+        } else {
+          "from dataframe"
+        }
+        warning_msg <- paste("Column", column_name, "not found in NDA data structure - computing metadata", enrichment)
       } else {
-        warning_msg <- paste("Column", column_name, "not found in NDA data structure or data frame - using placeholder metadata")
+        enrichment <- if (exists("rc_meta") && is.data.frame(rc_meta) && column_name %in% rc_meta$field_name) {
+          "from REDCap"
+        } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+          "from Qualtrics"
+        } else {
+          "from template"
+        }
+        warning_msg <- paste("Column", column_name, "not found in NDA data structure or data frame - using placeholder metadata", enrichment)
       }
 
       data_definition$metadata$validation_summary$warnings <-
@@ -1321,6 +1337,9 @@ exportDataDefinition <- function(data_definition, format = "csv") {
     dir.create(tmp_path, recursive = TRUE)
   }
 
+  # Internal-only fields that must never be exported
+  excluded_internal <- c("state", "lost_to_followup", "lost_to_follow-up", "study_status")
+
   # Create file path with appropriate extension
   file_path <- file.path(tmp_path, paste0(data_definition$measure_name, "_definitions.", format))
 
@@ -1338,7 +1357,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
            # Flatten the fields for CSV export with exact NDA column names and case
            field_names <- names(data_definition$fields)
            # Filter out excluded fields from final export
-           field_names <- setdiff(field_names, excluded_from_change)
+           field_names <- setdiff(field_names, excluded_internal)
 
            if (length(field_names) == 0) {
              warning("No fields to export")
@@ -1591,19 +1610,27 @@ compress_value_range <- function(val_range) {
 # Normalize aliases to plain comma-separated (no quotes), stripping c() and character(0)
 normalize_aliases_export <- function(alias_val) {
   if (is.null(alias_val)) return("")
-  # Vector case
+  # If it's a list, flatten first
+  if (is.list(alias_val)) {
+    alias_val <- unlist(alias_val, use.names = FALSE)
+    if (length(alias_val) == 0) return("")
+  }
+  # Vector case (after possible flatten)
   if (is.vector(alias_val) && !is.list(alias_val)) {
     alias_vec <- as.character(alias_val)
     alias_vec <- alias_vec[!is.na(alias_vec) & nzchar(alias_vec)]
     if (length(alias_vec) == 0) return("")
-    # remove any embedded quotes in vector elements
+    # remove any embedded quotes in vector elements and suppress 'list()'
     alias_vec <- gsub('"', "", alias_vec, fixed = TRUE)
+    alias_vec <- alias_vec[alias_vec != "list()"]
+    if (length(alias_vec) == 0) return("")
     return(paste(alias_vec, collapse = ","))
   }
   # Character scalar that might contain c() or quotes
   if (is.character(alias_val) && length(alias_val) == 1) {
     s <- as.character(alias_val)
     if (is.na(s) || !nzchar(s)) return("")
+    if (identical(trimws(s), "character(0)") || identical(trimws(s), "list()")) return("")
     # remove all embedded quotes first
     s <- gsub('"', "", s, fixed = TRUE)
     # handle character(0) anywhere
@@ -1614,22 +1641,21 @@ normalize_aliases_export <- function(alias_val) {
     }
     # split by comma
     parts <- trimws(strsplit(s, ",")[[1]])
-    parts <- parts[!is.na(parts) & nzchar(parts)]
+    parts <- parts[!is.na(parts) & nzchar(parts) & parts != "list()"]
     if (length(parts) == 0) return("")
     return(paste(parts, collapse = ","))
   }
   # Fallback: coerce to character, join, then strip like scalar path
   as_char <- as.character(alias_val)
-  as_char <- as_char[!is.na(as_char) & nzchar(as_char)]
+  as_char <- gsub('"', "", as_char, fixed = TRUE)
+  as_char <- as_char[!is.na(as_char) & nzchar(as_char) & !grepl("character\\(0\\)|^list\\(\\)$", as_char)]
   if (length(as_char) == 0) return("")
   s <- paste(as_char, collapse = ",")
-  s <- gsub('"', "", s, fixed = TRUE)
-  if (grepl("character\\(0\\)", s)) return("")
   if (grepl("^c[[:space:]]*\\(.*\\)[[:space:]]*$", s, perl = TRUE)) {
     s <- sub("^c[[:space:]]*\\((.*)\\)[[:space:]]*$", "\\1", s, perl = TRUE)
   }
   parts <- trimws(strsplit(s, ",")[[1]])
-  parts <- parts[!is.na(parts) & nzchar(parts)]
+  parts <- parts[!is.na(parts) & nzchar(parts) & parts != "list()"]
   if (length(parts) == 0) return("")
   paste(parts, collapse = ",")
 }
