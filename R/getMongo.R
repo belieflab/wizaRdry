@@ -965,8 +965,9 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
   })
 }
 
-#' Alias for 'mongo'
+#' Alias for 'mongo' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'mongo' instead.
 #' This is a legacy alias for the 'mongo' function to maintain compatibility with older code.
 #'
 #' @inheritParams mongo
@@ -974,6 +975,10 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use mongo() instead
 #' survey_data <- getTask("task_alias")
 #' }
-getTask <- mongo
+getTask <- function(...) {
+  .Deprecated("mongo", package = "wizaRdry")
+  mongo(...)
+}

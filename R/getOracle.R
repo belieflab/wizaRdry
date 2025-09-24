@@ -458,7 +458,7 @@ oracle.index <- function(schema = NULL) {
 #' @return A data frame with column information
 #' @importFrom odbc dbConnect dbListFields dbGetQuery dbDisconnect
 #' @export
-oracle.dict <- function(table_name, schema = NULL) {
+oracle.desc <- function(table_name, schema = NULL) {
 
   if (is.null(table_name)) {
     stop("Table name is required")
@@ -500,12 +500,12 @@ oracle.dict <- function(table_name, schema = NULL) {
     db_info <- tryCatch({
       odbc::dbGetInfo(channel)
     }, error = function(e) {
-      list(dbms.name = "Oracle")  # Default to Oracle for oracle.dict
+      list(dbms.name = "Oracle")  # Default to Oracle for oracle.desc
     })
 
     message(sprintf("Connected to %s database", db_info$dbms.name))
 
-    is_oracle <- TRUE  # Always TRUE for oracle.dict
+    is_oracle <- TRUE  # Always TRUE for oracle.desc
 
     # Try to get column information
     tryCatch({

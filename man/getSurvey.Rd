@@ -2,39 +2,25 @@
 % Please edit documentation in R/getQualtrics.R
 \name{getSurvey}
 \alias{getSurvey}
-\title{Alias for 'qualtrics'}
+\title{Alias for 'qualtrics' (DEPRECATED)}
 \usage{
-getSurvey(
-  qualtrics_alias,
-  ...,
-  institution = NULL,
-  label = FALSE,
-  interview_date = NULL
-)
+getSurvey(...)
 }
 \arguments{
-\item{qualtrics_alias}{The alias for the Qualtrics survey to be retrieved.}
-
 \item{...}{Optional column names to filter for. Only rows with non-missing values
 in ALL specified columns will be returned. This is useful for filtering
 data to only include complete cases for specific variables of interest.}
-
-\item{institution}{Optional. The institution name (e.g., "temple" or "nu"). If NULL, all institutions will be searched.}
-
-\item{label}{Logical indicating whether to return coded values or their associated labels (default is FALSE).}
-
-\item{interview_date}{Optional; can be either:
-- A date string in various formats (ISO, US, etc.) to filter data up to that date
-- A boolean TRUE to return only rows with non-NA interview_date values}
 }
 \value{
 A cleaned and harmonized data frame containing the survey data with superkeys first.
 }
 \description{
+This function is deprecated. Please use 'qualtrics' instead.
 This is a legacy alias for the 'qualtrics' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use qualtrics() instead
 survey_data <- getSurvey("your_survey_alias")
 }
 }

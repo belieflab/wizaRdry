@@ -2,88 +2,12 @@
 % Please edit documentation in R/dataFilter.R
 \name{dataFilter}
 \alias{dataFilter}
-\title{Alias for 'sift'}
+\title{Alias for 'sift' (DEPRECATED)}
 \usage{
-dataFilter(
-  df,
-  rows = NULL,
-  cols = NULL,
-  record_id = NULL,
-  src_subject_id = NULL,
-  subjectkey = NULL,
-  site = NULL,
-  subsiteid = NULL,
-  sex = NULL,
-  race = NULL,
-  ethnic_group = NULL,
-  phenotype = NULL,
-  phenotype_description = NULL,
-  status = NULL,
-  lost_to_followup = NULL,
-  twins_study = NULL,
-  sibling_study = NULL,
-  family_study = NULL,
-  sample_taken = NULL,
-  visit = NULL,
-  week = NULL,
-  arm = NULL,
-  interview_date = NULL
-)
+dataFilter(...)
 }
 \arguments{
-\item{df}{Dataframe to be filtered and trimmed based on the provided parameters.}
-
-\item{rows}{Optional; either a single row name or a vector of row names to be retained in the final output.
-If NULL or empty, all rows in the dataframe are retained.}
-
-\item{cols}{Optional; either a single column name or a vector of column names to be retained in the final output.
-If NULL or empty, all columns in the dataframe are retained.#' Data Filter}
-
-\item{record_id}{Optional; either a single record_id or a vector of record_ids to filter the dataframe by}
-
-\item{src_subject_id}{Optional; either a single subject ID or a vector of subject IDs to filter the dataframe by}
-
-\item{subjectkey}{Optional; either a single subjectkey or a vector of subjectkeys to filter the dataframe by}
-
-\item{site}{Optional; either a single site value or a vector of site values to filter the dataframe by (e.g., Yale, NU)}
-
-\item{subsiteid}{Optional; either a single subsiteid or a vector of subsiteids to filter the dataframe by}
-
-\item{sex}{Optional; either a single sex value or a vector of sex values at birth to filter the dataframe by (e.g., 'M', 'F')}
-
-\item{race}{Optional; either a single race value or a vector of race values to filter the dataframe by}
-
-\item{ethnic_group}{Optional; either a single ethnic_group value or a vector of ethnic_group values to filter the dataframe by}
-
-\item{phenotype}{Optional; either a single phenotype value or a vector of phenotype values to filter the dataframe by}
-
-\item{phenotype_description}{Optional; either a single phenotype_description or a vector of phenotype_descriptions to filter the dataframe by}
-
-\item{status}{Optional; either a single status string or a vector of status conditions to filter the dataframe by. Used
-if either 'state' or 'status' column exists in the dataframe. Can include values like 'complete',
-'completed baseline', 'completed 12m', 'completed 24m', etc.}
-
-\item{lost_to_followup}{Optional; either a single value or a vector of values to filter the dataframe by (checks both 'lost_to_followup' and 'lost_to_follow-up' columns)}
-
-\item{twins_study}{Optional; either a single twins_study value or a vector of twins_study values to filter the dataframe by}
-
-\item{sibling_study}{Optional; either a single sibling_study value or a vector of sibling_study values to filter the dataframe by}
-
-\item{family_study}{Optional; either a single family_study value or a vector of family_study values to filter the dataframe by}
-
-\item{sample_taken}{Optional; either a single sample_taken value or a vector of sample_taken values to filter the dataframe by}
-
-\item{visit}{Optional; either a single visit value or a vector of visit values to filter the dataframe by.
-Only used if 'visit' column exists in the dataframe.}
-
-\item{week}{Optional; either a single week value or a vector of week values to filter the dataframe by.
-Only used if 'week' column exists in the dataframe.}
-
-\item{arm}{Optional; either a single arm value or a vector of arm values to filter the dataframe by (e.g., drug, placebo)}
-
-\item{interview_date}{Optional; can be either:
-- A date string in various formats (ISO, US, etc.) to filter data up to that date
-- A boolean TRUE to return only rows with non-NA interview_date values}
+\item{...}{Additional arguments passed through to \code{sift()}.}
 }
 \value{
 A filtered dataframe based on the provided parameters,
@@ -91,10 +15,12 @@ and containing only the columns specified in 'cols'. If no columns
 are specified, returns the entire dataframe with applied row filters.
 }
 \description{
+This function is deprecated. Please use 'sift' instead.
 This is a legacy alias for the 'sift' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use sift() instead
 filtered <- dataFilter(df, sex="F")
 }
 }

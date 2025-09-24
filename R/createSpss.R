@@ -116,17 +116,20 @@ to.sav <- function(df, df_name = NULL, path = ".", skip_prompt = TRUE) { # skip_
   return(invisible(TRUE))
 }
 
-#' Alias for 'to.sav'
+#' Alias for 'to.sav' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'to.sav' instead.
 #' This is a legacy alias for the 'to.sav' function to maintain compatibility with older code.
 #'
-#' @inheritParams to.sav
+#' @param ... Additional arguments passed through to \code{to.sav()}.
 #' @inherit to.sav return
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use to.sav() instead
 #' createSpss(prl01)
 #' }
-createSpss <- to.sav
-
-
+createSpss <- function(...) {
+  .Deprecated("to.sav", package = "wizaRdry")
+  to.sav(...)
+}

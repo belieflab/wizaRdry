@@ -1,23 +1,4 @@
-#' Create Data Definition from NDA Structure and Submission Template
-#'
-#' This function creates a data definition by intersecting the columns selected
-#' for the final submission template against the data structure pulled from NDA.
-#' It provides metadata about each field including validation rules, data types,
-#' and submission-specific information. For fields not found in NDA, it computes
-#' metadata by analyzing the actual data.
-#'
-#' @param submission_template List containing the submission template with selected columns
-#' @param nda_structure List containing the complete NDA data structure from API
-#' @param measure_name Character string of the measure/data structure name
-#' @param data_frame Optional data frame to analyze for computing missing metadata
-#' @return List containing the intersected data definition with metadata
-#' @export
-#' @examples
-#' \dontrun{
-#'   # After creating submission template
-#'   template <- createTemplate(selected_columns, nda_data)
-#'   data_def <- createDataDefinition(template, nda_data, "prl01")
-#' }
+#' @noRd
 createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL) {
 
   # Try to get the data frame from the global environment if not provided
@@ -26,7 +7,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       base::get0(measure_name)
     }, error = function(e) NULL)
   }
-  
+
   # Load missing data codes from config if available
   missing_data_codes <- NULL
   tryCatch({
@@ -54,7 +35,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # Create a named vector mapping field names to labels
       redcap_label_map <- rc_meta$field_label
       names(redcap_label_map) <- rc_meta$field_name
-      
+
       # Create a named vector mapping field names to select_choices_or_calculations for ValueRange
       if ("select_choices_or_calculations" %in% names(rc_meta)) {
         redcap_choices_map <- rc_meta$select_choices_or_calculations
@@ -74,11 +55,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
       return("")
     }
-    
+
     # Split by pipe (|) to get individual choices
     choices <- strsplit(choices_string, "\\|")[[1]]
     choices <- trimws(choices)
-    
+
     # Parse each choice (format: "value, label" or "value, label")
     parsed_choices <- character(0)
     for (choice in choices) {
@@ -96,7 +77,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         }
       }
     }
-    
+
     # Join with semicolons for NDA format
     return(paste(parsed_choices, collapse = "; "))
   }
@@ -106,16 +87,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     if (is.null(data_vector) || length(data_vector) == 0) {
       return("")
     }
-    
+
     # Remove NAs for analysis
     clean_data <- data_vector[!is.na(data_vector)]
     if (length(clean_data) == 0) {
       return("")
     }
-    
+
     unique_vals <- unique(clean_data)
     unique_count <- length(unique_vals)
-    
+
     if (data_type == "Integer") {
       # For integers, check if values look like categorical codes
       if (unique_count <= 20 && all(clean_data >= 0 & clean_data <= 99)) {
@@ -140,7 +121,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # For floats, don't specify value ranges (too restrictive)
       return("")
     }
-    
+
     return("")
   }
 
@@ -360,13 +341,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # Define fields that should never be included as new or modified structures
   # They can still be included only if part of essential ndar_subject01 and unchanged
   excluded_from_change <- c("state", "lost_to_followup", "lost_to_follow-up", "study_status")
-  
+
   # Get essential NDA fields dynamically from ndar_subject01 API
   # This ensures we always have the current required elements with complete metadata
   essential_nda_fields <- tryCatch({
     # Try to get required field metadata from the global environment or nda_structure
     required_metadata <- NULL
-    
+
     # First, try to get from nda_structure if it contains ndar_subject01 data
     if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
       required_elements <- nda_structure$dataElements[nda_structure$dataElements$required == "Required", ]
@@ -374,13 +355,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         required_metadata <- required_elements
       }
     }
-    
+
     # If not found in nda_structure, try to fetch from API directly
     if (is.null(required_metadata)) {
       message("Fetching current ndar_subject01 required elements from NDA API...")
       nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
       url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
-      
+
       response <- httr::GET(url, httr::timeout(10))
       if (httr::status_code(response) == 200) {
         raw_content <- rawToChar(response$content)
@@ -392,25 +373,25 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         }
       }
     }
-    
+
     # Extract field names from metadata
     if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
       field_names <- required_metadata$name
       # Exclude internal fields that should never appear
       field_names <- setdiff(field_names, excluded_from_change)
-      message(sprintf("Found %d required ndar_subject01 elements: %s", 
+      message(sprintf("Found %d required ndar_subject01 elements: %s",
                       length(field_names), paste(head(field_names, 5), collapse = ", ")))
       field_names
     } else {
       # Fallback to essential fields if API fails
       message("Using fallback essential fields list")
-      setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+      setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date",
         "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name"), excluded_from_change)
     }
   }, error = function(e) {
     message("Error fetching ndar_subject01 elements: ", e$message)
     message("Using fallback essential fields list")
-    setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+    setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date",
       "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name"), excluded_from_change)
   })
 
@@ -523,7 +504,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     unique_vals <- unique(clean_data)
     unique_count <- length(unique_vals)
     value_range <- ""
-    
+
     # Detect user-defined missing value codes from config and data
     user_defined_codes <- character(0)
     if (data_type %in% c("Integer", "Float") && !is.null(missing_data_codes)) {
@@ -544,7 +525,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
     # Use the enhanced inference function to determine value range
     value_range <- infer_value_range_from_data(data_vector, data_type)
-    
+
     # Append user-defined missing value codes if they exist
     if (length(user_defined_codes) > 0) {
       if (value_range == "") {
@@ -562,10 +543,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
     # Keep notes minimal for all field types
     notes_parts <- c()
-    
+
     # Calculate missing percentage for missing_info (still needed)
     missing_pct <- round((missing_count / total_count) * 100, 1)
-    
+
     # Document user-defined missing value codes if they exist
     if (length(user_defined_codes) > 0 && !is.null(missing_data_codes)) {
       code_descriptions <- character(0)
@@ -733,18 +714,18 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # 2. Modified fields (in NDA but changed)
   # Exclude unchanged NDA fields
   # IMPORTANT: ndar_subject01 variables can NEVER be modified
-  
+
   all_nda_fields <- names(nda_lookup)
   user_added_fields <- selected_columns[!selected_columns %in% all_nda_fields]
-  
+
   # Identify ndar_subject01 variables that should never be modified
   ndar_subject01_fields <- all_nda_fields[grepl("^ndar_subject01", all_nda_fields)]
-  
+
   # Initialize lists for different field categories
   new_fields <- character(0)
   modified_fields <- character(0)
   unchanged_fields <- character(0)
-  
+
   if (!is.null(data_frame)) {
     # Categorize fields based on whether they exist in data and NDA
     for (field in selected_columns) {
@@ -764,16 +745,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           } else {
             # Check if this field has actual modifications
             is_modified <- FALSE
-            
+
             # Check for missing value code modifications
             if (!is.null(missing_data_codes)) {
               field_data <- data_frame[[field]]
               field_type <- if ("type" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$type else "String"
-              
+
               if (field_type %in% c("Integer", "Float")) {
                 # Check if field has missing value codes not in original NDA range
                 original_value_range <- if ("valueRange" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$valueRange else ""
-                
+
                 # Detect missing value codes in the data
                 user_defined_codes <- character(0)
                 for (category in names(missing_data_codes)) {
@@ -788,7 +769,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                     }
                   }
                 }
-                
+
                 # Check if any of these codes are not in the original value range
                 if (length(user_defined_codes) > 0) {
                   original_codes <- character(0)
@@ -801,7 +782,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                       }
                     }
                   }
-                  
+
                   # Find new codes that aren't in the original
                   new_codes <- setdiff(user_defined_codes, original_codes)
                   if (length(new_codes) > 0) {
@@ -810,7 +791,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                 }
               }
             }
-            
+
             if (is_modified) {
               modified_fields <- c(modified_fields, field)
             } else {
@@ -839,29 +820,29 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # Essential NDA fields are always included even if unchanged
   essential_fields <- intersect(selected_columns, essential_nda_fields)
   ordered_columns <- c(new_fields, modified_fields, essential_fields)
-  
+
   # Ensure we don't drop any selected columns: append remaining ones and de-duplicate
   remaining_columns <- setdiff(selected_columns, ordered_columns)
   if (length(remaining_columns) > 0) {
     ordered_columns <- c(ordered_columns, remaining_columns)
   }
   ordered_columns <- unique(ordered_columns)
-  
+
   # Report what's being included in the data definition
   if (length(new_fields) > 0) {
-    message(sprintf("Including %d new fields in data definition: %s", 
+    message(sprintf("Including %d new fields in data definition: %s",
                     length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
   }
   if (length(modified_fields) > 0) {
-    message(sprintf("Including %d modified fields in data definition: %s", 
+    message(sprintf("Including %d modified fields in data definition: %s",
                     length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
   }
   if (length(essential_fields) > 0) {
-    message(sprintf("Including %d essential NDA fields in data definition: %s", 
+    message(sprintf("Including %d essential NDA fields in data definition: %s",
                     length(essential_fields), paste(head(essential_fields, 5), collapse = ", ")))
   }
   if (length(unchanged_fields) > 0) {
-    message(sprintf("Excluding %d unchanged NDA fields from data definition: %s", 
+    message(sprintf("Excluding %d unchanged NDA fields from data definition: %s",
                     length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
   }
 
@@ -902,14 +883,14 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       missing_info <- NULL
       field_data <- NULL
       field_exists_in_data <- FALSE
-      
+
       if (!is.null(data_frame) && column_name %in% names(data_frame)) {
         field_data <- data_frame[[column_name]]
         field_exists_in_data <- TRUE
         total_count <- length(field_data)
         missing_count <- sum(is.na(field_data))
         missing_percentage <- round((missing_count / total_count) * 100, 1)
-        
+
         missing_info <- list(
           missing_count = missing_count,
           missing_percentage = missing_percentage,
@@ -921,7 +902,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       is_modified_structure <- FALSE
       updated_value_range <- NULL
       modification_notes <- NULL
-      
+
       # IMPORTANT: ndar_subject01 variables can NEVER be modified
       if (column_name %in% ndar_subject01_fields) {
         # Force ndar_subject01 fields to remain unchanged
@@ -929,7 +910,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       } else if (field_exists_in_data && !is.null(missing_data_codes)) {
         original_value_range <- if ("valueRange" %in% names(nda_field)) nda_field$valueRange else ""
         field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
-        
+
         # Only check numeric fields for missing value codes
         if (field_type %in% c("Integer", "Float")) {
           # Detect missing value codes in the data
@@ -946,7 +927,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
               }
             }
           }
-          
+
           # Check if any of these codes are not in the original value range
           if (length(user_defined_codes) > 0) {
             original_codes <- character(0)
@@ -959,19 +940,19 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                 }
               }
             }
-            
+
             # Find new codes that aren't in the original
             new_codes <- setdiff(user_defined_codes, original_codes)
             if (length(new_codes) > 0) {
               is_modified_structure <- TRUE
-              
+
               # Create updated value range
               if (original_value_range == "") {
                 updated_value_range <- paste(new_codes, collapse = ";")
               } else {
                 updated_value_range <- paste0(original_value_range, ";", paste(new_codes, collapse = ";"))
               }
-              
+
               # Create modification notes
               code_descriptions <- character(0)
               for (code in new_codes) {
@@ -1001,16 +982,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           allowed_values = updated_value_range,
           pattern = if ("pattern" %in% names(nda_field)) nda_field$pattern else NULL
         )
-        
+
         # Update NDA metadata with modified value range
         modified_nda_metadata <- nda_field
         modified_nda_metadata$valueRange <- updated_value_range
         if (!is.null(modification_notes)) {
-          modified_nda_metadata$notes <- paste0(if ("notes" %in% names(nda_field)) nda_field$notes else "", 
+          modified_nda_metadata$notes <- paste0(if ("notes" %in% names(nda_field)) nda_field$notes else "",
                                                if ("notes" %in% names(nda_field) && nda_field$notes != "") " | " else "",
                                                modification_notes)
         }
-        
+
         nda_metadata_to_use <- modified_nda_metadata
         data_definition$metadata$validation_summary$modified_fields <-
           (data_definition$metadata$validation_summary$modified_fields %||% 0) + 1
@@ -1105,10 +1086,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
         # Additional NDA metadata
         nda_metadata = nda_metadata_to_use,
-        
+
         # Missing value information
         missing_info = missing_info,
-        
+
         # Modification information
         is_modified = is_modified_structure,
         modification_notes = modification_notes
@@ -1143,7 +1124,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           computed_desc <- as.character(qualtrics_label_map[[column_name]])
         }
       }
-      
+
       # REDCap checkbox child handling: derive from parent metadata first
       if (exists("rc_meta") && is.data.frame(rc_meta)) {
         cbx <- rc_enrich_checkbox_child(column_name, rc_meta)
@@ -1282,12 +1263,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       2
     )
   )
-  
+
   # Add missing value summary across all fields
   total_missing_count <- 0
   total_rows <- 0
   fields_with_missing <- 0
-  
+
   for (field_name in names(data_definition$fields)) {
     field <- data_definition$fields[[field_name]]
     if (!is.null(field$missing_info)) {
@@ -1298,7 +1279,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
   }
-  
+
   if (total_rows > 0) {
     data_definition$summary$missing_data_summary <- list(
       total_missing_values = total_missing_count,
@@ -1317,7 +1298,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   cat("Modified NDA structures:", data_definition$summary$modified_fields, "\n")
   cat("Computed from data:", data_definition$summary$computed_fields, "\n")
   cat("Match percentage:", paste0(data_definition$summary$match_percentage, "%"), "\n")
-  
+
   # Print missing value summary
   if (!is.null(data_definition$summary$missing_data_summary)) {
     missing_summary <- data_definition$summary$missing_data_summary
@@ -1345,14 +1326,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   return(data_definition)
 }
 
-#' Validate Data Definition
-#'
-#' Validates the created data definition against submission requirements
-#'
-#' @param data_definition List containing the data definition
-#' @param strict_validation Logical, whether to enforce strict validation rules
-#' @return List with validation results
-#' @export
+#' @noRd
 validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 
   validation_result <- list(
@@ -1429,13 +1403,7 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
   return(validation_result)
 }
 
-#' Export Data Definition
-#'
-#' Exports the data definition to various formats
-#'
-#' @param data_definition List containing the data definition
-#' @param format Character string specifying export format ("json", "csv", "yaml")
-#' @export
+#' @noRd
 exportDataDefinition <- function(data_definition, format = "csv") {
   # Create directory structure if it doesn't exist
   tmp_path <- file.path(".", "tmp")

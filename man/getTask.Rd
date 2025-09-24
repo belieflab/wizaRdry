@@ -2,45 +2,25 @@
 % Please edit documentation in R/getMongo.R
 \name{getTask}
 \alias{getTask}
-\title{Alias for 'mongo'}
+\title{Alias for 'mongo' (DEPRECATED)}
 \usage{
-getTask(
-  collection,
-  ...,
-  database = NULL,
-  identifier = NULL,
-  chunk_size = NULL,
-  verbose = FALSE,
-  interview_date = NULL
-)
+getTask(...)
 }
 \arguments{
-\item{collection}{The name of the MongoDB collection}
-
 \item{...}{Optional column names to filter for. Only rows with non-missing values
 in ALL specified columns will be returned. This is useful for filtering
 data to only include complete cases for specific variables of interest.}
-
-\item{database}{The database name (optional)}
-
-\item{identifier}{Field to use as identifier (optional)}
-
-\item{chunk_size}{Number of records per chunk (optional)}
-
-\item{verbose}{Logical; if TRUE, displays detailed progress messages. Default is FALSE.}
-
-\item{interview_date}{Optional; can be either:
-- A date string in various formats (ISO, US, etc.) to filter data up to that date
-- A boolean TRUE to return only rows with non-NA interview_date values}
 }
 \value{
 A data frame containing the MongoDB data with superkeys first
 }
 \description{
+This function is deprecated. Please use 'mongo' instead.
 This is a legacy alias for the 'mongo' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use mongo() instead
 survey_data <- getTask("task_alias")
 }
 }

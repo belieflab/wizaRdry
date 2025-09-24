@@ -954,8 +954,9 @@ redcap.dict <- function(instrument_name) {
   stop("Input must be either a data frame, a string variable name, or an instrument name string.")
 }
 
-#' Alias for 'redcap'
+#' Alias for 'redcap' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'redcap' instead.
 #' This is a legacy alias for the 'redcap' function to maintain compatibility with older code.
 #'
 #' @inheritParams redcap
@@ -963,7 +964,10 @@ redcap.dict <- function(instrument_name) {
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use redcap() instead
 #' survey_data <- getRedcap("demographics")
 #' }
-getRedcap <- redcap
-
+getRedcap <- function(...) {
+  .Deprecated("redcap", package = "wizaRdry")
+  redcap(...)
+}

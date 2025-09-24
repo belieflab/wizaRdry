@@ -737,8 +737,9 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
   })
 }
 
-#' Alias for 'qualtrics'
+#' Alias for 'qualtrics' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'qualtrics' instead.
 #' This is a legacy alias for the 'qualtrics' function to maintain compatibility with older code.
 #'
 #' @inheritParams qualtrics
@@ -746,6 +747,10 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use qualtrics() instead
 #' survey_data <- getSurvey("your_survey_alias")
 #' }
-getSurvey <- qualtrics
+getSurvey <- function(...) {
+  .Deprecated("qualtrics", package = "wizaRdry")
+  qualtrics(...)
+}

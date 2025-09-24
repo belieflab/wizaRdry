@@ -317,15 +317,20 @@ sift <- function(df, rows = NULL, cols = NULL,
   return(result_df)
 }
 
-#' Alias for 'sift'
+#' Alias for 'sift' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'sift' instead.
 #' This is a legacy alias for the 'sift' function to maintain compatibility with older code.
 #'
-#' @inheritParams sift
+#' @param ... Additional arguments passed through to \code{sift()}.
 #' @inherit sift return
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use sift() instead
 #' filtered <- dataFilter(df, sex="F")
 #' }
-dataFilter <- sift
+dataFilter <- function(...) {
+  .Deprecated("sift", package = "wizaRdry")
+  sift(...)
+}

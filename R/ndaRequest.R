@@ -1558,8 +1558,9 @@ formatElapsedTime <- function(start_time) {
   message("Formatted for NDA in ", formatted_time, ".")
 }
 
-#' Alias for 'nda'
+#' Alias for 'nda' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'nda' instead.
 #' This is a legacy alias for the 'nda' function to maintain compatibility with older code.
 #'
 #' @inheritParams nda
@@ -1567,7 +1568,10 @@ formatElapsedTime <- function(start_time) {
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use nda() instead
 #' prl01 <- ndaRequest("prl01")
 #' }
-ndaRequest <- nda
-
+ndaRequest <- function(...) {
+  .Deprecated("nda", package = "wizaRdry")
+  nda(...)
+}
