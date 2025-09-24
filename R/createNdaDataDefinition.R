@@ -208,7 +208,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     # Numeric child like parent___1
     if (!is.null(suffix) && grepl("^[0-9]+$", suffix)) {
       label <- choice_map[[suffix]] %||% parent_label
-      out$description <- label
+      # Compose description as single line: Parent label - choice label
+      if (nzchar(parent_label) && nzchar(label) && parent_label != label) {
+        out$description <- paste0(parent_label, " - ", label)
+      } else {
+        out$description <- label
+      }
       out$valueRange <- "0;1"
       out$notes <- "0=No;1=Yes"
       # Per current expectation: keep as String with Size 255
