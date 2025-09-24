@@ -274,7 +274,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
   # Define fields that should never be included as new or modified structures
   # They can still be included only if part of essential ndar_subject01 and unchanged
-  excluded_from_change <- c("state", "lost_to_followup", "lost_to_follow-up")
+  excluded_from_change <- c("state", "lost_to_followup", "lost_to_follow-up", "study_status")
   
   # Get essential NDA fields dynamically from ndar_subject01 API
   # This ensures we always have the current required elements with complete metadata
@@ -311,20 +311,22 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     # Extract field names from metadata
     if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
       field_names <- required_metadata$name
+      # Exclude internal fields that should never appear
+      field_names <- setdiff(field_names, excluded_from_change)
       message(sprintf("Found %d required ndar_subject01 elements: %s", 
                       length(field_names), paste(head(field_names, 5), collapse = ", ")))
       field_names
     } else {
       # Fallback to essential fields if API fails
       message("Using fallback essential fields list")
-      c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
-        "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name")
+      setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+        "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name"), excluded_from_change)
     }
   }, error = function(e) {
     message("Error fetching ndar_subject01 elements: ", e$message)
     message("Using fallback essential fields list")
-    c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
-      "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name")
+    setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+      "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name"), excluded_from_change)
   })
 
   # Convert to character vector if needed
@@ -803,6 +805,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
     column_name <- ordered_columns[i]
+    # Skip internal/excluded fields unconditionally
+    if (column_name %in% excluded_from_change) next
 
     # Check if column exists in NDA structure
     if (column_name %in% names(nda_lookup)) {
@@ -1333,6 +1337,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
          "csv" = {
            # Flatten the fields for CSV export with exact NDA column names and case
            field_names <- names(data_definition$fields)
+           # Filter out excluded fields from final export
+           field_names <- setdiff(field_names, excluded_from_change)
 
            if (length(field_names) == 0) {
              warning("No fields to export")
