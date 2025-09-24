@@ -3196,6 +3196,90 @@ extract_bidirectional_mappings <- function(notes, direction = "string_to_numeric
   return(list(mapping = mapping, source = source))
 }
 
+# Function to parse RedCap select_choices_or_calculations and convert to NDA ValueRange format
+parse_redcap_choices_to_value_range <- function(choices_string) {
+  if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+    return("")
+  }
+  
+  # Split by pipe (|) to get individual choices
+  choices <- strsplit(choices_string, "\\|")[[1]]
+  choices <- trimws(choices)
+  
+  # Parse each choice (format: "value, label" or "value, label")
+  parsed_choices <- character(0)
+  for (choice in choices) {
+    if (choice != "") {
+      # Split by comma to separate value and label
+      parts <- strsplit(choice, ",")[[1]]
+      if (length(parts) >= 2) {
+        value <- trimws(parts[1])
+        label <- trimws(paste(parts[-1], collapse = ","))  # In case label contains commas
+        # Format as NDA ValueRange: "value; label"
+        parsed_choices <- c(parsed_choices, paste0(value, "; ", label))
+      } else if (length(parts) == 1) {
+        # If no comma, treat the whole thing as a value
+        parsed_choices <- c(parsed_choices, trimws(parts[1]))
+      }
+    }
+  }
+  
+  # Join with semicolons for NDA format
+  return(paste(parsed_choices, collapse = "; "))
+}
+
+# Function to enhance NDA elements with RedCap metadata
+enhance_elements_with_redcap_metadata <- function(elements, redcap_metadata) {
+  if (is.null(redcap_metadata) || !is.data.frame(redcap_metadata)) {
+    return(elements)
+  }
+  
+  # Create mappings from RedCap metadata
+  redcap_label_map <- NULL
+  redcap_choices_map <- NULL
+  
+  if (all(c("field_name", "field_label") %in% names(redcap_metadata))) {
+    redcap_label_map <- redcap_metadata$field_label
+    names(redcap_label_map) <- redcap_metadata$field_name
+  }
+  
+  if ("select_choices_or_calculations" %in% names(redcap_metadata)) {
+    redcap_choices_map <- redcap_metadata$select_choices_or_calculations
+    names(redcap_choices_map) <- redcap_metadata$field_name
+    # Remove NA values
+    redcap_choices_map <- redcap_choices_map[!is.na(redcap_choices_map) & redcap_choices_map != ""]
+  }
+  
+  # Enhance elements with RedCap metadata
+  for (i in 1:nrow(elements)) {
+    field_name <- elements$name[i]
+    
+    # Enhance description with field_label if available
+    if (!is.null(redcap_label_map) && field_name %in% names(redcap_label_map)) {
+      current_desc <- elements$description[i]
+      if (is.null(current_desc) || current_desc == "" || is.na(current_desc)) {
+        elements$description[i] <- as.character(redcap_label_map[[field_name]])
+      }
+    }
+    
+    # Enhance valueRange with select_choices_or_calculations if available
+    if (!is.null(redcap_choices_map) && field_name %in% names(redcap_choices_map)) {
+      current_value_range <- elements$valueRange[i]
+      if (is.null(current_value_range) || current_value_range == "" || is.na(current_value_range)) {
+        redcap_choices <- redcap_choices_map[[field_name]]
+        if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
+          parsed_value_range <- parse_redcap_choices_to_value_range(redcap_choices)
+          if (parsed_value_range != "") {
+            elements$valueRange[i] <- parsed_value_range
+          }
+        }
+      }
+    }
+  }
+  
+  return(elements)
+}
+
 # Updated ndaValidator to incorporate better missing value handling
 # Updated ndaValidator to incorporate better missing value handling
 ndaValidator <- function(measure_name,
@@ -3217,6 +3301,22 @@ ndaValidator <- function(measure_name,
 
     # Get the dataframe from the environment
     df <- base::get(measure_name, envir = .wizaRdry_env)
+
+    # Enhance with RedCap metadata if available and api is "redcap"
+    redcap_metadata <- NULL
+    if (api == "redcap") {
+      try({
+        # Try to get RedCap metadata
+        if (!is.null(attr(df, "redcap_instrument"))) {
+          redcap_metadata <- redcap.dict(df)
+        } else {
+          redcap_metadata <- redcap.dict(measure_name)
+        }
+        if (verbose && !is.null(redcap_metadata)) {
+          message("Enhanced validation with RedCap metadata")
+        }
+      }, silent = TRUE)
+    }
 
     # Force all complex/problematic data types to character immediately
     for (col in names(df)) {
@@ -3284,6 +3384,14 @@ ndaValidator <- function(measure_name,
 
     if (is.null(elements) || nrow(elements) == 0) {
       stop("No elements found in the structure definition")
+    }
+
+    # Enhance elements with RedCap metadata if available
+    if (!is.null(redcap_metadata)) {
+      elements <- enhance_elements_with_redcap_metadata(elements, redcap_metadata)
+      if (verbose) {
+        message("Enhanced NDA elements with RedCap metadata")
+      }
     }
 
     # PHASE 1: NA Value Mapping

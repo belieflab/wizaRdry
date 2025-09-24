@@ -39,9 +39,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
   # Build optional description maps from external sources (REDCap/Qualtrics)
   redcap_label_map <- NULL
+  redcap_choices_map <- NULL
   qualtrics_label_map <- NULL
 
-  # Attempt to fetch REDCap metadata and map field_name -> field_label
+  # Attempt to fetch REDCap metadata and map field_name -> field_label and field_name -> select_choices_or_calculations
   try({
     # Prefer using the provided data_frame if it carries instrument attribute
     if (is.data.frame(data_frame) && !is.null(attr(data_frame, "redcap_instrument"))) {
@@ -53,8 +54,95 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # Create a named vector mapping field names to labels
       redcap_label_map <- rc_meta$field_label
       names(redcap_label_map) <- rc_meta$field_name
+      
+      # Create a named vector mapping field names to select_choices_or_calculations for ValueRange
+      if ("select_choices_or_calculations" %in% names(rc_meta)) {
+        redcap_choices_map <- rc_meta$select_choices_or_calculations
+        names(redcap_choices_map) <- rc_meta$field_name
+        # Remove NA values
+        redcap_choices_map <- redcap_choices_map[!is.na(redcap_choices_map) & redcap_choices_map != ""]
+      } else {
+        redcap_choices_map <- NULL
+      }
+    } else {
+      redcap_choices_map <- NULL
     }
   }, silent = TRUE)
+
+  # Function to parse RedCap select_choices_or_calculations and convert to NDA ValueRange format
+  parse_redcap_choices_to_value_range <- function(choices_string) {
+    if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+      return("")
+    }
+    
+    # Split by pipe (|) to get individual choices
+    choices <- strsplit(choices_string, "\\|")[[1]]
+    choices <- trimws(choices)
+    
+    # Parse each choice (format: "value, label" or "value, label")
+    parsed_choices <- character(0)
+    for (choice in choices) {
+      if (choice != "") {
+        # Split by comma to separate value and label
+        parts <- strsplit(choice, ",")[[1]]
+        if (length(parts) >= 2) {
+          value <- trimws(parts[1])
+          label <- trimws(paste(parts[-1], collapse = ","))  # In case label contains commas
+          # Format as NDA ValueRange: "value; label"
+          parsed_choices <- c(parsed_choices, paste0(value, "; ", label))
+        } else if (length(parts) == 1) {
+          # If no comma, treat the whole thing as a value
+          parsed_choices <- c(parsed_choices, trimws(parts[1]))
+        }
+      }
+    }
+    
+    # Join with semicolons for NDA format
+    return(paste(parsed_choices, collapse = "; "))
+  }
+
+  # Function to infer value ranges from data tuples when choices are not available
+  infer_value_range_from_data <- function(data_vector, data_type) {
+    if (is.null(data_vector) || length(data_vector) == 0) {
+      return("")
+    }
+    
+    # Remove NAs for analysis
+    clean_data <- data_vector[!is.na(data_vector)]
+    if (length(clean_data) == 0) {
+      return("")
+    }
+    
+    unique_vals <- unique(clean_data)
+    unique_count <- length(unique_vals)
+    
+    if (data_type == "Integer") {
+      # For integers, check if values look like categorical codes
+      if (unique_count <= 20 && all(clean_data >= 0 & clean_data <= 99)) {
+        # Likely categorical data - list all values
+        sorted_vals <- sort(as.numeric(unique_vals))
+        return(paste(sorted_vals, collapse = ";"))
+      } else {
+        # Likely continuous data - use range notation
+        min_val <- min(clean_data, na.rm = TRUE)
+        max_val <- max(clean_data, na.rm = TRUE)
+        return(paste0(as.integer(min_val), "::", as.integer(max_val)))
+      }
+    } else if (data_type == "String") {
+      # For strings, list unique values if reasonable number
+      if (unique_count <= 20) {
+        sorted_vals <- sort(as.character(unique_vals))
+        return(paste(sorted_vals, collapse = ";"))
+      } else {
+        return(paste0("Multiple categorical values (", unique_count, " unique)"))
+      }
+    } else if (data_type == "Float") {
+      # For floats, don't specify value ranges (too restrictive)
+      return("")
+    }
+    
+    return("")
+  }
 
   # Attempt to fetch Qualtrics column map and map variable -> question text
   try({
@@ -66,8 +154,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
     if (is.data.frame(q_map)) {
       # Heuristically identify variable and question-text columns
-      var_cols <- c("VariableName", "variable", "Variable", "col_name", "column", "Column", "name", "Name")
-      txt_cols <- c("QuestionText", "question_text", "Question", "Label", "label", "Description", "description")
+      var_cols <- c("qname", "VariableName", "variable", "Variable", "col_name", "column", "Column", "name", "Name")
+      txt_cols <- c("description", "QuestionText", "question_text", "Question", "Label", "label", "Description")
       var_col <- var_cols[var_cols %in% names(q_map)]
       txt_col <- txt_cols[txt_cols %in% names(q_map)]
       if (length(var_col) > 0 && length(txt_col) > 0) {
@@ -297,33 +385,15 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
 
-    if (data_type == "Integer") {
-      min_val <- min(clean_data, na.rm = TRUE)
-      max_val <- max(clean_data, na.rm = TRUE)
-
-      # Always use range notation for integer data (less restrictive)
-      value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
-      
-      # Append user-defined missing value codes if they exist
-      if (length(user_defined_codes) > 0) {
-        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
-      }
-    } else if (data_type == "Float") {
-      # For float variables, keep it simple - no value ranges
-      value_range <- ""
-      
-      # Only append user-defined missing value codes if they exist
-      if (length(user_defined_codes) > 0) {
+    # Use the enhanced inference function to determine value range
+    value_range <- infer_value_range_from_data(data_vector, data_type)
+    
+    # Append user-defined missing value codes if they exist
+    if (length(user_defined_codes) > 0) {
+      if (value_range == "") {
         value_range <- paste(user_defined_codes, collapse = ";")
-      }
-    } else {
-      # For categorical/string data, list unique values (up to 20)
-      if (unique_count <= 20) {
-        # Sort string values alphabetically
-        sorted_vals <- sort(as.character(unique_vals))
-        value_range <- paste(sorted_vals, collapse = ";")
       } else {
-        value_range <- paste0("Multiple categorical values (", unique_count, " unique)")
+        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
       }
     }
 
@@ -790,6 +860,24 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           fallback_desc <- ""
         }
       }
+      
+      # Enhance ValueRange with RedCap choices if available and not an ndar_subject01 field
+      if (!column_name %in% ndar_subject01_fields && !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
+        redcap_choices <- redcap_choices_map[[column_name]]
+        if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
+          # Parse RedCap choices and convert to NDA ValueRange format
+          parsed_value_range <- parse_redcap_choices_to_value_range(redcap_choices)
+          if (parsed_value_range != "") {
+            # Use RedCap choices as ValueRange if NDA doesn't have one or it's empty
+            current_value_range <- if ("valueRange" %in% names(nda_metadata_to_use)) nda_metadata_to_use$valueRange else ""
+            if (is.null(current_value_range) || current_value_range == "" || is.na(current_value_range)) {
+              nda_metadata_to_use$valueRange <- parsed_value_range
+              # Also update the validation rules
+              validation_rules$allowed_values <- parsed_value_range
+            }
+          }
+        }
+      }
 
       data_definition$fields[[column_name]] <- list(
         name = column_name,
@@ -838,6 +926,20 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           computed_desc <- as.character(redcap_label_map[[column_name]])
         } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
           computed_desc <- as.character(qualtrics_label_map[[column_name]])
+        }
+      }
+      
+      # Enhance computed ValueRange with RedCap choices if available
+      computed_value_range <- computed_metadata$valueRange
+      if ((is.null(computed_value_range) || computed_value_range == "" || is.na(computed_value_range)) &&
+          !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
+        redcap_choices <- redcap_choices_map[[column_name]]
+        if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
+          # Parse RedCap choices and convert to NDA ValueRange format
+          parsed_value_range <- parse_redcap_choices_to_value_range(redcap_choices)
+          if (parsed_value_range != "") {
+            computed_metadata$valueRange <- parsed_value_range
+          }
         }
       }
 
@@ -1171,17 +1273,17 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                    if (is.null(alias_val) || is.na(alias_val) || alias_val == "" || alias_val == "character(0)") {
                      ""
                    } else if (is.vector(alias_val) && length(alias_val) > 0) {
-                     # If it's a vector with elements, join with commas
-                     paste(alias_val, collapse = ", ")
+                     # If it's a vector with elements, join with commas (no spaces)
+                     paste(alias_val, collapse = ",")
                    } else if (is.character(alias_val) && length(alias_val) == 1) {
                      # If it's a string, clean up R syntax
                      cleaned <- gsub("^c\\(|\\)$", "", alias_val)
                      # Remove quotes around individual items and clean up
                      cleaned <- gsub('"([^"]*)"', "\\1", cleaned)
-                     # Split by comma and clean up whitespace, then rejoin
+                     # Split by comma and clean up whitespace, then rejoin without spaces
                      if (nchar(cleaned) > 0) {
                        items <- trimws(strsplit(cleaned, ",")[[1]])
-                       paste(items, collapse = ", ")
+                       paste(items, collapse = ",")
                      } else {
                        ""
                      }
