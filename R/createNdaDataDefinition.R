@@ -753,6 +753,13 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   essential_fields <- intersect(selected_columns, essential_nda_fields)
   ordered_columns <- c(new_fields, modified_fields, essential_fields)
   
+  # Ensure we don't drop any selected columns: append remaining ones and de-duplicate
+  remaining_columns <- setdiff(selected_columns, ordered_columns)
+  if (length(remaining_columns) > 0) {
+    ordered_columns <- c(ordered_columns, remaining_columns)
+  }
+  ordered_columns <- unique(ordered_columns)
+  
   # Report what's being included in the data definition
   if (length(new_fields) > 0) {
     message(sprintf("Including %d new fields in data definition: %s", 
@@ -1399,6 +1406,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  }
                }, error = function(e) "")
              })
+            # Compress numeric ranges
+            value_ranges <- vapply(value_ranges, compress_value_range, character(1))
 
              notes <- sapply(field_names, function(fname) {
                tryCatch({
@@ -1420,28 +1429,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
                    alias_val <- x$nda_metadata$aliases %||% ""
-                   
-                   # Handle different alias formats
-                   if (is.null(alias_val) || is.na(alias_val) || alias_val == "" || alias_val == "character(0)") {
-                     ""
-                   } else if (is.vector(alias_val) && length(alias_val) > 0) {
-                     # If it's a vector with elements, join with commas (no spaces)
-                     paste(alias_val, collapse = ",")
-                   } else if (is.character(alias_val) && length(alias_val) == 1) {
-                     # If it's a string, clean up R syntax
-                     cleaned <- gsub("^c\\(|\\)$", "", alias_val)
-                     # Remove quotes around individual items and clean up
-                     cleaned <- gsub('"([^"]*)"', "\\1", cleaned)
-                     # Split by comma and clean up whitespace, then rejoin without spaces
-                     if (nchar(cleaned) > 0) {
-                       items <- trimws(strsplit(cleaned, ",")[[1]])
-                       paste(items, collapse = ",")
-                     } else {
-                       ""
-                     }
-                   } else {
-                     ""
-                   }
+                   normalize_aliases_export(alias_val)
                  } else {
                    ""
                  }
@@ -1484,6 +1472,39 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                stringsAsFactors = FALSE
              )
 
+             # --- Safe export sanitization ---
+             # Drop rows with empty ElementName
+             fields_df$ElementName <- as.character(fields_df$ElementName)
+             fields_df <- fields_df[!is.na(fields_df$ElementName) & fields_df$ElementName != "", , drop = FALSE]
+
+             # NA -> ""
+             for (nm in names(fields_df)) {
+               fields_df[[nm]][is.na(fields_df[[nm]])] <- ""
+             }
+
+             # Normalize DataType and Required
+             fields_df$DataType <- as.character(fields_df$DataType)
+             fields_df$Required <- as.character(fields_df$Required)
+             fields_df$DataType[!fields_df$DataType %in% c("String", "Integer", "Float", "Date", "GUID", "Boolean")] <- "String"
+             fields_df$Required[!fields_df$Required %in% c("Required", "Recommended", "Conditional", "No")] <- "No"
+
+             # Coerce Size to numeric-like text or empty
+             suppressWarnings(sz <- as.numeric(fields_df$Size))
+             sz[is.na(sz)] <- NA_real_
+             fields_df$Size <- ifelse(is.na(sz), "", as.character(sz))
+
+             # Only Strings have Size; clear Size for non-String types
+             non_string_idx <- which(fields_df$DataType != "String")
+             if (length(non_string_idx) > 0) {
+               fields_df$Size[non_string_idx] <- ""
+             }
+
+             # Compress numeric ValueRange and normalize spacing
+             fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
+
+             # Normalize Aliases to comma-separated without quotes/c()
+             fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
+
              write.csv(fields_df, file_path, row.names = FALSE)
              cat("Data definition exported to:", file_path, "\n")
 
@@ -1511,3 +1532,98 @@ exportDataDefinition <- function(data_definition, format = "csv") {
 
 # Helper function for null coalescing
 `%||%` <- function(x, y) if (is.null(x)) y else x
+
+# Compress numeric ValueRange like "1; 2; 3; 4; 5; 9999" -> "1::5;9999"
+compress_value_range <- function(val_range) {
+  if (is.null(val_range) || identical(val_range, "") || is.na(val_range)) return("")
+  parts <- trimws(strsplit(as.character(val_range), ";")[[1]])
+  parts <- parts[nzchar(parts)]
+  if (length(parts) == 0) return("")
+  suppressWarnings(nums <- as.numeric(parts))
+  if (any(is.na(nums))) {
+    # Not purely numeric; normalize spacing only
+    return(paste(parts, collapse = "; "))
+  }
+
+  # Keep special outliers separate (e.g., 77, 88, 99, 777, 999, -7, -8, -9, 9999) if they are not contiguous with the main run
+  # Strategy: sort ascending to find contiguous runs, then join. This also fixes descending inputs like 5;4;3;2;1;0.
+  nums_sorted <- sort(unique(nums))
+
+  runs <- list()
+  run_start <- nums_sorted[1]
+  run_prev <- nums_sorted[1]
+  for (i in seq_along(nums_sorted)) {
+    if (i == 1) next
+    if (nums_sorted[i] == run_prev + 1) {
+      run_prev <- nums_sorted[i]
+    } else {
+      runs[[length(runs) + 1]] <- c(run_start, run_prev)
+      run_start <- nums_sorted[i]
+      run_prev <- nums_sorted[i]
+    }
+  }
+  # close last run
+  runs[[length(runs) + 1]] <- c(run_start, run_prev)
+
+  # Build tokens: ranges as a::b when length >= 3, otherwise list numbers individually
+  tokens <- character(0)
+  for (r in runs) {
+    a <- r[1]; b <- r[2]
+    if (b - a + 1 >= 3) {
+      tokens <- c(tokens, paste0(a, "::", b))
+    } else if (a == b) {
+      tokens <- c(tokens, as.character(a))
+    } else {
+      tokens <- c(tokens, as.character(a), as.character(b))
+    }
+  }
+
+  # Preserve any values from the original list that were not numeric (already handled above) or out-of-order duplicates (deduped)
+  paste(tokens, collapse = ";")
+}
+
+# Normalize aliases to plain comma-separated (no quotes), stripping c() and character(0)
+normalize_aliases_export <- function(alias_val) {
+  if (is.null(alias_val)) return("")
+  # Vector case
+  if (is.vector(alias_val) && !is.list(alias_val)) {
+    alias_vec <- as.character(alias_val)
+    alias_vec <- alias_vec[!is.na(alias_vec) & nzchar(alias_vec)]
+    if (length(alias_vec) == 0) return("")
+    # remove any embedded quotes in vector elements
+    alias_vec <- gsub('"', "", alias_vec, fixed = TRUE)
+    return(paste(alias_vec, collapse = ","))
+  }
+  # Character scalar that might contain c() or quotes
+  if (is.character(alias_val) && length(alias_val) == 1) {
+    s <- as.character(alias_val)
+    if (is.na(s) || !nzchar(s)) return("")
+    # remove all embedded quotes first
+    s <- gsub('"', "", s, fixed = TRUE)
+    # handle character(0) anywhere
+    if (grepl("character\\(0\\)", s)) return("")
+    # strip c( ... ) wrapper, tolerate spaces using POSIX classes and proper escaping
+    if (grepl("^c[[:space:]]*\\(.*\\)[[:space:]]*$", s, perl = TRUE)) {
+      s <- sub("^c[[:space:]]*\\((.*)\\)[[:space:]]*$", "\\1", s, perl = TRUE)
+    }
+    # split by comma
+    parts <- trimws(strsplit(s, ",")[[1]])
+    parts <- parts[!is.na(parts) & nzchar(parts)]
+    if (length(parts) == 0) return("")
+    return(paste(parts, collapse = ","))
+  }
+  # Fallback: coerce to character, join, then strip like scalar path
+  as_char <- as.character(alias_val)
+  as_char <- as_char[!is.na(as_char) & nzchar(as_char)]
+  if (length(as_char) == 0) return("")
+  s <- paste(as_char, collapse = ",")
+  s <- gsub('"', "", s, fixed = TRUE)
+  if (grepl("character\\(0\\)", s)) return("")
+  if (grepl("^c[[:space:]]*\\(.*\\)[[:space:]]*$", s, perl = TRUE)) {
+    s <- sub("^c[[:space:]]*\\((.*)\\)[[:space:]]*$", "\\1", s, perl = TRUE)
+  }
+  parts <- trimws(strsplit(s, ",")[[1]])
+  parts <- parts[!is.na(parts) & nzchar(parts)]
+  if (length(parts) == 0) return("")
+  paste(parts, collapse = ",")
+}
