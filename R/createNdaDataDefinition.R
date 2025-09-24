@@ -144,6 +144,76 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     return("")
   }
 
+  # Helper: clean HTML breaks from labels
+  rc_clean_label <- function(x) {
+    if (is.null(x) || is.na(x)) return("")
+    gsub("<br>", " ", x, fixed = TRUE)
+  }
+
+  # Helper: parse REDCap choices -> numeric codes only for ValueRange + mapping text for Notes
+  rc_parse_choices_codes_and_notes <- function(choices_string) {
+    if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+      return(list(codes = "", notes = ""))
+    }
+    parts <- strsplit(choices_string, "\\|")[[1]]
+    parts <- trimws(parts)
+    codes <- character(0)
+    note_pairs <- character(0)
+    for (p in parts) {
+      if (p == "") next
+      kv <- strsplit(p, ",")[[1]]
+      if (length(kv) >= 2) {
+        code <- trimws(kv[1])
+        label <- trimws(paste(kv[-1], collapse = ","))
+        label <- rc_clean_label(label)
+        codes <- c(codes, code)
+        note_pairs <- c(note_pairs, paste0(code, "=", label))
+      } else {
+        # fallback: if no comma, treat as bare code
+        code <- trimws(kv[1])
+        codes <- c(codes, code)
+      }
+    }
+    list(
+      codes = if (length(codes)) paste(codes, collapse = "; ") else "",
+      notes = if (length(note_pairs)) paste(note_pairs, collapse = "; ") else ""
+    )
+  }
+
+  # Helper: use REDCap validation/type to derive ValueRange when appropriate
+  rc_derive_value_range_from_validation <- function(meta_row) {
+    if (is.null(meta_row) || nrow(meta_row) == 0) return("")
+    vtype <- meta_row$text_validation_type_or_show_slider_number
+    vmin <- suppressWarnings(as.numeric(meta_row$text_validation_min))
+    vmax <- suppressWarnings(as.numeric(meta_row$text_validation_max))
+    ftype <- meta_row$field_type
+
+    # Integer-like
+    if (!is.null(vtype) && !is.na(vtype) && grepl("integer", vtype, ignore.case = TRUE)) {
+      if (!is.na(vmin) && !is.na(vmax)) return(paste0(as.integer(vmin), "::", as.integer(vmax)))
+      return("")
+    }
+
+    # Slider (numeric)
+    if (!is.null(vtype) && !is.na(vtype) && grepl("slider|number", vtype, ignore.case = TRUE)) {
+      if (!is.na(vmin) && !is.na(vmax)) return(paste0(vmin, "::", vmax))
+      return("")
+    }
+
+    # Field type specific
+    if (!is.null(ftype) && ftype %in% c("radio", "checkbox", "dropdown")) {
+      # Handled via choices, not validation
+      return("")
+    }
+
+    # Date/time: let NDA handle as type; no numeric range
+    if (!is.null(vtype) && grepl("date|datetime", vtype, ignore.case = TRUE)) {
+      return("")
+    }
+
+    return("")
+  }
+
   # Attempt to fetch Qualtrics column map and map variable -> question text
   try({
     # qualtrics.dict accepts either a data frame or an alias
@@ -846,7 +916,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         # Only apply external fallbacks for non-ndar_subject01 fields
         if (!column_name %in% ndar_subject01_fields) {
           if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
-            fallback_desc <- as.character(redcap_label_map[[column_name]])
+            fallback_desc <- rc_clean_label(as.character(redcap_label_map[[column_name]]))
           } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
             fallback_desc <- as.character(qualtrics_label_map[[column_name]])
           } else {
@@ -861,19 +931,35 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         }
       }
       
-      # Enhance ValueRange with RedCap choices if available and not an ndar_subject01 field
+      # Enhance ValueRange/Notes with REDCap choices when available and not an ndar_subject01 field
       if (!column_name %in% ndar_subject01_fields && !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
         redcap_choices <- redcap_choices_map[[column_name]]
         if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
-          # Parse RedCap choices and convert to NDA ValueRange format
-          parsed_value_range <- parse_redcap_choices_to_value_range(redcap_choices)
-          if (parsed_value_range != "") {
-            # Use RedCap choices as ValueRange if NDA doesn't have one or it's empty
+          parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
+          if (parsed$codes != "") {
             current_value_range <- if ("valueRange" %in% names(nda_metadata_to_use)) nda_metadata_to_use$valueRange else ""
             if (is.null(current_value_range) || current_value_range == "" || is.na(current_value_range)) {
-              nda_metadata_to_use$valueRange <- parsed_value_range
-              # Also update the validation rules
-              validation_rules$allowed_values <- parsed_value_range
+              nda_metadata_to_use$valueRange <- parsed$codes
+              validation_rules$allowed_values <- parsed$codes
+            }
+          }
+          # Append mapping into notes (preserve existing)
+          if (parsed$notes != "") {
+            existing_notes <- if ("notes" %in% names(nda_metadata_to_use)) (nda_metadata_to_use$notes %||% "") else ""
+            nda_metadata_to_use$notes <- paste0(existing_notes, ifelse(existing_notes != "", " | ", ""), parsed$notes)
+          }
+        }
+      }
+      
+      # If still no ValueRange, attempt to derive from validation/type where possible using REDCap metadata row
+      if (!column_name %in% ndar_subject01_fields && (is.null(nda_metadata_to_use$valueRange) || nda_metadata_to_use$valueRange == "" || is.na(nda_metadata_to_use$valueRange))) {
+        if (exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
+          rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+          if (nrow(rc_row) == 1) {
+            derived <- rc_derive_value_range_from_validation(rc_row)
+            if (derived != "") {
+              nda_metadata_to_use$valueRange <- derived
+              validation_rules$allowed_values <- derived
             }
           }
         }
@@ -935,12 +1021,32 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
         redcap_choices <- redcap_choices_map[[column_name]]
         if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
-          # Parse RedCap choices and convert to NDA ValueRange format
-          parsed_value_range <- parse_redcap_choices_to_value_range(redcap_choices)
-          if (parsed_value_range != "") {
-            computed_metadata$valueRange <- parsed_value_range
+          parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
+          if (parsed$codes != "") {
+            computed_metadata$valueRange <- parsed$codes
+          }
+          # Add mapping to notes
+          if (parsed$notes != "") {
+            existing_notes <- computed_metadata$notes %||% ""
+            computed_metadata$notes <- paste0(existing_notes, ifelse(existing_notes != "", " | ", ""), parsed$notes)
           }
         }
+      }
+
+      # If still no ValueRange, attempt derive from REDCap validation/type
+      if ((is.null(computed_metadata$valueRange) || computed_metadata$valueRange == "" || is.na(computed_metadata$valueRange)) && exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
+        rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+        if (nrow(rc_row) == 1) {
+          derived <- rc_derive_value_range_from_validation(rc_row)
+          if (derived != "") {
+            computed_metadata$valueRange <- derived
+          }
+        }
+      }
+
+      # Clean description for <br>
+      if (!is.null(computed_desc) && computed_desc != "") {
+        computed_desc <- rc_clean_label(computed_desc)
       }
 
       # Adjust warning message based on whether field exists in data
