@@ -24,7 +24,7 @@ Alternativley, you can install the latest development version from GitHub:
 ```r
 remove.packages("wizaRdry")
 rstudioapi::restartSession()
-install.packages("devtools")
+if(!require(devtools)) {install.packages("devtools")}; library(devtools)
 devtools::install_github("belieflab/wizaRdry")
 ```
 
