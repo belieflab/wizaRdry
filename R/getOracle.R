@@ -138,6 +138,32 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       }
     }
 
+    # Determine if the requested table is the configured superkey table
+    is_superkey_request <- FALSE
+    if (!is.null(superkey_table) && !is.null(table_name)) {
+      # Extract table name without schema for comparison
+      table_name_only <- if (grepl("\\.", table_name)) {
+        strsplit(table_name, "\\.")[[1]][2]
+      } else {
+        table_name
+      }
+      
+      # Extract superkey table name without schema for comparison
+      superkey_name_only <- if (grepl("\\.", superkey_table)) {
+        strsplit(superkey_table, "\\.")[[1]][2]
+      } else {
+        superkey_table
+      }
+      
+      # Check if the requested table matches the superkey table
+      is_superkey_request <- identical(trimws(toupper(table_name_only)), trimws(toupper(superkey_name_only)))
+      
+      if (is_superkey_request) {
+        message("Requested table matches configured superkey; returning without joins.")
+        join_primary_keys <- FALSE
+      }
+    }
+
     # Determine fields to exclude based on PII settings with proper validation
     pii_fields <- character(0)
     if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
