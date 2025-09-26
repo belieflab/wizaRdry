@@ -73,8 +73,8 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }
@@ -163,36 +163,28 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Check if we need to add a schema to the table name
-  if (!is.null(table_name) && !grepl("\\.", table_name) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    # Try to find which schema contains the table
-    schema_found <- FALSE
+  if (!is.null(table_name) && !grepl("\\.", table_name) && !is.null(config$sql$schema)) {
+    # Use the configured schema
+    schema <- config$sql$schema
+    
+    # Build a query to check if the table exists in this schema
+    check_query <- sprintf(
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' AND table_name = '%s' LIMIT 1",
+      schema, table_name
+    )
 
-    # First, check if table exists in any of the configured schemas
-    for (schema in config$sql$schemas) {
-      # Build a query to check if the table exists in this schema
-      check_query <- sprintf(
-        "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' AND table_name = '%s' LIMIT 1",
-        schema, table_name
-      )
+    # Execute the query
+    check_result <- DBI::dbGetQuery(db_conn, check_query)
 
-      # Execute the query
-      check_result <- DBI::dbGetQuery(db_conn, check_query)
-
-      # If table exists in this schema, use it
-      if (nrow(check_result) > 0) {
-        message("Found table '", table_name, "' in schema '", schema, "'")
-        table_name <- paste0(schema, ".", table_name)
-        schema_found <- TRUE
-        break
-      }
-    }
-
-    # If table not found in any schema, show an informative error
-    if (!schema_found) {
-      available_schemas <- paste(config$sql$schemas, collapse = ", ")
+    # If table exists in this schema, use it
+    if (nrow(check_result) > 0) {
+      message("Found table '", table_name, "' in schema '", schema, "'")
+      table_name <- paste0(schema, ".", table_name)
+    } else {
+      # If table not found in the configured schema, show an informative error
       stop(sprintf(
-        "Table '%s' not found in any configured schema (%s). Please check your config.yml or specify the schema explicitly with '%s.%s'.",
-        table_name, available_schemas, config$sql$schemas[1], table_name
+        "Table '%s' not found in configured schema '%s'. Please check your config.yml or specify the schema explicitly with '%s.%s'.",
+        table_name, schema, schema, table_name
       ))
     }
   }
@@ -475,8 +467,8 @@ sql.index <- function(schema = NULL) {
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }
@@ -598,16 +590,16 @@ sql.desc <- function(table_name) {
     table_only <- parts[2]
   } else {
     # No schema specified, use the first configured schema
-    if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-      schema_name <- config$sql$schemas[1]
+    if (!is.null(config) && !is.null(config$sql$schema)) {
+      schema_name <- config$sql$schema
       message(sprintf("No schema specified. Using default schema: %s", schema_name))
     }
   }
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }
@@ -742,8 +734,8 @@ sql.query <- function(query, exclude_pii = FALSE) {
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }

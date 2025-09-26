@@ -754,15 +754,15 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
         select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
       } else {
         # No PII exclusion needed - include all fields from both tables
-        select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
+        select_clause <- paste0("SELECT ", main_table_alias, ".*, ", pk_table_alias, ".*")
       }
     } else {
       # No join - just select from main table
       if (!is.null(pii_fields) && length(pii_fields) > 0) {
         message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
-        select_clause <- "SELECT DISTINCT *"
+        select_clause <- "SELECT *"
       } else {
-        select_clause <- "SELECT DISTINCT *"
+        select_clause <- "SELECT *"
       }
     }
   } else {
@@ -787,14 +787,14 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
             qualified_fields <- c(qualified_fields, paste0(main_table_alias, ".", field))
           }
         }
-        select_clause <- paste0("SELECT DISTINCT ", paste(qualified_fields, collapse = ", "))
+        select_clause <- paste0("SELECT ", paste(qualified_fields, collapse = ", "))
       } else {
         # No join, use fields as-is
-        select_clause <- paste0("SELECT DISTINCT ", paste(fields, collapse = ", "))
+        select_clause <- paste0("SELECT ", paste(fields, collapse = ", "))
       }
     } else {
       # All requested fields were PII, so select a dummy field
-      select_clause <- "SELECT DISTINCT 1 AS dummy_column"
+      select_clause <- "SELECT 1 AS dummy_column"
     }
   }
 
@@ -803,9 +803,9 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
     # Determine join type based on 'all' parameter
     join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
 
-    # Join with superkey table
+    # Join with superkey table - using Oracle syntax format
     from_clause <- sprintf(
-      "FROM %s %s %s %s %s ON %s.%s = %s.%s",
+      "FROM %s %s\n%s %s %s\n    ON %s.%s = %s.%s",
       table_with_schema, main_table_alias,
       join_type,
       superkey_with_schema, pk_table_alias,
