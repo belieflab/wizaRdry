@@ -777,7 +777,7 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
       if (!is.null(pii_fields) && length(pii_fields) > 0) {
         # PII exclusion needed - this will be handled in the main function
         message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
-        select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
+        select_clause <- paste0("SELECT ", main_table_alias, ".*, ", pk_table_alias, ".*")
       } else {
         # No PII exclusion needed - include all fields from both tables
         select_clause <- paste0("SELECT ", main_table_alias, ".*, ", pk_table_alias, ".*")
@@ -830,13 +830,20 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
     join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
 
     # Join with superkey table - using Oracle syntax format
+    # Ensure primary_key_column doesn't have schema prefix
+    clean_primary_key <- if (grepl("\\.", primary_key_column)) {
+      strsplit(primary_key_column, "\\.")[[1]][2]
+    } else {
+      primary_key_column
+    }
+    
     from_clause <- sprintf(
       "FROM %s %s\n%s %s %s\n    ON %s.%s = %s.%s",
       table_with_schema, main_table_alias,
       join_type,
       superkey_with_schema, pk_table_alias,
-      main_table_alias, primary_key_column,
-      pk_table_alias, primary_key_column
+      main_table_alias, clean_primary_key,
+      pk_table_alias, clean_primary_key
     )
   } else {
     from_clause <- sprintf("FROM %s %s", table_with_schema, main_table_alias)
