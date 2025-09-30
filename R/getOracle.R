@@ -13,7 +13,7 @@
 #' @param max_rows Optional limit on the number of rows to return
 #' @param date_format Optional format for date fields (default uses ISO format)
 #' @param batch_size Number of records to retrieve per batch for large datasets
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @param interview_date Optional; can be either:
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
@@ -41,7 +41,7 @@
 #' }
 oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                    join_primary_keys = TRUE, custom_query = NULL, max_rows = NULL,
-                   date_format = NULL, batch_size = 1000, exclude_pii = TRUE,
+                   date_format = NULL, batch_size = 1000, pii = FALSE,
                    interview_date = NULL, all = FALSE, schema = NULL) {
 
   # Check if required packages are available
@@ -166,7 +166,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
     # Determine fields to exclude based on PII settings with proper validation
     pii_fields <- character(0)
-    if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
+    if (!pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
       pii_fields <- config$sql$pii_fields
       if (length(pii_fields) > 0) {
         message(sprintf("Will exclude %d PII fields: %s",
@@ -222,7 +222,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
         superkey_table = if (join_primary_keys) superkey_table else NULL,
         primary_key_column = if (join_primary_keys) primary_key_column else NULL,
         max_rows = max_rows,
-        pii_fields = if (exclude_pii) pii_fields else NULL,
+        pii_fields = if (!pii) pii_fields else NULL,
         schema = schema,
         all = all,
         is_oracle = is_oracle
@@ -255,11 +255,15 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     # Process and clean the data
     if (is.data.frame(result_data) && nrow(result_data) > 0) {
       # Apply PII exclusion if needed
-      if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0) {
+      if (!pii && !is.null(pii_fields) && length(pii_fields) > 0) {
         pii_cols_in_result <- intersect(names(result_data), pii_fields)
+        pii_cols_missing <- setdiff(pii_fields, names(result_data))
         if (length(pii_cols_in_result) > 0) {
           message("Removing PII columns from result: ", paste(pii_cols_in_result, collapse = ", "))
           result_data <- result_data[, !(names(result_data) %in% pii_fields), drop = FALSE]
+        }
+        if (length(pii_cols_missing) > 0) {
+          message("Configured PII columns not present in result (skipped): ", paste(pii_cols_missing, collapse = ", "))
         }
       }
 
@@ -636,7 +640,7 @@ oracle.desc <- function(table_name, schema = NULL) {
 #' Perform a direct Oracle query with minimal processing
 #'
 #' @param query The SQL query to execute
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @param schema Optional schema name to qualify table names in the query
 #' @return A data frame with the query results
 #' @importFrom odbc dbConnect dbGetQuery dbDisconnect

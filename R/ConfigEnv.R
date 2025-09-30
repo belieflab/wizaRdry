@@ -32,7 +32,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              )
                            ),
 
-                           initialize = function(config_file = "config.yml") {
+                            initialize = function(config_file = "config.yml") {
                              # Check if config file exists
                              if (!file.exists(config_file)) {
                                stop(config_file, " not found. Please create this file with the required API configurations.")

@@ -4,12 +4,12 @@
 \alias{sql.query}
 \title{Perform a direct SQL query with minimal processing}
 \usage{
-sql.query(query, exclude_pii = FALSE)
+sql.query(query, pii = FALSE)
 }
 \arguments{
 \item{query}{The SQL query to execute}
 
-\item{exclude_pii}{Default TRUE to remove all fields marked as identifiable}
+\item{pii}{Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.}
 }
 \value{
 A data frame with the query results

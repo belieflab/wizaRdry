@@ -273,7 +273,7 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 #' @param batch_size Number of records to retrieve per batch
 #' @param records Optional vector of specific record IDs
 #' @param fields Optional vector of specific fields
-#' @param exclude_pii Default TRUE remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @param interview_date Optional; date filtering parameter
 #' @param date_format Default ymd define date format for interview_date
 #' @param lower default TRUE convert prefixes to lower case
@@ -284,11 +284,11 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 #' @export
 redcap.rune <- function(instrument_name, raw_or_label = "raw",
                         redcap_event_name = NULL, batch_size = 1000,
-                        records = NULL, fields = NULL, exclude_pii = TRUE,
+                        records = NULL, fields = NULL, pii = FALSE,
                         interview_date = NULL, date_format = "ymd", lower = TRUE) {
   # Fetch the data using redcap()
   df <- redcap(instrument_name, raw_or_label, redcap_event_name, batch_size,
-               records, fields, exclude_pii, interview_date, date_format)
+               records, fields, pii, interview_date, date_format)
 
   # Define potential identifiers
   identifiers <- c("record_id", "participantId", "workerId", "PROLIFIC_PID", "src_subject_id")
