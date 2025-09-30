@@ -739,10 +739,10 @@ sql.desc <- function(table_name) {
 #' Perform a direct SQL query with minimal processing
 #'
 #' @param query The SQL query to execute
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @return A data frame with the query results
 #' @export
-sql.query <- function(query, exclude_pii = FALSE) {
+sql.query <- function(query, pii = FALSE) {
   # Check if required packages are available
   if (!requireNamespace("RMariaDB", quietly = TRUE)) {
     stop("Package 'RMariaDB' is needed for this function to work. Please install it.",
@@ -798,7 +798,7 @@ sql.query <- function(query, exclude_pii = FALSE) {
   # Get config for PII exclusion if needed
   config <- NULL
   pii_fields <- NULL
-  if (exclude_pii) {
+  if (!pii) {
     tryCatch({
       config <- validate_config("sql")
       if (!is.null(config$sql$pii_fields)) {
@@ -831,7 +831,7 @@ sql.query <- function(query, exclude_pii = FALSE) {
     result <- DBI::dbGetQuery(db_conn, query)
 
     # Apply PII exclusion if enabled
-    if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0) {
+    if (!pii && !is.null(pii_fields) && length(pii_fields) > 0) {
       pii_cols_present <- intersect(names(result), pii_fields)
       if (length(pii_cols_present) > 0) {
         message(sprintf("Removing %d PII fields from results: %s",

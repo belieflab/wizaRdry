@@ -652,7 +652,7 @@ oracle.desc <- function(table_name, schema = NULL) {
 #' @return A data frame with the query results
 #' @importFrom odbc dbConnect dbGetQuery dbDisconnect
 #' @export
-oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
+oracle.query <- function(query, pii = FALSE, schema = NULL) {
 
   if (is.null(query) || !is.character(query) || length(query) != 1) {
     stop("A valid SQL query string is required")
@@ -669,7 +669,7 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
 
   # Get PII fields configuration if needed with proper validation
   pii_fields <- NULL
-  if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
+  if (!pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
     pii_fields <- config$sql$pii_fields
     if (length(pii_fields) > 0) {
       message(sprintf("Will exclude %d PII fields if present in results: %s",
@@ -726,7 +726,7 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
     }
 
     # Apply PII exclusion if enabled
-    if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0 && nrow(result) > 0) {
+    if (!pii && !is.null(pii_fields) && length(pii_fields) > 0 && nrow(result) > 0) {
       pii_cols_present <- intersect(names(result), pii_fields)
       if (length(pii_cols_present) > 0) {
         message(sprintf("Removing %d PII fields from results: %s",
