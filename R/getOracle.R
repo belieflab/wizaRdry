@@ -56,6 +56,17 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   validate_secrets("sql")
   config <- validate_config("sql")
 
+  # If table_name includes schema (e.g., SCHEMA.TABLE) and no schema arg provided,
+  # extract schema for consistent handling and checks
+  if (is.null(schema) && !is.null(table_name) && grepl("\\.", table_name)) {
+    parts <- strsplit(table_name, "\\.")[[1]]
+    if (length(parts) >= 2) {
+      schema <- parts[1]
+      table_name <- parts[2]
+      message(sprintf("Using schema '%s' from table name", schema))
+    }
+  }
+
   # Initialize loading animation
   pb <- initializeLoadingAnimation(20)
 
@@ -142,11 +153,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     is_superkey_request <- FALSE
     if (!is.null(superkey_table) && !is.null(table_name)) {
       # Extract table name without schema for comparison
-      table_name_only <- if (grepl("\\.", table_name)) {
-        strsplit(table_name, "\\.")[[1]][2]
-      } else {
-        table_name
-      }
+      table_name_only <- table_name
       
       # Extract superkey table name without schema for comparison
       superkey_name_only <- if (grepl("\\.", superkey_table)) {
