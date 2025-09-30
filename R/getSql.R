@@ -73,8 +73,8 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
-    config$sql$schema  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$database)) {
+    config$sql$database  # Use configured database name
   } else {
     "mysql"  # Fallback default database
   }
@@ -189,9 +189,9 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Check if we need to add a schema to the table name
-  if (!is.null(table_name) && !grepl("\\.", table_name) && !is.null(config$sql$schema)) {
-    # Use the configured schema
-    schema <- config$sql$schema
+  if (!is.null(table_name) && !grepl("\\.", table_name) && !is.null(config$sql$database)) {
+    # Use the configured database as schema context
+    schema <- config$sql$database
     
     # Build a query to check if the table exists in this schema
     check_query <- sprintf(
@@ -209,7 +209,7 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     } else {
       # If table not found in the configured schema, show an informative error
       stop(sprintf(
-        "Table '%s' not found in configured schema '%s'. Please check your config.yml or specify the schema explicitly with '%s.%s'.",
+        "Table '%s' not found in configured database '%s'. Please check your config.yml or specify explicitly with '%s.%s'.",
         table_name, schema, schema, table_name
       ))
     }

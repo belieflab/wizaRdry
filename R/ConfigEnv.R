@@ -17,7 +17,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                required = c("superkey", "primary_key")
                              ),
                              sql = list(
-                               required = c("superkey", "primary_key", "schema", "pii_fields")
+                               required = c("database", "superkey", "primary_key", "pii_fields")
                              ),
                              missing_data_codes = list(
                                required = c(),  # No required fields - all are optional
@@ -57,6 +57,16 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                  warning("Cannot substitute ${study_alias} in mongo.database: study_alias is not defined in config")
                                }
                              }
+                               # Process sql database name if it references study_alias
+                               if (!is.null(self$config$sql) &&
+                                   !is.null(self$config$sql$database) &&
+                                   self$config$sql$database == "${study_alias}") {
+                                 if (!is.null(self$config$study_alias)) {
+                                   self$config$sql$database <- self$config$study_alias
+                                 } else {
+                                   warning("Cannot substitute ${study_alias} in sql.database: study_alias is not defined in config")
+                                 }
+                               }
                              # Add more substitution rules as needed
                            },
 
@@ -170,25 +180,30 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                if (self$has_value("redcap.primary_key") && nchar(self$get_value("redcap.primary_key")) == 0) {
                                  all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
                                }
-                             } else if (api_type == "sql") {
+                            } else if (api_type == "sql") {
                                # SQL-specific validations
-                               # Check for primary_key setting if specified
+                              # Check for primary_key setting if specified
                                if (self$has_value("sql.primary_key") && nchar(self$get_value("sql.primary_key")) == 0) {
                                  all_errors <- c(all_errors, "The 'primary_key' setting cannot be empty")
                                }
 
-                               # Check for superkey table if specified
+                              # Check for superkey table if specified
                                if (self$has_value("sql.superkey") && nchar(self$get_value("sql.superkey")) == 0) {
                                  all_errors <- c(all_errors, "The 'superkey' setting cannot be empty")
                                }
 
-                               # Check for pii_fields if specified
+                              # Check for pii_fields if specified
                                if (self$has_value("sql.pii_fields")) {
                                  pii_fields <- self$get_value("sql.pii_fields")
                                  if (!is.vector(pii_fields) || !is.character(pii_fields)) {
                                    all_errors <- c(all_errors, "The 'pii_fields' setting must be a character vector")
                                  }
                                }
+
+                              # Ensure at least one of database or schema exists when needed
+                              if (!self$has_value("sql.database") && !self$has_value("sql.schema")) {
+                                message("Note: Neither 'database' nor 'schema' specified under sql; some features may attempt auto-detection or require fully qualified names.")
+                              }
                              } else if (api_type == "missing_data_codes") {
                                # Get the current missing_data_codes configuration
                                missing_value_config <- self$get_value("missing_data_codes")

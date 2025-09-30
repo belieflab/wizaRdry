@@ -56,6 +56,18 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   validate_secrets("sql")
   config <- validate_config("sql")
 
+  # If no schema provided and config specifies a default schema, use it
+  if (is.null(schema)) {
+    cfg_schema <- tryCatch({
+      if (!is.null(config) && !is.null(config$sql) && !is.null(config$sql$database)) {
+        as.character(config$sql$database)
+      } else NULL
+    }, error = function(e) NULL)
+    if (!is.null(cfg_schema) && nzchar(cfg_schema)) {
+      schema <- cfg_schema
+    }
+  }
+
   # If table_name includes schema (e.g., SCHEMA.TABLE) and no schema arg provided,
   # extract schema for consistent handling and checks
   if (is.null(schema) && !is.null(table_name) && grepl("\\.", table_name)) {
