@@ -62,8 +62,8 @@ qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, i
 
   message(sprintf("Retrieving '%s' survey from %s Qualtrics...", qualtrics_alias, institution))
 
-  # Connect to Qualtrics
-  connectQualtrics()
+  # Connect to Qualtrics with the specific institution's credentials
+  connectQualtrics(institution = institution)
 
   # Show loading animation (if implemented)
   if (exists("show_loading_animation")) {
@@ -285,14 +285,13 @@ qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, i
 #' @importFrom config get
 #' @import qualtRics
 #' @noRd
-connectQualtrics <- function() {
+connectQualtrics <- function(institution = NULL) {
   # Validate secrets
   validate_secrets("qualtrics")
 
   # Get secrets using get_secret() to keep it secret, keep it safe
   baseUrls <- get_secret("baseUrls")
   apiKeys <- get_secret("apiKeys")
-
 
   if (!exists("apiKeys") || !exists("baseUrls")) {
     stop("apiKeys and/or baseUrls arrays not found in secrets.R")
@@ -302,7 +301,44 @@ connectQualtrics <- function() {
     stop("apiKeys and baseUrls arrays must have the same length.")
   }
 
-  # Suppress messages about .Renviron
+  # If institution is specified, try to find the matching credentials
+  if (!is.null(institution)) {
+    # Get institution names from config
+    cfg <- validate_config("qualtrics")
+    institution_names <- names(cfg$qualtrics$survey_ids)
+    
+    # Find the index of the institution
+    inst_index <- match(institution, institution_names)
+    
+    if (!is.na(inst_index) && inst_index <= length(apiKeys)) {
+      # Use the specific institution's credentials
+      message(sprintf("Connecting to Qualtrics using %s credentials...", institution))
+      
+      suppressMessages({
+        tryCatch({
+          result <- qualtRics::qualtrics_api_credentials(
+            api_key = apiKeys[inst_index],
+            base_url = baseUrls[inst_index],
+            install = TRUE,
+            overwrite = TRUE
+          )
+
+          # If credentials were set successfully, also read them into current session
+          if (file.exists("~/.Renviron")) {
+            readRenviron("~/.Renviron")
+          }
+
+          return(TRUE)
+        }, error = function(e) {
+          stop(sprintf("Failed to connect with %s credentials: %s", institution, e$message))
+        })
+      })
+    } else {
+      warning(sprintf("Institution '%s' not found in credentials. Trying all credentials...", institution))
+    }
+  }
+
+  # Fallback: try all credentials if institution not found or not specified
   suppressMessages({
     for (i in seq_along(apiKeys)) {
       tryCatch({
@@ -403,7 +439,7 @@ qualtrics.index <- function(institution = NULL) {
     cfg <- validate_config("qualtrics")
 
     # Connect to Qualtrics using the existing helper function
-    connectQualtrics()
+    connectQualtrics(institution = institution)
 
     # Get all surveys
     message("Fetching available Qualtrics surveys...")
