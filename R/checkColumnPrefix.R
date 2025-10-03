@@ -52,6 +52,6 @@ checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variable
       )
     })
   }, error = function(e) {
-    message(e$message)
+    #message(e$message)
   })
 }

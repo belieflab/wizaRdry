@@ -35,7 +35,7 @@ cleanDataFrameExists <- function(measure_alias, measure_type) {
     })
 
   }, error = function(e) {
-    message("The script did not create a'", output_df_name, "' dataframe.", e$message)
+    #message("The script did not create a'", output_df_name, "' dataframe.", e$message)
   })
 
 }
