@@ -4,11 +4,13 @@
 \alias{qualtrics.index}
 \title{Display table of available Qualtrics surveys}
 \usage{
-qualtrics.index(institution = NULL)
+qualtrics.index(institution = NULL, all = FALSE)
 }
 \arguments{
 \item{institution}{Optional; the institution identifier to use. If NULL, uses all
 institutions specified in the configuration file.}
+
+\item{all}{Logical; if TRUE, also shows unmapped surveys. Default is FALSE.}
 }
 \value{
 A data frame containing the IDs and names of all available surveys
