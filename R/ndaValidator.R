@@ -1393,7 +1393,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
       # Store all similarity scores
       renamed$similarity_scores[[field]] <- sort(similarities, decreasing = TRUE)
 
-      if(verbose) {
+      if(verbose && !interactive_mode) {
         cat(sprintf("\nField: %s\n", field))
         cat("Top matches:\n")
         # Get all matches sorted by similarity
