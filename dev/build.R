@@ -31,6 +31,7 @@ usethis::use_build_ignore(".github")
 usethis::use_build_ignore("dev")
 usethis::use_package("odbc")
 usethis::use_package("openxlsx")
+usethis::use_package("openxlsx2")
 
 # Generate documentation from roxygen comments
 devtools::document()

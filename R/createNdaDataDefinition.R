@@ -1841,7 +1841,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
             blueFill <- openxlsx::createStyle(fgFill = "#00B0F0")
             yellowFill <- openxlsx::createStyle(fgFill = "#FFFF00")
             redFont <- openxlsx::createStyle(fontColour = "#FF0000")
-            redOnYellow <- openxlsx::createStyle(fgFill = "#FFFF00", fontColour = "#FF0000")
+            # Collect rich text edits to apply post-save via openxlsx2
+            rich_text_edits <- list()
 
              # Determine whether each element exists in NDA by lookup retained in metadata,
              # falling back to NDA API element search when not found locally
@@ -1971,17 +1972,36 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                 if (is.null(nda_allowed) || length(nda_allowed) == 0) next
                 ours_vals <- expand_numeric_value_range(ours_str)
                 if (is.null(ours_vals)) next
-                if (length(setdiff(ours_vals, nda_allowed)) > 0) {
-                  # Apply red text on yellow fill for ValueRange cell
+                  if (length(setdiff(ours_vals, nda_allowed)) > 0) {
+                  # Clear definition columns except ValueRange and Notes
+                  clear_cols <- c("DataType", "Size", "Required", "ElementDescription")
+                  clear_idx <- which(colnames(fields_df) %in% clear_cols)
+                  if (length(clear_idx) > 0) {
+                    for (cc in clear_idx) {
+                      openxlsx::writeData(wb, "Data Definitions", "", startRow = i + 1, startCol = cc, colNames = FALSE)
+                    }
+                  }
+
+                  # Build rich-text instructions to apply later with openxlsx2
                   vr_col <- which(colnames(fields_df) == "ValueRange")
-                  if (length(vr_col) == 1) {
-                    openxlsx::addStyle(wb, "Data Definitions", redOnYellow, rows = i + 1, cols = vr_col, gridExpand = TRUE)
-                  }
-                  # Also highlight Notes cell in yellow (with red text for emphasis)
                   notes_col <- which(colnames(fields_df) == "Notes")
-                  if (length(notes_col) == 1) {
-                    openxlsx::addStyle(wb, "Data Definitions", redOnYellow, rows = i + 1, cols = notes_col, gridExpand = TRUE)
+                  tokens <- trimws(strsplit(ours_str, ";")[[1]])
+                  tokens <- tokens[nzchar(tokens)]
+                  added_tokens <- character(0)
+                  token_is_added <- logical(length(tokens))
+                  for (ti in seq_along(tokens)) {
+                    tok_vals <- expand_numeric_value_range(tokens[ti])
+                    token_is_added[ti] <- length(setdiff(tok_vals %||% numeric(0), nda_allowed)) > 0
+                    if (token_is_added[ti]) added_tokens <- c(added_tokens, tokens[ti])
                   }
+                  rich_text_edits[[length(rich_text_edits) + 1]] <- list(
+                    row = i + 1,
+                    vr_col = if (length(vr_col) == 1) vr_col else NA_integer_,
+                    notes_col = if (length(notes_col) == 1) notes_col else NA_integer_,
+                    tokens = tokens,
+                    token_is_added = token_is_added,
+                    added_tokens = added_tokens
+                  )
                   applied_yellow[i] <- TRUE
                   nda_range_mismatch[i] <- TRUE
                 }
@@ -1989,16 +2009,12 @@ exportDataDefinition <- function(data_definition, format = "csv") {
               cat("Value range comparison complete.\n")
             }
 
-             # Red text: elements not in NDA (new/proposed elements)
-             idx_not_in_nda <- which(!element_is_in_nda)
-             if (length(idx_not_in_nda) > 0) {
-              # Apply bright red font across the full row
+            # Red text only (no yellow fill): elements not in NDA (new/proposed elements)
+            idx_not_in_nda <- which(!element_is_in_nda)
+            if (length(idx_not_in_nda) > 0) {
               openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
-              # Also apply highlighter yellow fill across the full row so it's clearly visible
-              openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
-               applied_red[idx_not_in_nda] <- TRUE
-              applied_yellow[idx_not_in_nda] <- TRUE
-             }
+              applied_red[idx_not_in_nda] <- TRUE
+            }
 
              # Add diagnostics worksheet summarizing route and highlighting decisions
              routes_df <- data.frame(
@@ -2026,6 +2042,18 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                for (k in seq_along(idx_no_change)) {
                  openxlsx::writeData(wb, "Data Definitions", default_notes[k], startRow = idx_no_change[k] + 1, startCol = notes_col, colNames = FALSE)
                }
+
+               # For unchanged NDA elements, clear all definition columns
+               cols_to_clear <- c("DataType", "Size", "Required", "ElementDescription", "ValueRange", "Notes", "Aliases")
+               clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
+               if (length(clear_cols_idx) > 0) {
+                 for (cc in clear_cols_idx) {
+                   # write empty strings into each target row for this column
+                   for (r in idx_no_change) {
+                     openxlsx::writeData(wb, "Data Definitions", "", startRow = r + 1, startCol = cc, colNames = FALSE)
+                   }
+                 }
+               }
              }
            }
           
@@ -2033,6 +2061,48 @@ exportDataDefinition <- function(data_definition, format = "csv") {
           openxlsx::setColWidths(wb, "Data Definitions", cols = seq_len(ncol(fields_df)), widths = "auto")
 
           openxlsx::saveWorkbook(wb, file_path, overwrite = TRUE)
+
+          # Post-process with openxlsx2 to apply per-token rich text if needed
+          if (length(rich_text_edits) > 0) {
+            # Helper to convert numeric column index to Excel column letters
+            num_to_col <- function(n) {
+              letters <- c()
+              while (n > 0) {
+                r <- (n - 1) %% 26
+                letters <- c(LETTERS[r + 1], letters)
+                n <- (n - 1) %/% 26
+              }
+              paste0(letters, collapse = "")
+            }
+            wb2 <- openxlsx2::wb_load(file_path)
+            for (edit in rich_text_edits) {
+              # ValueRange rich text
+              if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
+                parts <- list()
+                for (ti in seq_along(edit$tokens)) {
+                  txt <- edit$tokens[ti]
+                  col <- if (edit$token_is_added[ti]) "FF0000" else NULL
+                  parts <- c(parts, list(list(text = txt, color = col)))
+                  if (ti < length(edit$tokens)) parts <- c(parts, list(list(text = "; ")))
+                }
+                rt <- do.call(openxlsx2::create_rich_text, parts)
+                dims <- paste0(num_to_col(edit$vr_col), edit$row)
+                openxlsx2::wb_add_rich_text(wb2, sheet = "Data Definitions", dims = dims, x = rt)
+              }
+              # Notes rich text
+              if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
+                parts2 <- list(list(text = "Added: "))
+                for (j in seq_along(edit$added_tokens)) {
+                  parts2 <- c(parts2, list(list(text = edit$added_tokens[j], color = "FF0000")))
+                  if (j < length(edit$added_tokens)) parts2 <- c(parts2, list(list(text = "; ")))
+                }
+                rt2 <- do.call(openxlsx2::create_rich_text, parts2)
+                dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
+                openxlsx2::wb_add_rich_text(wb2, sheet = "Data Definitions", dims = dims2, x = rt2)
+              }
+            }
+            openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
+          }
           cat("Data definition exported to:", file_path, "\n")
          },
 
