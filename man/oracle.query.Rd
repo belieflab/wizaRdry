@@ -4,12 +4,12 @@
 \alias{oracle.query}
 \title{Perform a direct Oracle query with minimal processing}
 \usage{
-oracle.query(query, exclude_pii = FALSE, schema = NULL)
+oracle.query(query, pii = FALSE, schema = NULL)
 }
 \arguments{
 \item{query}{The SQL query to execute}
 
-\item{exclude_pii}{Default TRUE to remove all fields marked as identifiable}
+\item{pii}{Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.}
 
 \item{schema}{Optional schema name to qualify table names in the query}
 }

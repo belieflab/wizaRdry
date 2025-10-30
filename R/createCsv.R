@@ -113,16 +113,20 @@ to.csv <- function(df, df_name = NULL, path = ".", skip_prompt = TRUE) { # set d
   return(invisible(TRUE))
 }
 
-#' Alias for 'to.csv'
+#' Alias for 'to.csv' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'to.csv' instead.
 #' This is a legacy alias for the 'to.csv' function to maintain compatibility with older code.
 #'
-#' @inheritParams to.csv
+#' @param ... Additional arguments passed through to \code{to.csv()}.
 #' @inherit to.csv return
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use to.csv() instead
 #' createCsv(prl01)
 #' }
-createCsv <- to.csv
-
+createCsv <- function(...) {
+  .Deprecated("to.csv", package = "wizaRdry")
+  to.csv(...)
+}

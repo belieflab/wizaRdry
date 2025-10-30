@@ -2,7 +2,7 @@
 % Please edit documentation in R/getMongo.R
 \name{mongo}
 \alias{mongo}
-\title{Fetch data from MongoDB to be stored in a data frame}
+\title{Fetch data from MongoDB to be stored in a data frame - UPDATED VERSION}
 \usage{
 mongo(
   collection,
@@ -37,7 +37,7 @@ data to only include complete cases for specific variables of interest.}
 A data frame containing the MongoDB data with superkeys first
 }
 \description{
-Fetch data from MongoDB to be stored in a data frame
+Fetch data from MongoDB to be stored in a data frame - UPDATED VERSION
 }
 \examples{
 \dontrun{

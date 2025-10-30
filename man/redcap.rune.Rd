@@ -11,7 +11,7 @@ redcap.rune(
   batch_size = 1000,
   records = NULL,
   fields = NULL,
-  exclude_pii = TRUE,
+  pii = FALSE,
   interview_date = NULL,
   date_format = "ymd",
   lower = TRUE
@@ -30,7 +30,7 @@ redcap.rune(
 
 \item{fields}{Optional vector of specific fields}
 
-\item{exclude_pii}{Default TRUE remove all fields marked as identifiable}
+\item{pii}{Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.}
 
 \item{interview_date}{Optional; date filtering parameter}
 

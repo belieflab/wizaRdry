@@ -100,8 +100,9 @@ meld <- function(..., by = NULL, all = TRUE, no.dups = FALSE, csv = FALSE, rdata
 }
 
 
-#' Alias for 'meld'
+#' Alias for 'meld' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'meld' instead.
 #' This is a legacy alias for the 'meld' function to maintain compatibility with older code.
 #'
 #' @inheritParams meld
@@ -109,6 +110,10 @@ meld <- function(..., by = NULL, all = TRUE, no.dups = FALSE, csv = FALSE, rdata
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use meld() instead
 #' merged <- dataMerge(df1_clean, df2_clean)
 #' }
-dataMerge <- meld
+dataMerge <- function(...) {
+  .Deprecated("meld", package = "wizaRdry")
+  meld(...)
+}

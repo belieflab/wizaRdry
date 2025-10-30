@@ -1,14 +1,6 @@
 # First, install R6 if you don't have it
 
-#' Secrets Environment Class
-#'
-#' The SecretsEnv class handles validation of API credentials stored in a secrets file.
-#' It checks for the presence of required variables, validates their types, and ensures
-#' they are properly formatted.
-#'
-#' @title Secrets Environment Class
-#' @description A class to manage and validate API credentials and secrets.
-#' @export
+#' @noRd
 #' @importFrom R6 R6Class
 SecretsEnv <- R6::R6Class("SecretsEnv",
                           public = list(
@@ -273,12 +265,7 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                           )
 )
 
-#' Create a wrapper function to make validation easier
-#'
-#' @param api_type API type to validate
-#' @param secrets_file Path to secrets file
-#' @return TRUE if validation passes
-#' @export
+#' @noRd
 validate_secrets <- function(api_type = NULL, secrets_file = "secrets.R") {
   secrets <- SecretsEnv$new(secrets_file)
 

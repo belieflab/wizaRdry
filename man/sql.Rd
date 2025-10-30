@@ -14,7 +14,7 @@ sql(
   max_rows = NULL,
   date_format = NULL,
   batch_size = 1000,
-  exclude_pii = TRUE,
+  pii = FALSE,
   interview_date = NULL,
   all = FALSE
 )
@@ -39,7 +39,7 @@ in ALL specified columns will be returned.}
 
 \item{batch_size}{Number of records to retrieve per batch for large datasets}
 
-\item{exclude_pii}{Default TRUE to remove all fields marked as identifiable}
+\item{pii}{Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.}
 
 \item{interview_date}{Optional; can be either:
 - A date string in various formats (ISO, US, etc.) to filter data up to that date

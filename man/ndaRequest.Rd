@@ -2,39 +2,23 @@
 % Please edit documentation in R/ndaRequest.R
 \name{ndaRequest}
 \alias{ndaRequest}
-\title{Alias for 'nda'}
+\title{Alias for 'nda' (DEPRECATED)}
 \usage{
-ndaRequest(
-  ...,
-  csv = FALSE,
-  rdata = FALSE,
-  spss = FALSE,
-  limited_dataset = FALSE,
-  skip_prompt = TRUE
-)
+ndaRequest(...)
 }
 \arguments{
 \item{...}{Strings, specifying the measures to process, which can be a Mongo collection, REDCap instrument, or Qualtrics survey.}
-
-\item{csv}{Optional; Boolean, if TRUE creates a .csv extract in ./tmp.}
-
-\item{rdata}{Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.}
-
-\item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp.}
-
-\item{limited_dataset}{Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age}
-
-\item{skip_prompt}{Logical. If TRUE (default), skips confirmation prompts unless preferences aren't set yet. If FALSE,
-prompts for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
 Prints the time taken for the data request process.
 }
 \description{
+This function is deprecated. Please use 'nda' instead.
 This is a legacy alias for the 'nda' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use nda() instead
 prl01 <- ndaRequest("prl01")
 }
 }

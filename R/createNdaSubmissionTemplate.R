@@ -113,6 +113,68 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
     template <- df
   }
 
+  # Define fields to exclude from submission templates
+  excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
+  
+  # Get essential NDA fields dynamically from ndar_subject01 API
+  # This ensures we always have the current required elements
+  essential_nda_fields <- tryCatch({
+    message("Fetching current ndar_subject01 required elements from NDA API...")
+    nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+    url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+    
+    response <- httr::GET(url, httr::timeout(10))
+    if (httr::status_code(response) == 200) {
+      raw_content <- rawToChar(response$content)
+      if (nchar(raw_content) > 0) {
+        subject_structure <- jsonlite::fromJSON(raw_content)
+        if ("dataElements" %in% names(subject_structure)) {
+          required_metadata <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
+          if (nrow(required_metadata) > 0) {
+            field_names <- required_metadata$name
+            message(sprintf("Found %d required ndar_subject01 elements for template", length(field_names)))
+            field_names
+          } else {
+            stop("No required elements found")
+          }
+        } else {
+          stop("No dataElements in API response")
+        }
+      } else {
+        stop("Empty API response")
+      }
+    } else {
+      stop(sprintf("API request failed with status %d", httr::status_code(response)))
+    }
+  }, error = function(e) {
+    message("Error fetching ndar_subject01 elements: ", e$message)
+    message("Using fallback essential fields list")
+    c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date", 
+      "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name")
+  })
+  
+  # Filter template columns:
+  # 1. Remove excluded fields
+  # 2. Include essential NDA fields + other non-excluded fields
+  template_cols <- names(template)
+  excluded_cols <- template_cols[template_cols %in% excluded_from_template]
+  essential_cols <- template_cols[template_cols %in% essential_nda_fields]
+  other_cols <- template_cols[!template_cols %in% c(excluded_from_template, essential_nda_fields)]
+  
+  # Create filtered template with essential fields first, then others
+  filtered_cols <- c(essential_cols, other_cols)
+  template <- template[, filtered_cols, drop = FALSE]
+  
+  # Report what was filtered
+  if (length(excluded_cols) > 0) {
+    message(sprintf("Excluded %d fields from submission template: %s", 
+                    length(excluded_cols), paste(excluded_cols, collapse = ", ")))
+  }
+  if (length(essential_cols) > 0) {
+    message(sprintf("Included %d essential NDA fields: %s", 
+                    length(essential_cols), paste(essential_cols, collapse = ", ")))
+  }
+
   # Open a connection to overwrite the file
   con <- file(file_path, "w")
 

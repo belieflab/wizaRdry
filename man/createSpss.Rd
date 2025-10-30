@@ -2,32 +2,24 @@
 % Please edit documentation in R/createSpss.R
 \name{createSpss}
 \alias{createSpss}
-\title{Alias for 'to.sav'}
+\title{Alias for 'to.sav' (DEPRECATED)}
 \usage{
-createSpss(df, df_name = NULL, path = ".", skip_prompt = TRUE)
+createSpss(...)
 }
 \arguments{
-\item{df}{Data frame to be exported to SPSS format.}
-
-\item{df_name}{Optional; custom file name for the saved SPSS file. If not provided,
-the name of the data frame variable will be used. The ".sav" extension will
-be appended automatically.}
-
-\item{path}{Character string specifying the directory path where the "tmp" folder
-and SPSS file should be created. Defaults to the current working directory.}
-
-\item{skip_prompt}{Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
-will prompt for confirmation unless the user has previously chosen to remember their preference.}
+\item{...}{Additional arguments passed through to \code{to.sav()}.}
 }
 \value{
 Invisible TRUE if successful. Writes an SPSS file to the designated path and prints a message indicating
 the file's location.
 }
 \description{
+This function is deprecated. Please use 'to.sav' instead.
 This is a legacy alias for the 'to.sav' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use to.sav() instead
 createSpss(prl01)
 }
 }

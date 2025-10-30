@@ -67,7 +67,8 @@ NULL
       if (!structure_complete) {
         packageStartupMessage("wizaRdry structure detected but incomplete. Use scry(repair = TRUE) to repair it.")
       } else {
-        packageStartupMessage("wizaRdry project structure detected and complete.")
+        ver <- tryCatch(as.character(utils::packageVersion(pkgname)), error = function(e) "unknown")
+        packageStartupMessage(paste0("wizaRdry v", ver, " project structure detected and complete."))
 
         # Check for duplicate script names - use get to access the internal function
         tryCatch({

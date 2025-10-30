@@ -62,8 +62,8 @@ qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, i
 
   message(sprintf("Retrieving '%s' survey from %s Qualtrics...", qualtrics_alias, institution))
 
-  # Connect to Qualtrics
-  connectQualtrics()
+  # Connect to Qualtrics with the specific institution's credentials
+  connectQualtrics(institution = institution)
 
   # Show loading animation (if implemented)
   if (exists("show_loading_animation")) {
@@ -285,14 +285,13 @@ qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, i
 #' @importFrom config get
 #' @import qualtRics
 #' @noRd
-connectQualtrics <- function() {
+connectQualtrics <- function(institution = NULL) {
   # Validate secrets
   validate_secrets("qualtrics")
 
   # Get secrets using get_secret() to keep it secret, keep it safe
   baseUrls <- get_secret("baseUrls")
   apiKeys <- get_secret("apiKeys")
-
 
   if (!exists("apiKeys") || !exists("baseUrls")) {
     stop("apiKeys and/or baseUrls arrays not found in secrets.R")
@@ -302,7 +301,44 @@ connectQualtrics <- function() {
     stop("apiKeys and baseUrls arrays must have the same length.")
   }
 
-  # Suppress messages about .Renviron
+  # If institution is specified, try to find the matching credentials
+  if (!is.null(institution)) {
+    # Get institution names from config
+    cfg <- validate_config("qualtrics")
+    institution_names <- names(cfg$qualtrics$survey_ids)
+    
+    # Find the index of the institution
+    inst_index <- match(institution, institution_names)
+    
+    if (!is.na(inst_index) && inst_index <= length(apiKeys)) {
+      # Use the specific institution's credentials
+      message(sprintf("Connecting to Qualtrics using %s credentials...", institution))
+      
+      suppressMessages({
+        tryCatch({
+          result <- qualtRics::qualtrics_api_credentials(
+            api_key = apiKeys[inst_index],
+            base_url = baseUrls[inst_index],
+            install = TRUE,
+            overwrite = TRUE
+          )
+
+          # If credentials were set successfully, also read them into current session
+          if (file.exists("~/.Renviron")) {
+            readRenviron("~/.Renviron")
+          }
+
+          return(TRUE)
+        }, error = function(e) {
+          stop(sprintf("Failed to connect with %s credentials: %s", institution, e$message))
+        })
+      })
+    } else {
+      warning(sprintf("Institution '%s' not found in credentials. Trying all credentials...", institution))
+    }
+  }
+
+  # Fallback: try all credentials if institution not found or not specified
   suppressMessages({
     for (i in seq_along(apiKeys)) {
       tryCatch({
@@ -380,13 +416,14 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
 #'
 #' @param institution Optional; the institution identifier to use. If NULL, uses all
 #'   institutions specified in the configuration file.
+#' @param all Logical; if TRUE, also shows unmapped surveys. Default is FALSE.
 #'
 #' @return A data frame containing the IDs and names of all available surveys
 #'   in the configured Qualtrics account. Can be used to identify surveys for
 #'   further data retrieval.
 #'
 #' @export
-qualtrics.index <- function(institution = NULL) {
+qualtrics.index <- function(institution = NULL, all = FALSE) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
 
@@ -402,57 +439,121 @@ qualtrics.index <- function(institution = NULL) {
 
     cfg <- validate_config("qualtrics")
 
-    # Connect to Qualtrics using the existing helper function
-    connectQualtrics()
+    # Check if we have institution configuration
+    if (is.null(cfg$qualtrics$survey_ids) || length(cfg$qualtrics$survey_ids) == 0) {
+      message("No institutions configured in config.yml. Nothing to return.")
+      return(invisible(NULL))
+    }
 
-    # Get all surveys
-    message("Fetching available Qualtrics surveys...")
-    surveys <- qualtRics::all_surveys()
+    # Build mapping of all configured surveys
+    all_mapped_surveys <- data.frame(
+      id = character(0),
+      alias = character(0),
+      institution = character(0),
+      stringsAsFactors = FALSE
+    )
 
-    # Filter by institution if specified
-    if (!is.null(institution) && !is.null(cfg$qualtrics$survey_ids)) {
-      if (institution %in% names(cfg$qualtrics$survey_ids)) {
-        # Extract the survey IDs for the specified institution
-        inst_surveys <- cfg$qualtrics$survey_ids[[institution]]
-
-        # Create a mapping of configured surveys for this institution
-        configured_surveys <- data.frame(
-          id = unlist(inst_surveys),
-          alias = names(inst_surveys),
+    # Get institution names from config
+    institution_names <- names(cfg$qualtrics$survey_ids)
+    
+    # Build the complete mapping from configuration
+    for (inst in institution_names) {
+      inst_config <- cfg$qualtrics$survey_ids[[inst]]
+      if (length(inst_config) > 0) {
+        inst_df <- data.frame(
+          id = unlist(inst_config),
+          alias = names(inst_config),
+          institution = rep(inst, length(inst_config)),
           stringsAsFactors = FALSE
         )
-
-        # Filter and merge with alias information
-        surveys <- merge(surveys, configured_surveys, by = "id", all.y = TRUE)
-        message(paste0("Filtered to ", nrow(surveys), " surveys from institution '", institution, "'"))
-      } else {
-        warning(paste0("Institution '", institution, "' not found in configuration. Returning all surveys."))
+        all_mapped_surveys <- rbind(all_mapped_surveys, inst_df)
       }
-    } else if (!is.null(cfg$qualtrics$survey_ids)) {
-      # Create a complete mapping of all configured surveys across institutions
-      all_mapped_surveys <- data.frame(
+    }
+
+    if (nrow(all_mapped_surveys) == 0) {
+      message("No surveys configured in any institution. Nothing to return.")
+      return(invisible(NULL))
+    }
+
+    # Filter by institution if specified
+    if (!is.null(institution)) {
+      if (institution %in% institution_names) {
+        all_mapped_surveys <- all_mapped_surveys[all_mapped_surveys$institution == institution, ]
+        if (nrow(all_mapped_surveys) == 0) {
+          message(paste0("No surveys configured for institution '", institution, "'. Nothing to return."))
+          return(invisible(NULL))
+        }
+      } else {
+        warning(paste0("Institution '", institution, "' not found in configuration. Nothing to return."))
+        return(invisible(NULL))
+      }
+    }
+
+    # Initialize surveys data frame
+    surveys <- data.frame(
+      id = character(0),
+      name = character(0),
+      lastModified = character(0),
+      stringsAsFactors = FALSE
+    )
+
+    # Fetch survey details grouped by institution (connect only once per institution)
+    unique_institutions <- unique(all_mapped_surveys$institution)
+    
+    for (inst in unique_institutions) {
+      # Get all survey IDs for this institution
+      inst_survey_ids <- all_mapped_surveys$id[all_mapped_surveys$institution == inst]
+      
+      tryCatch({
+        # Connect to this institution once
+        connectQualtrics(institution = inst)
+        
+        # Get all surveys from this institution
+        inst_surveys <- qualtRics::all_surveys()
+        
+        # Find the specific surveys we need
+        survey_info <- inst_surveys[inst_surveys$id %in% inst_survey_ids, ]
+        
+        if (nrow(survey_info) > 0) {
+          surveys <- rbind(surveys, survey_info)
+        }
+        
+      }, error = function(e) {
+        warning(paste0("Failed to fetch surveys from institution '", inst, "': ", e$message))
+      })
+    }
+
+    # Merge with the configured surveys data to get aliases
+    surveys <- merge(surveys, all_mapped_surveys, by = "id", all = TRUE)
+
+    # If all=TRUE, also fetch unmapped surveys
+    if (all) {
+      # Get all surveys from all institutions and find unmapped ones
+      all_surveys <- data.frame(
         id = character(0),
-        alias = character(0),
-        institution = character(0),
+        name = character(0),
+        lastModified = character(0),
         stringsAsFactors = FALSE
       )
-
-      for (inst in names(cfg$qualtrics$survey_ids)) {
-        inst_surveys <- cfg$qualtrics$survey_ids[[inst]]
-        if (length(inst_surveys) > 0) {
-          inst_df <- data.frame(
-            id = unlist(inst_surveys),
-            alias = names(inst_surveys),
-            institution = rep(inst, length(inst_surveys)),
-            stringsAsFactors = FALSE
-          )
-          all_mapped_surveys <- rbind(all_mapped_surveys, inst_df)
-        }
+      
+      for (inst in institution_names) {
+        tryCatch({
+          connectQualtrics(institution = inst)
+          inst_surveys <- qualtRics::all_surveys()
+          if (nrow(inst_surveys) > 0) {
+            all_surveys <- rbind(all_surveys, inst_surveys)
+          }
+        }, error = function(e) {
+          warning(paste0("Failed to fetch surveys from institution '", inst, "': ", e$message))
+        })
       }
-
-      # Merge with the surveys data
-      if (nrow(all_mapped_surveys) > 0) {
-        surveys <- merge(surveys, all_mapped_surveys, by = "id", all = TRUE)
+      
+      # Find unmapped surveys
+      unmapped_surveys <- all_surveys[!all_surveys$id %in% all_mapped_surveys$id, ]
+      if (nrow(unmapped_surveys) > 0) {
+        unmapped_surveys$alias <- NA
+        unmapped_surveys$institution <- NA
+        surveys <- rbind(surveys, unmapped_surveys)
       }
     }
 
@@ -461,40 +562,29 @@ qualtrics.index <- function(institution = NULL) {
       # Sort by name for easier reading
       surveys <- surveys[order(surveys$name), ]
 
-      # Create output table
-      if ("alias" %in% colnames(surveys)) {
-        if ("institution" %in% colnames(surveys)) {
-          # Full output with institution information
-          result <- data.frame(
-            ID = surveys$id,
-            Alias = surveys$alias,
-            Institution = surveys$institution,
-            Name = surveys$name,
-            Last_Modified = surveys$lastModified,
-            stringsAsFactors = FALSE
-          )
-        } else {
-          # Output for specific institution
-          result <- data.frame(
-            ID = surveys$id,
-            Alias = surveys$alias,
-            Name = surveys$name,
-            Last_Modified = surveys$lastModified,
-            stringsAsFactors = FALSE
-          )
-        }
+      # Create simple output table
+      result <- data.frame(
+        ID = surveys$id,
+        Alias = surveys$alias,
+        Institution = surveys$institution,
+        Name = surveys$name,
+        Last_Modified = surveys$lastModified,
+        stringsAsFactors = FALSE
+      )
+
+      # Calculate institution counts for message
+      if (!is.null(institution)) {
+        # Single institution
+        count_msg <- paste0("Found ", nrow(result), " surveys from ", institution)
       } else {
-        # Basic output for unconfigured surveys
-        result <- data.frame(
-          ID = surveys$id,
-          Name = surveys$name,
-          Last_Modified = surveys$lastModified,
-          stringsAsFactors = FALSE
-        )
+        # Multiple institutions - count by institution
+        inst_counts <- table(all_mapped_surveys$institution)
+        count_parts <- paste0(names(inst_counts), inst_counts, collapse = "+")
+        count_msg <- paste0("Found ", nrow(result), " surveys (", count_parts, ")")
       }
 
-      # Print the results in a user-friendly format
-      message(paste0("\nFound ", nrow(result), " Qualtrics surveys:"))
+      # Print the results
+      message(count_msg)
       print(result, row.names = TRUE)
 
       # Restore previous warning setting
@@ -737,8 +827,9 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
   })
 }
 
-#' Alias for 'qualtrics'
+#' Alias for 'qualtrics' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'qualtrics' instead.
 #' This is a legacy alias for the 'qualtrics' function to maintain compatibility with older code.
 #'
 #' @inheritParams qualtrics
@@ -746,6 +837,10 @@ parse_dates_to_iso <- function(date_vector, column_name = "date") {
 #' @export
 #' @examples
 #' \dontrun{
+#' # DEPRECATED - use qualtrics() instead
 #' survey_data <- getSurvey("your_survey_alias")
 #' }
-getSurvey <- qualtrics
+getSurvey <- function(...) {
+  .Deprecated("qualtrics", package = "wizaRdry")
+  qualtrics(...)
+}
