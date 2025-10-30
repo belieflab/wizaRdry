@@ -868,6 +868,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     )
   )
 
+  # Persist NDA element names for downstream export/formatting without relying on outer scope
+  data_definition$metadata$nda_element_names <- names(nda_lookup)
+
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
     column_name <- ordered_columns[i]
@@ -986,11 +989,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         # Update NDA metadata with modified value range
         modified_nda_metadata <- nda_field
         modified_nda_metadata$valueRange <- updated_value_range
-        if (!is.null(modification_notes)) {
-          modified_nda_metadata$notes <- paste0(if ("notes" %in% names(nda_field)) nda_field$notes else "",
-                                               if ("notes" %in% names(nda_field) && nda_field$notes != "") " | " else "",
-                                               modification_notes)
-        }
+              # Do not append internal modification notes to exportable metadata
 
         nda_metadata_to_use <- modified_nda_metadata
         data_definition$metadata$validation_summary$modified_fields <-
@@ -1316,9 +1315,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   }
 
-  # Auto-export to CSV
+  # Auto-export to XLSX
   tryCatch({
-    exportDataDefinition(data_definition, "csv")
+    exportDataDefinition(data_definition, "xlsx")
   }, error = function(e) {
     warning("Could not export data definition: ", e$message)
   })
@@ -1558,8 +1557,45 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                }, error = function(e) "0%")
              })
 
+             # Curator notes to summarize changes
+             curator_notes <- sapply(field_names, function(fname) {
+               x <- data_definition$fields[[fname]]
+               parts <- character(0)
+               # Source summary
+               if (!is.null(x$source)) {
+                 if (identical(x$source, "computed_from_data")) {
+                   parts <- c(parts, "New field (not in NDA); metadata inferred from data")
+                 } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
+                   parts <- c(parts, "Modified NDA field (valueRange updated)")
+                 } else if (identical(x$source, "template_only")) {
+                   parts <- c(parts, "In template only; no data observed")
+                 } else if (identical(x$source, "nda_validated")) {
+                   parts <- c(parts, "Matched NDA field")
+                 }
+               }
+               # Required status
+               reqFlag <- NULL
+               if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+                 reqFlag <- x$nda_metadata$required
+               } else if (!is.null(x$required)) {
+                 reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
+               }
+               if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
+                 parts <- c(parts, "Required by NDA")
+               }
+               # Missing percentage
+               if (!is.null(x$missing_info) && "missing_percentage" %in% names(x$missing_info)) {
+                 parts <- c(parts, paste0("Missing ", x$missing_info$missing_percentage, "%"))
+               }
+               note <- paste(parts, collapse = " | ")
+               if (identical(note, "")) {
+                 note <- paste0("Requesting to add ", fname, " as is")
+               }
+               note
+             })
+
              # Create data frame with explicit length checking
-             fields_df <- data.frame(
+            fields_df <- data.frame(
                ElementName = element_names,
                DataType = data_types,
                Size = sizes,
@@ -1568,7 +1604,9 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                ValueRange = value_ranges,
                Notes = notes,
                Aliases = aliases,
-               stringsAsFactors = FALSE
+              `Notes for Data Curator` = curator_notes,
+              stringsAsFactors = FALSE,
+              check.names = FALSE
              )
 
              # --- Safe export sanitization ---
@@ -1612,6 +1650,379 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              cat("Debug info - field count:", length(field_names), "\n")
              cat("Debug info - fields:", paste(head(field_names, 5), collapse = ", "), "\n")
            })
+         },
+
+         "xlsx" = {
+           # openxlsx is a hard dependency (Imports); proceed directly
+
+           # Reuse the same field assembly as CSV branch
+           field_names <- names(data_definition$fields)
+           field_names <- setdiff(field_names, excluded_internal)
+           if (length(field_names) == 0) {
+             warning("No fields to export")
+             return(invisible(NULL))
+           }
+
+           element_names <- field_names
+
+           data_types <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "type" %in% names(x$nda_metadata)) {
+                 as.character(x$nda_metadata$type %||% "String")
+               } else {
+                 as.character(x$data_type %||% "String")
+               }
+             }, error = function(e) "String")
+           })
+
+           sizes <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "size" %in% names(x$nda_metadata)) {
+                 size_val <- x$nda_metadata$size
+                 if (is.null(size_val) || is.na(size_val)) "" else as.numeric(size_val)
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+
+           required_vals <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+                 as.character(x$nda_metadata$required %||% "No")
+               } else if (!is.null(x$required)) {
+                 ifelse(isTRUE(x$required), "Required", "No")
+               } else {
+                 "No"
+               }
+             }, error = function(e) "No")
+           })
+
+           descriptions <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "description" %in% names(x$nda_metadata)) {
+                desc_val <- as.character(x$nda_metadata$description %||% "")
+                desc_val <- gsub("^Missing field: ", "", desc_val)
+                desc_val <- gsub("^Empty field: ", "", desc_val)
+                desc_val
+               } else {
+                 as.character(x$description %||% "")
+               }
+             }, error = function(e) "")
+           })
+
+           value_ranges <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "valueRange" %in% names(x$nda_metadata)) {
+                 val_range <- x$nda_metadata$valueRange %||% ""
+                 if (is.na(val_range) || val_range == "NA") "" else as.character(val_range)
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+           value_ranges <- vapply(value_ranges, compress_value_range, character(1))
+
+           notes <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "notes" %in% names(x$nda_metadata)) {
+                 notes_val <- x$nda_metadata$notes %||% ""
+                 notes_val <- if (is.na(notes_val) || notes_val == "NA" || notes_val == "character(0)") "" else as.character(notes_val)
+                 # Strip internal modification text if ever present
+                 notes_val <- gsub("\\bModified structure: Added missing value codes:.*$", "", notes_val)
+                 trimws(notes_val)
+               } else if (!is.null(x$notes)) {
+                 as.character(x$notes %||% "")
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+
+           aliases <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
+                 alias_val <- x$nda_metadata$aliases %||% ""
+                 normalize_aliases_export(alias_val)
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+
+           # Curator notes to summarize changes (mirror CSV branch)
+           curator_notes <- sapply(field_names, function(fname) {
+             x <- data_definition$fields[[fname]]
+             parts <- character(0)
+             if (!is.null(x$source)) {
+               if (identical(x$source, "computed_from_data")) {
+                 parts <- c(parts, "New field (not in NDA); metadata inferred from data")
+               } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
+                 parts <- c(parts, "Modified NDA field (valueRange updated)")
+               } else if (identical(x$source, "template_only")) {
+                 parts <- c(parts, "In template only; no data observed")
+               } else if (identical(x$source, "nda_validated")) {
+                 parts <- c(parts, "Matched NDA field")
+               }
+             }
+             reqFlag <- NULL
+             if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+               reqFlag <- x$nda_metadata$required
+             } else if (!is.null(x$required)) {
+               reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
+             }
+             if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
+               parts <- c(parts, "Required by NDA")
+             }
+             if (!is.null(x$missing_info) && "missing_percentage" %in% names(x$missing_info)) {
+               parts <- c(parts, paste0("Missing ", x$missing_info$missing_percentage, "%"))
+             }
+             note <- paste(parts, collapse = " | ")
+             if (identical(note, "")) {
+               note <- paste0("Requesting to add ", fname, " as is")
+             }
+             note
+           })
+
+          fields_df <- data.frame(
+             ElementName = element_names,
+             DataType = data_types,
+             Size = sizes,
+             Required = required_vals,
+             ElementDescription = descriptions,
+             ValueRange = value_ranges,
+             Notes = notes,
+             Aliases = aliases,
+            `Notes for Data Curator` = curator_notes,
+            stringsAsFactors = FALSE,
+            check.names = FALSE
+           )
+
+           # Sanitize (same as CSV)
+           fields_df$ElementName <- as.character(fields_df$ElementName)
+           fields_df <- fields_df[!is.na(fields_df$ElementName) & fields_df$ElementName != "", , drop = FALSE]
+           for (nm in names(fields_df)) {
+             fields_df[[nm]][is.na(fields_df[[nm]])] <- ""
+           }
+           fields_df$DataType <- as.character(fields_df$DataType)
+           fields_df$Required <- as.character(fields_df$Required)
+           fields_df$DataType[!fields_df$DataType %in% c("String", "Integer", "Float", "Date", "GUID", "Boolean")] <- "String"
+           fields_df$Required[!fields_df$Required %in% c("Required", "Recommended", "Conditional", "No")] <- "No"
+           suppressWarnings(sz <- as.numeric(fields_df$Size))
+           sz[is.na(sz)] <- NA_real_
+           fields_df$Size <- ifelse(is.na(sz), "", as.character(sz))
+           non_string_idx <- which(fields_df$DataType != "String")
+           if (length(non_string_idx) > 0) {
+             fields_df$Size[non_string_idx] <- ""
+           }
+           fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
+           fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
+
+           # Build workbook with formatting
+           wb <- openxlsx::createWorkbook()
+           openxlsx::addWorksheet(wb, "Data Definitions")
+           openxlsx::writeData(wb, "Data Definitions", fields_df, startRow = 1, startCol = 1, withFilter = TRUE)
+
+           # Header style: yellow fill, bold
+           headerStyle <- openxlsx::createStyle(textDecoration = "bold", fgFill = "#FFF2CC", halign = "left", valign = "top", border = "Bottom")
+           openxlsx::addStyle(wb, "Data Definitions", headerStyle, rows = 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
+
+           # Wrap text for description/notes/valueRange
+           wrapStyle <- openxlsx::createStyle(wrapText = TRUE, valign = "top")
+           wrapCols <- which(colnames(fields_df) %in% c("ElementDescription", "ValueRange", "Notes", "Notes for Data Curator"))
+           if (length(wrapCols) > 0 && nrow(fields_df) > 0) {
+             openxlsx::addStyle(wb, "Data Definitions", wrapStyle, rows = 2:(nrow(fields_df) + 1), cols = wrapCols, gridExpand = TRUE)
+           }
+
+            # Red text for Required == "Required"
+           if (nrow(fields_df) > 0) {
+             reqRows <- which(fields_df$Required == "Required")
+             if (length(reqRows) > 0) {
+                redText <- openxlsx::createStyle(fontColour = "#FF0000")
+               openxlsx::addStyle(wb, "Data Definitions", redText, rows = reqRows + 1, cols = which(colnames(fields_df) == "Required"), gridExpand = TRUE)
+             }
+           }
+
+           # NDA Highlighting Rules
+           if (nrow(fields_df) > 0) {
+             elementCol <- which(colnames(fields_df) == "ElementName")
+             valueCols <- which(colnames(fields_df) %in% c("ValueRange", "Notes"))
+
+            blueFill <- openxlsx::createStyle(fgFill = "#00B0F0")
+            yellowFill <- openxlsx::createStyle(fgFill = "#FFFF00")
+            redFont <- openxlsx::createStyle(fontColour = "#FF0000")
+
+             # Determine whether each element exists in NDA by lookup retained in metadata,
+             # falling back to NDA API element search when not found locally
+             nda_element_names <- data_definition$metadata$nda_element_names %||% character(0)
+             in_local_nda <- element_names %in% nda_element_names
+
+             # Cached API checker to minimize network calls
+             .nda_exists_cache <- new.env(parent = emptyenv())
+             nda_element_exists_api <- function(el_name) {
+               if (!nzchar(el_name)) return(FALSE)
+               if (!is.null(.nda_exists_cache[[el_name]])) return(.nda_exists_cache[[el_name]])
+               base_url <- "https://nda.nih.gov/api/datadictionary/v2/datastructure/dataElement/"
+               url <- paste0(base_url, utils::URLencode(el_name, reserved = TRUE))
+               exists_flag <- FALSE
+               try({
+                 resp <- httr::GET(url, httr::timeout(8))
+                 if (httr::status_code(resp) == 200) {
+                   raw <- rawToChar(resp$content)
+                   if (nzchar(raw)) {
+                     parsed <- tryCatch(jsonlite::fromJSON(raw), error = function(e) NULL)
+                     # Endpoint returns an array of structures containing the element; non-empty => exists
+                     if (!is.null(parsed) && length(parsed) > 0) exists_flag <- TRUE
+                   }
+                 }
+               }, silent = TRUE)
+               .nda_exists_cache[[el_name]] <- exists_flag
+               exists_flag
+             }
+
+             api_check_needed <- which(!in_local_nda)
+             api_exists <- rep(FALSE, length(element_names))
+             if (length(api_check_needed) > 0) {
+               for (idx in api_check_needed) {
+                 api_exists[idx] <- nda_element_exists_api(element_names[idx])
+               }
+             }
+
+             element_is_in_nda <- in_local_nda | api_exists
+
+             # Fetch NDA element metadata for allowed range comparison (cached)
+             .nda_meta_cache <- new.env(parent = emptyenv())
+             nda_fetch_element <- function(el_name) {
+               if (!nzchar(el_name)) return(NULL)
+               if (!is.null(.nda_meta_cache[[el_name]])) return(.nda_meta_cache[[el_name]])
+               base_url <- "https://nda.nih.gov/api/datadictionary/v2/dataelement/"
+               url <- paste0(base_url, utils::URLencode(el_name, reserved = TRUE))
+               out <- NULL
+               try({
+                 resp <- httr::GET(url, httr::timeout(8))
+                 if (httr::status_code(resp) == 200) {
+                   raw <- rawToChar(resp$content)
+                   if (nzchar(raw)) {
+                     out <- tryCatch(jsonlite::fromJSON(raw), error = function(e) NULL)
+                   }
+                 }
+               }, silent = TRUE)
+               .nda_meta_cache[[el_name]] <- out
+               out
+             }
+
+             # Helper to expand numeric valueRange string into a set of allowed integer values
+             expand_numeric_value_range <- function(val_range_str) {
+               if (is.null(val_range_str) || identical(val_range_str, "") || is.na(val_range_str)) return(NULL)
+               parts <- trimws(strsplit(as.character(val_range_str), ";")[[1]])
+               parts <- parts[nzchar(parts)]
+               if (length(parts) == 0) return(NULL)
+               out_vals <- integer(0)
+               for (p in parts) {
+                 if (grepl("::", p, fixed = TRUE)) {
+                   bounds <- suppressWarnings(as.numeric(strsplit(p, "::", fixed = TRUE)[[1]]))
+                   if (length(bounds) == 2 && !any(is.na(bounds))) {
+                     a <- floor(bounds[1]); b <- floor(bounds[2])
+                     if (b >= a && (b - a) <= 10000) { # safety bound
+                       out_vals <- c(out_vals, seq(a, b))
+                     }
+                   }
+                 } else {
+                   num <- suppressWarnings(as.numeric(p))
+                   if (!is.na(num)) out_vals <- c(out_vals, floor(num))
+                 }
+               }
+               unique(out_vals)
+             }
+
+             # Determine which rows are modified (our proposal changes)
+             row_modified <- vapply(field_names, function(fname) {
+               x <- data_definition$fields[[fname]]
+               isTRUE(x$is_modified) || identical(as.character(x$source %||% ""), "nda_modified")
+             }, logical(1))
+
+             # Track diagnostics for a Routes sheet
+             route_source <- vapply(field_names, function(fname) {
+               x <- data_definition$fields[[fname]]
+               as.character(x$source %||% "")
+             }, character(1))
+             applied_blue <- rep(FALSE, length(field_names))
+             applied_yellow <- rep(FALSE, length(field_names))
+             applied_red <- rep(FALSE, length(field_names))
+             nda_range_mismatch <- rep(FALSE, length(field_names))
+
+             # Blue: all rows whose ElementName exists in NDA
+             idx_in_nda <- which(element_is_in_nda)
+             if (length(idx_in_nda) > 0) {
+               openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_in_nda + 1, cols = elementCol, gridExpand = TRUE)
+               applied_blue[idx_in_nda] <- TRUE
+             }
+
+             # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
+             idx_modified <- which(row_modified & element_is_in_nda)
+             if (length(idx_modified) > 0 && length(valueCols) > 0) {
+               openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
+               applied_yellow[idx_modified] <- TRUE
+             }
+
+             # Yellow: also highlight NDA elements whose exported ValueRange extends beyond NDA-allowed values
+             if (length(valueCols) > 0) {
+               cat("Comparing NDA value ranges for mismatches...\n")
+               for (i in which(element_is_in_nda)) {
+                 el <- element_names[i]
+                 nda_meta <- nda_fetch_element(el)
+                 if (is.null(nda_meta)) next
+                 nda_allowed <- expand_numeric_value_range(nda_meta$valueRange)
+                 if (is.null(nda_allowed) || length(nda_allowed) == 0) next
+                 ours_str <- as.character(fields_df$ValueRange[i] %||% "")
+                 ours_vals <- expand_numeric_value_range(ours_str)
+                 if (is.null(ours_vals)) next
+                 if (length(setdiff(ours_vals, nda_allowed)) > 0) {
+                   openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = valueCols, gridExpand = TRUE)
+                   applied_yellow[i] <- TRUE
+                   nda_range_mismatch[i] <- TRUE
+                 }
+               cat("Value range comparison complete.\n")
+               }
+             }
+
+             # Red text: elements not in NDA (new/proposed elements)
+             idx_not_in_nda <- which(!element_is_in_nda)
+             if (length(idx_not_in_nda) > 0) {
+               openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
+               applied_red[idx_not_in_nda] <- TRUE
+             }
+
+             # Add diagnostics worksheet summarizing route and highlighting decisions
+             routes_df <- data.frame(
+               ElementName = element_names,
+               InNDA = element_is_in_nda,
+               Source = route_source,
+               Modified = row_modified,
+               BlueApplied = applied_blue,
+               YellowApplied = applied_yellow,
+               RedApplied = applied_red,
+               NdaRangeMismatch = nda_range_mismatch,
+               stringsAsFactors = FALSE,
+               check.names = FALSE
+             )
+             openxlsx::addWorksheet(wb, "Routes")
+             openxlsx::writeData(wb, "Routes", routes_df, startRow = 1, startCol = 1, withFilter = TRUE)
+             openxlsx::setColWidths(wb, "Routes", cols = seq_len(ncol(routes_df)), widths = "auto")
+           }
+
+           # Auto widths
+           openxlsx::setColWidths(wb, "Data Definitions", cols = seq_len(ncol(fields_df)), widths = "auto")
+
+           openxlsx::saveWorkbook(wb, file_path, overwrite = TRUE)
+           cat("Data definition exported to:", file_path, "\n")
          },
 
          "yaml" = {
