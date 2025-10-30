@@ -1953,7 +1953,13 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
              idx_modified <- which(row_modified & element_is_in_nda)
              if (length(idx_modified) > 0 && length(valueCols) > 0) {
+               # Yellow highlight on ValueRange and Notes cells
                openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
+               # Additionally make the ValueRange cell text red for modified elements
+               vr_col_only <- which(colnames(fields_df) == "ValueRange")
+               if (length(vr_col_only) == 1) {
+                 openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
+               }
                applied_yellow[idx_modified] <- TRUE
              }
 
