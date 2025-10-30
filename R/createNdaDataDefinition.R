@@ -1552,7 +1552,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                # Source summary
                if (!is.null(x$source)) {
                  if (identical(x$source, "computed_from_data")) {
-                   parts <- c(parts, "New field (not in NDA); metadata inferred from data")
+                   parts <- c(parts, "New field (not in NDA)")
                  } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
                    parts <- c(parts, "Modified NDA field (valueRange updated)")
                  } else if (identical(x$source, "template_only")) {
@@ -1748,7 +1748,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              parts <- character(0)
              if (!is.null(x$source)) {
                if (identical(x$source, "computed_from_data")) {
-                 parts <- c(parts, "New field (not in NDA); metadata inferred from data")
+                 parts <- c(parts, "New field (not in NDA)")
                } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
                  parts <- c(parts, "Modified NDA field (valueRange updated)")
                } else if (identical(x$source, "template_only")) {
@@ -2070,14 +2070,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  }
                }
 
-               # Populate Notes with version string for provenance
-               ver_str <- tryCatch(as.character(utils::packageVersion("wizaRdry")), error = function(e) "unknown")
-               notes_idx <- which(colnames(fields_df) == "Notes")
-               if (length(notes_idx) == 1) {
-                 for (r in idx_no_change) {
-                   openxlsx::writeData(wb, "Data Definitions", paste0("metadata generated with wizaRdry v", ver_str), startRow = r + 1, startCol = notes_idx, colNames = FALSE)
-                 }
-               }
+              # Do not populate Notes with version string for unchanged elements
              }
            }
           
@@ -2105,36 +2098,27 @@ exportDataDefinition <- function(data_definition, format = "csv") {
             for (edit in rich_text_edits) {
               # ValueRange rich text
               if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
-                texts <- character(0)
-                colors <- character(0)
+                runs <- list()
                 for (ti in seq_along(edit$tokens)) {
-                  texts <- c(texts, edit$tokens[ti])
-                  colors <- c(colors, if (edit$token_is_added[ti]) "FF0000" else "000000")
+                  tok <- edit$tokens[ti]
+                  col <- if (edit$token_is_added[ti]) "FF0000" else "000000"
+                  runs[[length(runs) + 1]] <- create_rich_text_fn(text = tok, color = col)
                   if (ti < length(edit$tokens)) {
-                    texts <- c(texts, "; ")
-                    colors <- c(colors, "000000")
+                    runs[[length(runs) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
                   }
                 }
                 dims <- paste0(num_to_col(edit$vr_col), edit$row)
-                # Write rich text (added tokens red) into the yellow-filled cell
-                rt <- create_rich_text_fn(text = texts, color = colors)
-                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, str = rt)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
               }
               # Notes rich text
               if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
-                texts2 <- c("Added: ")
-                colors2 <- c("000000")
+                runs2 <- list()
                 for (j in seq_along(edit$added_tokens)) {
-                  texts2 <- c(texts2, edit$added_tokens[j])
-                  colors2 <- c(colors2, "FF0000")
-                  if (j < length(edit$added_tokens)) {
-                    texts2 <- c(texts2, "; ")
-                    colors2 <- c(colors2, "000000")
-                  }
+                  runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
+                  if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
                 }
                 dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
-                rt2 <- create_rich_text_fn(text = texts2, color = colors2)
-                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, str = rt2)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
               }
             }
             openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)

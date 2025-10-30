@@ -1040,11 +1040,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         if (DEBUG) message("[DEBUG] Updated local df variable")
       }
 
-      # Play validation sound
-      if (exists("validation_results") && is.list(validation_results)) {
-        if (DEBUG) message("[DEBUG] Playing validation sound")
-        ifelse(validation_results$valid, "mario", "wilhelm") |> beepr::beep()
-      }
+      # Defer any sounds until the end of processing
 
       # Create data upload template ONLY for existing structures
       if (DEBUG) message("[DEBUG] Creating NDA template")
@@ -1088,9 +1084,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         message("Enhanced new structure with complete ndar_subject01 required and recommended field metadata")
       }
 
-      # Play success sound for new structure
-      if (DEBUG) message("[DEBUG] Playing new structure sound")
-      beepr::beep("treasure")
+      # Defer any sounds until the end of processing
 
       # DO NOT CREATE SUBMISSION TEMPLATE FOR NEW STRUCTURES
       message("Skipping submission template creation for new structure")
@@ -1131,6 +1125,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     })
 
     formatElapsedTime(start_time)
+
+    # Play completion sound AFTER all processing, including data definition export
+    if (exists("validation_results") && is.list(validation_results)) {
+      # Use success/fail tone for existing structures; treasure for new (bypassed) ones
+      tone <- if (isTRUE(validation_results$bypassed_validation)) "treasure" else if (isTRUE(validation_results$valid)) "mario" else "wilhelm"
+      if (DEBUG) message("[DEBUG] Playing completion sound: ", tone)
+      try(beepr::beep(tone), silent = TRUE)
+    } else {
+      try(beepr::beep("treasure"), silent = TRUE)
+    }
   }, error = function(e) {
     if (DEBUG) message("[DEBUG] Error caught: ", e$message)
     # Check if identifier is valid
