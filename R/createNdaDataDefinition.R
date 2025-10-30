@@ -1998,9 +1998,16 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                   added_tokens <- character(0)
                   token_is_added <- logical(length(tokens))
                   for (ti in seq_along(tokens)) {
-                    tok_vals <- expand_numeric_value_range(tokens[ti])
+                    tok <- tokens[ti]
+                    # Support tokens like "9999=Prefer not to say" by extracting leading code before '='
+                    leading_code <- suppressWarnings(as.numeric(sub("=.*$", "", tok)))
+                    if (!is.na(leading_code)) {
+                      tok_vals <- leading_code
+                    } else {
+                      tok_vals <- expand_numeric_value_range(tok)
+                    }
                     token_is_added[ti] <- length(setdiff(tok_vals %||% numeric(0), nda_allowed)) > 0
-                    if (token_is_added[ti]) added_tokens <- c(added_tokens, tokens[ti])
+                    if (token_is_added[ti]) added_tokens <- c(added_tokens, tok)
                   }
                   rich_text_edits[[length(rich_text_edits) + 1]] <- list(
                     row = i + 1,
@@ -2060,6 +2067,15 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                    for (r in idx_no_change) {
                      openxlsx::writeData(wb, "Data Definitions", "", startRow = r + 1, startCol = cc, colNames = FALSE)
                    }
+                 }
+               }
+
+               # Populate Notes with version string for provenance
+               ver_str <- tryCatch(as.character(utils::packageVersion("wizaRdry")), error = function(e) "unknown")
+               notes_idx <- which(colnames(fields_df) == "Notes")
+               if (length(notes_idx) == 1) {
+                 for (r in idx_no_change) {
+                   openxlsx::writeData(wb, "Data Definitions", paste0("metadata generated with wizaRdry v", ver_str), startRow = r + 1, startCol = notes_idx, colNames = FALSE)
                  }
                }
              }
