@@ -437,7 +437,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     if (is.null(data_vector) || length(data_vector) == 0) {
       return(list(
         data_type = "String",
-        description = paste("Missing field:", field_name),
+        description = "",
         size = 255,
         valueRange = "",
         required = "Recommended",
@@ -455,11 +455,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     if (valid_count == 0) {
       return(list(
         data_type = "String",
-        description = paste("Empty field:", field_name, "- all values are NA"),
+        description = "",
         size = 255,
         valueRange = "",
         required = "Recommended",
-        notes = paste0("Field contains only NA values (", total_count, " total rows). Missing: 100%"),
+        notes = "",
         aliases = "",
         missing_info = list(
           missing_count = missing_count,
@@ -567,19 +567,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
 
-    if (data_type == "Integer") {
-      mean_val <- round(mean(clean_data, na.rm = TRUE), 3)
-      sd_val <- round(stats::sd(clean_data, na.rm = TRUE), 3)
-      notes_parts <- c(notes_parts, paste0("Mean: ", mean_val, ", SD: ", sd_val))
-    }
-    # For Float fields, skip statistical information to keep them clean
-
-    if (unique_count <= 10 && data_type == "String") {
-      # For categorical data with few categories, show frequency
-      freq_table <- table(clean_data)
-      most_common <- names(freq_table)[which.max(freq_table)]
-      notes_parts <- c(notes_parts, paste0("Most common: '", most_common, "' (", max(freq_table), " cases)"))
-    }
+    # Do not append Mean/SD or other statistical summaries to notes
 
     notes <- paste(notes_parts, collapse = "; ")
 
@@ -1583,10 +1571,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
                  parts <- c(parts, "Required by NDA")
                }
-               # Missing percentage
-               if (!is.null(x$missing_info) && "missing_percentage" %in% names(x$missing_info)) {
-                 parts <- c(parts, paste0("Missing ", x$missing_info$missing_percentage, "%"))
-               }
+               # Skip missing percentage in curator notes
                note <- paste(parts, collapse = " | ")
                if (identical(note, "")) {
                  note <- paste0("Requesting to add ", fname, " as is")
@@ -1781,9 +1766,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
                parts <- c(parts, "Required by NDA")
              }
-             if (!is.null(x$missing_info) && "missing_percentage" %in% names(x$missing_info)) {
-               parts <- c(parts, paste0("Missing ", x$missing_info$missing_percentage, "%"))
-             }
+             # Skip missing percentage in curator notes
              note <- paste(parts, collapse = " | ")
              if (identical(note, "")) {
                note <- paste0("Requesting to add ", fname, " as is")
@@ -1858,6 +1841,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
             blueFill <- openxlsx::createStyle(fgFill = "#00B0F0")
             yellowFill <- openxlsx::createStyle(fgFill = "#FFFF00")
             redFont <- openxlsx::createStyle(fontColour = "#FF0000")
+            redOnYellow <- openxlsx::createStyle(fgFill = "#FFFF00", fontColour = "#FF0000")
 
              # Determine whether each element exists in NDA by lookup retained in metadata,
              # falling back to NDA API element search when not found locally
@@ -1972,32 +1956,48 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                applied_yellow[idx_modified] <- TRUE
              }
 
-             # Yellow: also highlight NDA elements whose exported ValueRange extends beyond NDA-allowed values
+             # Yellow + red text on ValueRange for NDA elements whose exported ValueRange extends beyond NDA-allowed values
              if (length(valueCols) > 0) {
                cat("Comparing NDA value ranges for mismatches...\n")
-               for (i in which(element_is_in_nda)) {
-                 el <- element_names[i]
-                 nda_meta <- nda_fetch_element(el)
-                 if (is.null(nda_meta)) next
-                 nda_allowed <- expand_numeric_value_range(nda_meta$valueRange)
-                 if (is.null(nda_allowed) || length(nda_allowed) == 0) next
-                 ours_str <- as.character(fields_df$ValueRange[i] %||% "")
-                 ours_vals <- expand_numeric_value_range(ours_str)
-                 if (is.null(ours_vals)) next
-                 if (length(setdiff(ours_vals, nda_allowed)) > 0) {
-                   openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = valueCols, gridExpand = TRUE)
-                   applied_yellow[i] <- TRUE
-                   nda_range_mismatch[i] <- TRUE
-                 }
-               cat("Value range comparison complete.\n")
-               }
-             }
+              for (i in which(element_is_in_nda)) {
+                # Fast skip when our ValueRange is empty
+                ours_str <- as.character(fields_df$ValueRange[i] %||% "")
+                if (!nzchar(ours_str)) next
+                # Fetch NDA metadata only when needed
+                el <- element_names[i]
+                nda_meta <- nda_fetch_element(el)
+                if (is.null(nda_meta)) next
+                nda_allowed <- expand_numeric_value_range(nda_meta$valueRange)
+                if (is.null(nda_allowed) || length(nda_allowed) == 0) next
+                ours_vals <- expand_numeric_value_range(ours_str)
+                if (is.null(ours_vals)) next
+                if (length(setdiff(ours_vals, nda_allowed)) > 0) {
+                  # Apply red text on yellow fill for ValueRange cell
+                  vr_col <- which(colnames(fields_df) == "ValueRange")
+                  if (length(vr_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", redOnYellow, rows = i + 1, cols = vr_col, gridExpand = TRUE)
+                  }
+                  # Also highlight Notes cell in yellow (with red text for emphasis)
+                  notes_col <- which(colnames(fields_df) == "Notes")
+                  if (length(notes_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", redOnYellow, rows = i + 1, cols = notes_col, gridExpand = TRUE)
+                  }
+                  applied_yellow[i] <- TRUE
+                  nda_range_mismatch[i] <- TRUE
+                }
+              }
+              cat("Value range comparison complete.\n")
+            }
 
              # Red text: elements not in NDA (new/proposed elements)
              idx_not_in_nda <- which(!element_is_in_nda)
              if (length(idx_not_in_nda) > 0) {
-               openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
+              # Apply bright red font across the full row
+              openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
+              # Also apply highlighter yellow fill across the full row so it's clearly visible
+              openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
                applied_red[idx_not_in_nda] <- TRUE
+              applied_yellow[idx_not_in_nda] <- TRUE
              }
 
              # Add diagnostics worksheet summarizing route and highlighting decisions
@@ -2016,13 +2016,24 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              openxlsx::addWorksheet(wb, "Routes")
              openxlsx::writeData(wb, "Routes", routes_df, startRow = 1, startCol = 1, withFilter = TRUE)
              openxlsx::setColWidths(wb, "Routes", cols = seq_len(ncol(routes_df)), widths = "auto")
+
+             # Ensure Notes for Data Curator defaults for unchanged NDA elements
+             idx_no_change <- which(element_is_in_nda & !row_modified & !nda_range_mismatch)
+             if (length(idx_no_change) > 0) {
+               notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+               default_notes <- paste0("Requesting to add ", element_names[idx_no_change], " as is.")
+               # Overwrite cells in worksheet to guarantee desired phrasing
+               for (k in seq_along(idx_no_change)) {
+                 openxlsx::writeData(wb, "Data Definitions", default_notes[k], startRow = idx_no_change[k] + 1, startCol = notes_col, colNames = FALSE)
+               }
+             }
            }
+          
+          # Auto widths
+          openxlsx::setColWidths(wb, "Data Definitions", cols = seq_len(ncol(fields_df)), widths = "auto")
 
-           # Auto widths
-           openxlsx::setColWidths(wb, "Data Definitions", cols = seq_len(ncol(fields_df)), widths = "auto")
-
-           openxlsx::saveWorkbook(wb, file_path, overwrite = TRUE)
-           cat("Data definition exported to:", file_path, "\n")
+          openxlsx::saveWorkbook(wb, file_path, overwrite = TRUE)
+          cat("Data definition exported to:", file_path, "\n")
          },
 
          "yaml" = {
