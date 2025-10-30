@@ -2102,7 +2102,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                 dims <- paste0(num_to_col(edit$vr_col), edit$row)
                 # Write rich text (added tokens red) into the yellow-filled cell
                 rt <- create_rich_text_fn(text = texts, color = colors)
-                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = rt)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, str = rt)
               }
               # Notes rich text
               if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
@@ -2118,7 +2118,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                 }
                 dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
                 rt2 <- create_rich_text_fn(text = texts2, color = colors2)
-                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = rt2)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, str = rt2)
               }
             }
             openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
