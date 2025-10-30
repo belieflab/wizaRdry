@@ -529,6 +529,10 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
   # Print header message only
   message(header_message)
 
+  # Versioned completion notice
+  ver <- tryCatch(as.character(utils::packageVersion("wizaRdry")), error = function(e) "unknown")
+  message(paste0("wizaRdry v", ver, " project structure detected and complete"))
+
   # Display file tree if requested
   if (show_tree) {
     # Display tree without a header

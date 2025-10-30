@@ -1982,9 +1982,17 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                     }
                   }
 
-                  # Build rich-text instructions to apply later with openxlsx2
+                  # Apply yellow fill to ValueRange and Notes cells to indicate change
                   vr_col <- which(colnames(fields_df) == "ValueRange")
                   notes_col <- which(colnames(fields_df) == "Notes")
+                  if (length(vr_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = vr_col, gridExpand = TRUE)
+                  }
+                  if (length(notes_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = notes_col, gridExpand = TRUE)
+                  }
+
+                  # Build rich-text instructions to apply later with openxlsx2
                   tokens <- trimws(strsplit(ours_str, ";")[[1]])
                   tokens <- tokens[nzchar(tokens)]
                   added_tokens <- character(0)
@@ -2075,30 +2083,42 @@ exportDataDefinition <- function(data_definition, format = "csv") {
               paste0(letters, collapse = "")
             }
             wb2 <- openxlsx2::wb_load(file_path)
+            # Resolve exported functions dynamically to avoid R CMD check NOTE/WARNING
+            create_rich_text_fn <- get("create_rich_text", asNamespace("openxlsx2"))
+            wb_add_rich_text_fn <- get("wb_add_rich_text", asNamespace("openxlsx2"))
             for (edit in rich_text_edits) {
               # ValueRange rich text
               if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
-                parts <- list()
+                texts <- character(0)
+                colors <- character(0)
                 for (ti in seq_along(edit$tokens)) {
-                  txt <- edit$tokens[ti]
-                  col <- if (edit$token_is_added[ti]) "FF0000" else NULL
-                  parts <- c(parts, list(list(text = txt, color = col)))
-                  if (ti < length(edit$tokens)) parts <- c(parts, list(list(text = "; ")))
+                  texts <- c(texts, edit$tokens[ti])
+                  colors <- c(colors, if (edit$token_is_added[ti]) "FF0000" else "000000")
+                  if (ti < length(edit$tokens)) {
+                    texts <- c(texts, "; ")
+                    colors <- c(colors, "000000")
+                  }
                 }
-                rt <- do.call(openxlsx2::create_rich_text, parts)
                 dims <- paste0(num_to_col(edit$vr_col), edit$row)
-                openxlsx2::wb_add_rich_text(wb2, sheet = "Data Definitions", dims = dims, x = rt)
+                # Write rich text (added tokens red) into the yellow-filled cell
+                rt <- create_rich_text_fn(text = texts, color = colors)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = rt)
               }
               # Notes rich text
               if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
-                parts2 <- list(list(text = "Added: "))
+                texts2 <- c("Added: ")
+                colors2 <- c("000000")
                 for (j in seq_along(edit$added_tokens)) {
-                  parts2 <- c(parts2, list(list(text = edit$added_tokens[j], color = "FF0000")))
-                  if (j < length(edit$added_tokens)) parts2 <- c(parts2, list(list(text = "; ")))
+                  texts2 <- c(texts2, edit$added_tokens[j])
+                  colors2 <- c(colors2, "FF0000")
+                  if (j < length(edit$added_tokens)) {
+                    texts2 <- c(texts2, "; ")
+                    colors2 <- c(colors2, "000000")
+                  }
                 }
-                rt2 <- do.call(openxlsx2::create_rich_text, parts2)
                 dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
-                openxlsx2::wb_add_rich_text(wb2, sheet = "Data Definitions", dims = dims2, x = rt2)
+                rt2 <- create_rich_text_fn(text = texts2, color = colors2)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = rt2)
               }
             }
             openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
