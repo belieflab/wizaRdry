@@ -59,7 +59,6 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type, verbose = TRUE
             }, error = function(e) {
               duplicates_summary <- toString(base::unique(df_duplicates[[identifier]]))
               message(paste("Error in testing for duplicates in '", measure_alias, "': ", e$message,
-                            "\nOffending IDs: ", duplicates_summary,
                             "\nDetails exported to ", paste0("./tmp/",duplicate_extract,".csv")))
             })
 

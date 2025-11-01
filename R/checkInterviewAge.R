@@ -64,7 +64,7 @@ checkInterviewAge <- function(measure_alias) {
       )
     })
   }, error = function(e) {
-    message("The following subjects have out of range ages:",rows_not_meeting_condition, e$message)
+    #message("The following subjects have out of range ages:",rows_not_meeting_condition, e$message)
   })
   }
 }
