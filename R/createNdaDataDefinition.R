@@ -125,130 +125,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     return("")
   }
 
-  # Helper function to compare two value ranges and detect if they differ
-  # Returns TRUE if the ranges differ, FALSE if they're the same
-  value_ranges_differ <- function(range1, range2) {
-    # Handle empty ranges
-    if ((is.null(range1) || range1 == "" || is.na(range1)) &&
-        (is.null(range2) || range2 == "" || is.na(range2))) {
-      return(FALSE)
-    }
-    if ((is.null(range1) || range1 == "" || is.na(range1)) ||
-        (is.null(range2) || range2 == "" || is.na(range2))) {
-      return(TRUE)
-    }
-
-    range1 <- trimws(as.character(range1))
-    range2 <- trimws(as.character(range2))
-
-    # If identical, no difference
-    if (identical(range1, range2)) {
-      return(FALSE)
-    }
-
-    # Parse both ranges to extract numeric ranges and codes
-    parse_range <- function(r) {
-      if (is.null(r) || r == "" || is.na(r)) {
-        return(list(numeric_ranges = list(), codes = character(0)))
-      }
-      parts <- trimws(strsplit(r, ";")[[1]])
-      numeric_ranges <- list()
-      codes <- character(0)
-      
-      for (part in parts) {
-        if (grepl("::", part)) {
-          # Extract numeric range
-          range_parts <- strsplit(part, "::")[[1]]
-          if (length(range_parts) == 2) {
-            min_val <- suppressWarnings(as.numeric(trimws(range_parts[1])))
-            max_val <- suppressWarnings(as.numeric(trimws(range_parts[2])))
-            if (!is.na(min_val) && !is.na(max_val)) {
-              numeric_ranges <- c(numeric_ranges, list(list(min = min_val, max = max_val)))
-            }
-          }
-        } else {
-          # Extract individual code
-          code <- trimws(part)
-          if (code != "") {
-            codes <- c(codes, code)
-          }
-        }
-      }
-      return(list(numeric_ranges = numeric_ranges, codes = codes))
-    }
-
-    parsed1 <- parse_range(range1)
-    parsed2 <- parse_range(range2)
-
-    # Convert discrete codes to range if they form a continuous sequence
-    # This handles cases like "1;2;3;4;5;6" vs "1::6"
-    convert_codes_to_range <- function(codes) {
-      numeric_codes <- suppressWarnings(as.numeric(codes))
-      numeric_codes <- numeric_codes[!is.na(numeric_codes)]
-      if (length(numeric_codes) > 0) {
-        sorted_codes <- sort(unique(numeric_codes))
-        # Check if codes form a continuous sequence from min to max
-        if (length(sorted_codes) > 1 && all(diff(sorted_codes) == 1)) {
-          return(list(min = min(sorted_codes), max = max(sorted_codes)))
-        }
-      }
-      return(NULL)
-    }
-
-    # If one has a range and the other has codes, try to convert codes to range
-    if (length(parsed1$numeric_ranges) > 0 && length(parsed2$numeric_ranges) == 0 && length(parsed2$codes) > 0) {
-      converted_range2 <- convert_codes_to_range(parsed2$codes)
-      if (!is.null(converted_range2)) {
-        r1 <- parsed1$numeric_ranges[[1]]
-        if (r1$min != converted_range2$min || r1$max != converted_range2$max) {
-          return(TRUE)
-        }
-        # Ranges match, now compare remaining codes (non-continuous ones)
-        remaining_codes2 <- setdiff(parsed2$codes, as.character(seq(converted_range2$min, converted_range2$max)))
-        if (length(remaining_codes2) != length(parsed1$codes) || any(sort(remaining_codes2) != sort(parsed1$codes))) {
-          return(TRUE)
-        }
-        return(FALSE)
-      }
-    }
-    if (length(parsed2$numeric_ranges) > 0 && length(parsed1$numeric_ranges) == 0 && length(parsed1$codes) > 0) {
-      converted_range1 <- convert_codes_to_range(parsed1$codes)
-      if (!is.null(converted_range1)) {
-        r2 <- parsed2$numeric_ranges[[1]]
-        if (r2$min != converted_range1$min || r2$max != converted_range1$max) {
-          return(TRUE)
-        }
-        # Ranges match, now compare remaining codes (non-continuous ones)
-        remaining_codes1 <- setdiff(parsed1$codes, as.character(seq(converted_range1$min, converted_range1$max)))
-        if (length(remaining_codes1) != length(parsed2$codes) || any(sort(remaining_codes1) != sort(parsed2$codes))) {
-          return(TRUE)
-        }
-        return(FALSE)
-      }
-    }
-
-    # Compare numeric ranges
-    if (length(parsed1$numeric_ranges) != length(parsed2$numeric_ranges)) {
-      return(TRUE)
-    }
-    for (i in seq_along(parsed1$numeric_ranges)) {
-      r1 <- parsed1$numeric_ranges[[i]]
-      r2 <- parsed2$numeric_ranges[[i]]
-      if (is.null(r1) || is.null(r2) || r1$min != r2$min || r1$max != r2$max) {
-        return(TRUE)
-      }
-    }
-
-    # Compare codes (order doesn't matter, but set difference does)
-    codes1_set <- sort(unique(parsed1$codes))
-    codes2_set <- sort(unique(parsed2$codes))
-    if (length(codes1_set) != length(codes2_set) || any(codes1_set != codes2_set)) {
-      return(TRUE)
-    }
-
-    return(FALSE)
-  }
-
   # Helper: clean HTML breaks from labels
   rc_clean_label <- function(x) {
     if (is.null(x) || is.na(x)) return("")
@@ -858,24 +734,15 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
             # Check if this field has actual modifications
             is_modified <- FALSE
 
-            field_data <- data_frame[[field]]
-            field_type <- if ("type" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$type else "String"
-            original_value_range <- if ("valueRange" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$valueRange else ""
-
-            # Check for value range differences (e.g., 1::6 vs 1::8)
-            if (field_type %in% c("Integer", "Float")) {
-              # Compute value range from actual data
-              computed_value_range <- infer_value_range_from_data(field_data, field_type)
-              
-              # Compare computed range with NDA range
-              if (value_ranges_differ(original_value_range, computed_value_range)) {
-                is_modified <- TRUE
-              }
-            }
-
             # Check for missing value code modifications
-            if (!is.null(missing_data_codes) && !is_modified) {
+            if (!is.null(missing_data_codes)) {
+              field_data <- data_frame[[field]]
+              field_type <- if ("type" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$type else "String"
+
               if (field_type %in% c("Integer", "Float")) {
+                # Check if field has missing value codes not in original NDA range
+                original_value_range <- if ("valueRange" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$valueRange else ""
+
                 # Detect missing value codes in the data
                 user_defined_codes <- character(0)
                 for (category in names(missing_data_codes)) {
@@ -991,12 +858,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
   # Persist NDA element names for downstream export/formatting without relying on outer scope
   data_definition$metadata$nda_element_names <- names(nda_lookup)
-  
-  # Store nda_structure in metadata for use in export functions
-  # This avoids R CMD check notes about undefined global variables
-  if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
-    data_definition$metadata$nda_structure <- nda_structure
-  }
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -1037,99 +898,66 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       if (column_name %in% ndar_subject01_fields) {
         # Force ndar_subject01 fields to remain unchanged
         is_modified_structure <- FALSE
-      } else if (field_exists_in_data) {
+      } else if (field_exists_in_data && !is.null(missing_data_codes)) {
         original_value_range <- if ("valueRange" %in% names(nda_field)) nda_field$valueRange else ""
         field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
 
-        # Check for value range differences first (e.g., 1::6 vs 1::8)
+        # Only check numeric fields for missing value codes
         if (field_type %in% c("Integer", "Float")) {
-          # Compute value range from actual data
-          computed_value_range <- infer_value_range_from_data(field_data, field_type)
-          
-          # Compare computed range with NDA range
-          if (value_ranges_differ(original_value_range, computed_value_range)) {
-            is_modified_structure <- TRUE
-            
-            # Extract missing codes from original range to preserve them
-            preserved_codes <- character(0)
+          # Detect missing value codes in the data
+          user_defined_codes <- character(0)
+          for (category in names(missing_data_codes)) {
+            if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+              category_values <- missing_data_codes[[category]]
+              if (is.character(category_values) || is.numeric(category_values)) {
+                for (code in category_values) {
+                  if (as.numeric(code) %in% field_data) {
+                    user_defined_codes <- c(user_defined_codes, as.character(code))
+                  }
+                }
+              }
+            }
+          }
+
+          # Check if any of these codes are not in the original value range
+          if (length(user_defined_codes) > 0) {
+            original_codes <- character(0)
             if (original_value_range != "") {
+              # Parse original value range to extract individual codes
               range_parts <- trimws(strsplit(original_value_range, ";")[[1]])
               for (part in range_parts) {
-                if (!grepl("::", part)) {  # Missing codes are not ranges
-                  preserved_codes <- c(preserved_codes, part)
+                if (!grepl("::", part)) {  # Skip range notation
+                  original_codes <- c(original_codes, part)
                 }
               }
             }
-            
-            # Combine computed range with preserved missing codes
-            if (length(preserved_codes) > 0) {
-              updated_value_range <- paste0(computed_value_range, ";", paste(preserved_codes, collapse = ";"))
-            } else {
-              updated_value_range <- computed_value_range
-            }
-            modification_notes <- "Modified structure: Value range updated"
-          }
-        }
 
-        # Check for missing value code modifications (only if not already modified)
-        if (!is_modified_structure && !is.null(missing_data_codes)) {
-          # Only check numeric fields for missing value codes
-          if (field_type %in% c("Integer", "Float")) {
-            # Detect missing value codes in the data
-            user_defined_codes <- character(0)
-            for (category in names(missing_data_codes)) {
-              if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
-                category_values <- missing_data_codes[[category]]
-                if (is.character(category_values) || is.numeric(category_values)) {
-                  for (code in category_values) {
-                    if (as.numeric(code) %in% field_data) {
-                      user_defined_codes <- c(user_defined_codes, as.character(code))
+            # Find new codes that aren't in the original
+            new_codes <- setdiff(user_defined_codes, original_codes)
+            if (length(new_codes) > 0) {
+              is_modified_structure <- TRUE
+
+              # Create updated value range
+              if (original_value_range == "") {
+                updated_value_range <- paste(new_codes, collapse = ";")
+              } else {
+                updated_value_range <- paste0(original_value_range, ";", paste(new_codes, collapse = ";"))
+              }
+
+              # Create modification notes
+              code_descriptions <- character(0)
+              for (code in new_codes) {
+                for (category in names(missing_data_codes)) {
+                  if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
+                    category_values <- missing_data_codes[[category]]
+                    if (as.numeric(code) %in% category_values) {
+                      code_descriptions <- c(code_descriptions, paste0(code, " = ", category))
+                      break
                     }
                   }
                 }
               }
-            }
-
-            # Check if any of these codes are not in the original value range
-            if (length(user_defined_codes) > 0) {
-              original_codes <- character(0)
-              if (original_value_range != "") {
-                # Parse original value range to extract individual codes
-                range_parts <- trimws(strsplit(original_value_range, ";")[[1]])
-                for (part in range_parts) {
-                  if (!grepl("::", part)) {  # Skip range notation
-                    original_codes <- c(original_codes, part)
-                  }
-                }
-              }
-
-              # Find new codes that aren't in the original
-              new_codes <- setdiff(user_defined_codes, original_codes)
-              if (length(new_codes) > 0) {
-                is_modified_structure <- TRUE
-
-                # Create updated value range
-                if (original_value_range == "") {
-                  updated_value_range <- paste(new_codes, collapse = ";")
-                } else {
-                  updated_value_range <- paste0(original_value_range, ";", paste(new_codes, collapse = ";"))
-                }
-
-                # Create modification notes
-                code_descriptions <- character(0)
-                for (code in new_codes) {
-                  for (category in names(missing_data_codes)) {
-                    if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
-                      category_values <- missing_data_codes[[category]]
-                      if (as.numeric(code) %in% category_values) {
-                        code_descriptions <- c(code_descriptions, paste0(code, " = ", category))
-                        break
-                      }
-                    }
-                  }
-                }
-                modification_notes <- paste0("Modified structure: Added missing value codes: ", paste(code_descriptions, collapse = ", "))
-              }
+              modification_notes <- paste0("Modified structure: Added missing value codes: ", paste(code_descriptions, collapse = ", "))
             }
           }
         }
@@ -1255,197 +1083,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       )
 
     } else {
-      # Field not found in nda_lookup - check if it exists in NDA structure or API
-      # This handles cases where field exists in NDA but wasn't in the initial lookup
-      nda_field <- NULL
-      
-      # First, check if field exists in nda_structure but wasn't in nda_lookup
-      if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
-        if (is.data.frame(nda_structure$dataElements)) {
-          nda_elem <- nda_structure$dataElements[nda_structure$dataElements$name == column_name, ]
-          if (nrow(nda_elem) > 0) {
-            nda_field <- as.list(nda_elem[1, ])
-          }
-        }
-      }
-      
-      # If still not found, try API lookup (cached)
-      if (is.null(nda_field)) {
-        base_url <- "https://nda.nih.gov/api/datadictionary/v2/dataelement/"
-        url <- paste0(base_url, utils::URLencode(column_name, reserved = TRUE))
-        try({
-          resp <- httr::GET(url, httr::timeout(8))
-          if (httr::status_code(resp) == 200) {
-            raw <- rawToChar(resp$content)
-            if (nzchar(raw)) {
-              api_result <- tryCatch(jsonlite::fromJSON(raw), error = function(e) NULL)
-              if (!is.null(api_result) && "name" %in% names(api_result)) {
-                nda_field <- as.list(api_result)
-              }
-            }
-          }
-        }, silent = TRUE)
-      }
-      
-      # If field exists in NDA, process it as an NDA field (possibly modified)
-      if (!is.null(nda_field)) {
-        # Field found in NDA - process similar to fields in nda_lookup
-        # Get missing value information
-        missing_info <- NULL
-        field_data <- NULL
-        field_exists_in_data <- FALSE
-
-        if (!is.null(data_frame) && column_name %in% names(data_frame)) {
-          field_data <- data_frame[[column_name]]
-          field_exists_in_data <- TRUE
-          total_count <- length(field_data)
-          missing_count <- sum(is.na(field_data))
-          missing_percentage <- round((missing_count / total_count) * 100, 1)
-
-          missing_info <- list(
-            missing_count = missing_count,
-            missing_percentage = missing_percentage,
-            total_count = total_count
-          )
-        }
-
-        # Check if this field has modifications
-        is_modified_structure <- FALSE
-        updated_value_range <- NULL
-        modification_notes <- NULL
-
-        if (field_exists_in_data) {
-          original_value_range <- if ("valueRange" %in% names(nda_field)) nda_field$valueRange else ""
-          field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
-
-          # Check for value range differences first (e.g., 1::6 vs 1::8)
-          if (field_type %in% c("Integer", "Float")) {
-            # Compute value range from actual data
-            computed_value_range <- infer_value_range_from_data(field_data, field_type)
-            
-            # Compare computed range with NDA range
-            if (value_ranges_differ(original_value_range, computed_value_range)) {
-              is_modified_structure <- TRUE
-              
-              # Extract missing codes from original range to preserve them
-              preserved_codes <- character(0)
-              if (original_value_range != "") {
-                range_parts <- trimws(strsplit(original_value_range, ";")[[1]])
-                for (part in range_parts) {
-                  if (!grepl("::", part)) {
-                    preserved_codes <- c(preserved_codes, part)
-                  }
-                }
-              }
-              
-              # Combine computed range with preserved missing codes
-              if (length(preserved_codes) > 0) {
-                updated_value_range <- paste0(computed_value_range, ";", paste(preserved_codes, collapse = ";"))
-              } else {
-                updated_value_range <- computed_value_range
-              }
-              modification_notes <- "Modified structure: Value range updated"
-            }
-          }
-
-          # Check for missing value code modifications
-          if (!is_modified_structure && !is.null(missing_data_codes)) {
-            if (field_type %in% c("Integer", "Float")) {
-              user_defined_codes <- character(0)
-              for (category in names(missing_data_codes)) {
-                if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
-                  category_values <- missing_data_codes[[category]]
-                  if (is.character(category_values) || is.numeric(category_values)) {
-                    for (code in category_values) {
-                      if (as.numeric(code) %in% field_data) {
-                        user_defined_codes <- c(user_defined_codes, as.character(code))
-                      }
-                    }
-                  }
-                }
-              }
-
-              if (length(user_defined_codes) > 0) {
-                original_codes <- character(0)
-                if (original_value_range != "") {
-                  range_parts <- trimws(strsplit(original_value_range, ";")[[1]])
-                  for (part in range_parts) {
-                    if (!grepl("::", part)) {
-                      original_codes <- c(original_codes, part)
-                    }
-                  }
-                }
-
-                new_codes <- setdiff(user_defined_codes, original_codes)
-                if (length(new_codes) > 0) {
-                  is_modified_structure <- TRUE
-                  if (original_value_range == "") {
-                    updated_value_range <- paste(new_codes, collapse = ";")
-                  } else {
-                    updated_value_range <- paste0(original_value_range, ";", paste(new_codes, collapse = ";"))
-                  }
-                  code_descriptions <- character(0)
-                  for (code in new_codes) {
-                    for (category in names(missing_data_codes)) {
-                      if (category != "required" && category != "types" && category != "aliases" && category != "allow_custom") {
-                        category_values <- missing_data_codes[[category]]
-                        if (as.numeric(code) %in% category_values) {
-                          code_descriptions <- c(code_descriptions, paste0(code, " = ", category))
-                          break
-                        }
-                      }
-                    }
-                  }
-                  modification_notes <- paste0("Modified structure: Added missing value codes: ", paste(code_descriptions, collapse = ", "))
-                }
-              }
-            }
-          }
-        }
-
-        # Determine source
-        if (is_modified_structure) {
-          source <- "nda_modified"
-          modified_nda_metadata <- nda_field
-          modified_nda_metadata$valueRange <- updated_value_range
-          nda_metadata_to_use <- modified_nda_metadata
-          data_definition$metadata$validation_summary$modified_fields <-
-            (data_definition$metadata$validation_summary$modified_fields %||% 0) + 1
-        } else {
-          source <- "nda_validated"
-          nda_metadata_to_use <- nda_field
-          data_definition$metadata$validation_summary$matched_fields <-
-            data_definition$metadata$validation_summary$matched_fields + 1
-        }
-
-        # Use NDA description
-        fallback_desc <- if ("description" %in% names(nda_field)) nda_field$description else ""
-
-        data_definition$fields[[column_name]] <- list(
-          name = column_name,
-          selection_order = i,
-          selected_for_submission = TRUE,
-          source = source,
-          data_type = if ("type" %in% names(nda_field)) nda_field$type else "unknown",
-          description = fallback_desc,
-          required = if ("required" %in% names(nda_field)) as.logical(nda_field$required) else FALSE,
-          validation_rules = list(
-            min_value = if ("minimum" %in% names(nda_field)) nda_field$minimum else NULL,
-            max_value = if ("maximum" %in% names(nda_field)) nda_field$maximum else NULL,
-            allowed_values = if (is_modified_structure) updated_value_range else (if ("valueRange" %in% names(nda_field)) nda_field$valueRange else NULL),
-            pattern = if ("pattern" %in% names(nda_field)) nda_field$pattern else NULL
-          ),
-          nda_metadata = nda_metadata_to_use,
-          missing_info = missing_info,
-          is_modified = is_modified_structure,
-          modification_notes = modification_notes
-        )
-        
-        # Skip to next field since we've processed it as NDA field
-        next
-      }
-      
       # Field not found in NDA structure - compute metadata from data
+
       # Get data for this column if data frame is available
       column_data <- NULL
       field_exists_in_data <- FALSE
@@ -2316,97 +1955,12 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              if (length(idx_modified) > 0 && length(valueCols) > 0) {
                # Yellow highlight on ValueRange and Notes cells
                openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
-               # Make the ValueRange cell text red for modified elements (entire cell)
+               # Additionally make the ValueRange cell text red for modified elements
                vr_col_only <- which(colnames(fields_df) == "ValueRange")
                if (length(vr_col_only) == 1) {
                  openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
                }
                applied_yellow[idx_modified] <- TRUE
-               
-               # Prepare rich text edits for modified fields (for Notes column)
-               notes_col <- which(colnames(fields_df) == "Notes")
-               vr_col <- which(colnames(fields_df) == "ValueRange")
-               for (i in idx_modified) {
-                 fname <- field_names[i]
-                 x <- data_definition$fields[[fname]]
-                 
-                 # Get original and current Notes to identify new parts
-                 original_notes <- ""
-                 current_notes <- ""
-                 
-                 # Try to get original NDA notes
-                 if (!is.null(x$nda_metadata) && "notes" %in% names(x$nda_metadata)) {
-                   current_notes <- as.character(x$nda_metadata$notes %||% "")
-                   # Check if we can get original notes from data_definition metadata
-                   nda_structure <- data_definition$metadata$nda_structure
-                   if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
-                     nda_elem <- nda_structure$dataElements[nda_structure$dataElements$name == fname, ]
-                     if (nrow(nda_elem) > 0 && "notes" %in% names(nda_elem)) {
-                       original_notes <- as.character(nda_elem$notes[1] %||% "")
-                     }
-                   }
-                 }
-                 
-                 # If original notes are empty, try to fetch from NDA API
-                 if (original_notes == "" && element_is_in_nda[i]) {
-                   el <- element_names[i]
-                   nda_meta <- nda_fetch_element(el)
-                   if (!is.null(nda_meta) && "notes" %in% names(nda_meta)) {
-                     original_notes <- as.character(nda_meta$notes %||% "")
-                   }
-                 }
-                 
-                 # Parse Notes to identify new parts
-                 if (nzchar(current_notes) && nzchar(original_notes)) {
-                   # Split notes by semicolon to get individual code=description pairs
-                   current_parts <- trimws(strsplit(current_notes, ";")[[1]])
-                   original_parts <- trimws(strsplit(original_notes, ";")[[1]])
-                   
-                   # Extract code from each part (format: "code=description")
-                   get_code <- function(part) {
-                     if (grepl("=", part)) {
-                       return(trimws(strsplit(part, "=")[[1]][1]))
-                     }
-                     return(part)
-                   }
-                   
-                   current_codes <- vapply(current_parts, get_code, character(1))
-                   original_codes <- vapply(original_parts, get_code, character(1))
-                   
-                   # Find new parts (codes not in original)
-                   new_parts <- current_parts[!current_codes %in% original_codes]
-                   
-                   if (length(new_parts) > 0 && length(notes_col) == 1) {
-                     # Build rich text for Notes: existing parts in black, new parts in red
-                     tokens <- current_parts
-                     token_is_added <- !current_codes %in% original_codes
-                     
-                     rich_text_edits[[length(rich_text_edits) + 1]] <- list(
-                       row = i + 1,
-                       vr_col = if (length(vr_col) == 1) vr_col else NA_integer_,
-                       notes_col = notes_col,
-                       tokens = tokens,
-                       token_is_added = token_is_added,
-                       added_tokens = new_parts,
-                       is_value_range_mod = TRUE  # Flag to indicate this is a value range modification
-                     )
-                   }
-                 } else if (nzchar(current_notes) && original_notes == "") {
-                   # If no original notes but current notes exist, mark all as new
-                   current_parts <- trimws(strsplit(current_notes, ";")[[1]])
-                   if (length(current_parts) > 0 && length(notes_col) == 1) {
-                     rich_text_edits[[length(rich_text_edits) + 1]] <- list(
-                       row = i + 1,
-                       vr_col = if (length(vr_col) == 1) vr_col else NA_integer_,
-                       notes_col = notes_col,
-                       tokens = current_parts,
-                       token_is_added = rep(TRUE, length(current_parts)),
-                       added_tokens = current_parts,
-                       is_value_range_mod = TRUE
-                     )
-                   }
-                 }
-               }
              }
 
              # Yellow + red text on ValueRange for NDA elements whose exported ValueRange extends beyond NDA-allowed values
@@ -2562,35 +2116,15 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                 dims <- paste0(num_to_col(edit$vr_col), edit$row)
                 wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
               }
-              # Notes rich text - handle both token_is_added (new) and added_tokens (legacy) approaches
-              if (!is.na(edit$notes_col)) {
+              # Notes rich text
+              if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
                 runs2 <- list()
-                # Use token_is_added if available (more precise - handles all tokens)
-                if (length(edit$tokens) > 0 && length(edit$token_is_added) > 0 && 
-                    length(edit$tokens) == length(edit$token_is_added)) {
-                  # Process all tokens with color based on token_is_added flag
-                  for (ti in seq_along(edit$tokens)) {
-                    tok <- edit$tokens[ti]
-                    col <- if (edit$token_is_added[ti]) "FF0000" else "000000"
-                    runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = tok, color = col)
-                    if (ti < length(edit$tokens)) {
-                      runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
-                    }
-                  }
-                } else if (length(edit$added_tokens) > 0) {
-                  # Legacy approach: only highlight added tokens
-                  # First, we need to reconstruct the full notes text with proper formatting
-                  # This is a fallback for cases where token_is_added is not available
-                  for (j in seq_along(edit$added_tokens)) {
-                    runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
-                    if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
-                  }
+                for (j in seq_along(edit$added_tokens)) {
+                  runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
+                  if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
                 }
-                
-                if (length(runs2) > 0) {
-                  dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
-                  wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
-                }
+                dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
               }
             }
             openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
