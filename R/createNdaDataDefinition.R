@@ -401,6 +401,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   } else if (is.list(selected_columns) && all(sapply(selected_columns, is.character))) {
     selected_columns <- unlist(selected_columns)
   }
+  
+  # Exclude REDCap completion fields (e.g., "impact_demo_complete")
+  # These are REDCap-specific and should not be included in NDA data definitions
+  selected_columns <- selected_columns[!grepl("_complete$", selected_columns)]
 
   # Extract NDA data elements
   nda_elements <- NULL
@@ -864,6 +868,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     column_name <- ordered_columns[i]
     # Skip internal/excluded fields unconditionally
     if (column_name %in% excluded_from_change) next
+    # Skip REDCap completion fields (ending with "_complete")
+    if (grepl("_complete$", column_name)) next
 
     # Check if column exists in NDA structure
     if (column_name %in% names(nda_lookup)) {
@@ -1417,8 +1423,17 @@ exportDataDefinition <- function(data_definition, format = "csv") {
          "csv" = {
            # Flatten the fields for CSV export with exact NDA column names and case
            field_names <- names(data_definition$fields)
+           # Ensure field_names is a character vector
+           if (is.null(field_names)) {
+             field_names <- character(0)
+           }
+           if (!is.character(field_names)) {
+             field_names <- as.character(field_names)
+           }
            # Filter out excluded fields from final export
            field_names <- setdiff(field_names, excluded_internal)
+           # Also exclude REDCap completion fields (ending with "_complete")
+           field_names <- field_names[!grepl("_complete$", field_names)]
 
            if (length(field_names) == 0) {
              warning("No fields to export")
@@ -1546,15 +1561,39 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              })
 
              # Curator notes to summarize changes
+             # Check if field exists in NDA to avoid marking existing fields as "New field"
+             nda_element_names <- data_definition$metadata$nda_element_names
+             if (is.null(nda_element_names) || !is.character(nda_element_names) || length(nda_element_names) == 0) {
+               nda_element_names <- character(0)
+             }
+             # Ensure field_names is a character vector
+             if (is.null(field_names) || !is.character(field_names)) {
+               field_names <- character(0)
+             }
              curator_notes <- sapply(field_names, function(fname) {
+               if (is.null(fname) || !is.character(fname) || length(fname) != 1) {
+                 return("")
+               }
                x <- data_definition$fields[[fname]]
+               if (is.null(x)) return("")
                parts <- character(0)
+               # Check if field exists in NDA (ensure both are character vectors)
+               exists_in_nda <- if (is.character(fname) && is.character(nda_element_names) && length(fname) == 1) {
+                 fname %in% nda_element_names
+               } else {
+                 FALSE
+               }
                # Source summary
                if (!is.null(x$source)) {
                  if (identical(x$source, "computed_from_data")) {
-                   parts <- c(parts, "New field (not in NDA)")
+                   # If field exists in NDA but was marked as computed, it's likely a modified value range
+                   if (exists_in_nda || isTRUE(x$is_modified)) {
+                     parts <- c(parts, "Modified value range")
+                   } else {
+                     parts <- c(parts, "New field (not in NDA)")
+                   }
                  } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
-                   parts <- c(parts, "Modified NDA field (valueRange updated)")
+                   parts <- c(parts, "Modified value range")
                  } else if (identical(x$source, "template_only")) {
                    parts <- c(parts, "In template only; no data observed")
                  } else if (identical(x$source, "nda_validated")) {
@@ -1563,7 +1602,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                }
                # Required status
                reqFlag <- NULL
-               if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+               if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
                  reqFlag <- x$nda_metadata$required
                } else if (!is.null(x$required)) {
                  reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
@@ -1642,7 +1681,16 @@ exportDataDefinition <- function(data_definition, format = "csv") {
 
            # Reuse the same field assembly as CSV branch
            field_names <- names(data_definition$fields)
+           # Ensure field_names is a character vector
+           if (is.null(field_names)) {
+             field_names <- character(0)
+           }
+           if (!is.character(field_names)) {
+             field_names <- as.character(field_names)
+           }
            field_names <- setdiff(field_names, excluded_internal)
+           # Also exclude REDCap completion fields (ending with "_complete")
+           field_names <- field_names[!grepl("_complete$", field_names)]
            if (length(field_names) == 0) {
              warning("No fields to export")
              return(invisible(NULL))
@@ -1743,14 +1791,38 @@ exportDataDefinition <- function(data_definition, format = "csv") {
            })
 
            # Curator notes to summarize changes (mirror CSV branch)
+           # Check if field exists in NDA to avoid marking existing fields as "New field"
+           nda_element_names <- data_definition$metadata$nda_element_names
+           if (is.null(nda_element_names) || !is.character(nda_element_names) || length(nda_element_names) == 0) {
+             nda_element_names <- character(0)
+           }
+           # Ensure field_names is a character vector
+           if (is.null(field_names) || !is.character(field_names)) {
+             field_names <- character(0)
+           }
            curator_notes <- sapply(field_names, function(fname) {
+             if (is.null(fname) || !is.character(fname) || length(fname) != 1) {
+               return("")
+             }
              x <- data_definition$fields[[fname]]
+             if (is.null(x)) return("")
              parts <- character(0)
+             # Check if field exists in NDA (ensure both are character vectors)
+             exists_in_nda <- if (is.character(fname) && is.character(nda_element_names) && length(fname) == 1) {
+               fname %in% nda_element_names
+             } else {
+               FALSE
+             }
              if (!is.null(x$source)) {
                if (identical(x$source, "computed_from_data")) {
-                 parts <- c(parts, "New field (not in NDA)")
+                 # If field exists in NDA but was marked as computed, it's likely a modified value range
+                 if (exists_in_nda || isTRUE(x$is_modified)) {
+                   parts <- c(parts, "Modified value range")
+                 } else {
+                   parts <- c(parts, "New field (not in NDA)")
+                 }
                } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
-                 parts <- c(parts, "Modified NDA field (valueRange updated)")
+                 parts <- c(parts, "Modified value range")
                } else if (identical(x$source, "template_only")) {
                  parts <- c(parts, "In template only; no data observed")
                } else if (identical(x$source, "nda_validated")) {
@@ -1758,7 +1830,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                }
              }
              reqFlag <- NULL
-             if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+             if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
                reqFlag <- x$nda_metadata$required
              } else if (!is.null(x$required)) {
                reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
@@ -2029,6 +2101,11 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                   )
                   applied_yellow[i] <- TRUE
                   nda_range_mismatch[i] <- TRUE
+                  # Update curator notes to "Modified value range" for fields with mismatches
+                  notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+                  if (length(notes_col) == 1) {
+                    openxlsx::writeData(wb, "Data Definitions", "Modified value range", startRow = i + 1, startCol = notes_col, colNames = FALSE)
+                  }
                 }
               }
               cat("Value range comparison complete.\n")
