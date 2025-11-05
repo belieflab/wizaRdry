@@ -1844,10 +1844,14 @@ exportDataDefinition <- function(data_definition, format = "csv") {
             # Collect rich text edits to apply post-save via openxlsx2
             rich_text_edits <- list()
 
-             # Determine whether each element exists in NDA by lookup retained in metadata,
-             # falling back to NDA API element search when not found locally
-             nda_element_names <- data_definition$metadata$nda_element_names %||% character(0)
-             in_local_nda <- element_names %in% nda_element_names
+            # Determine whether each element exists in NDA by lookup retained in metadata,
+            # falling back to NDA API element search when not found locally
+            nda_element_names <- data_definition$metadata$nda_element_names
+            # Ensure nda_element_names is a character vector
+            if (is.null(nda_element_names) || !is.character(nda_element_names)) {
+              nda_element_names <- character(0)
+            }
+            in_local_nda <- element_names %in% nda_element_names
 
              # Cached API checker to minimize network calls
              .nda_exists_cache <- new.env(parent = emptyenv())
