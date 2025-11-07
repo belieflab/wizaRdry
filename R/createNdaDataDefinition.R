@@ -1,5 +1,5 @@
 #' @noRd
-createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL) {
+createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL, interactive_mode = interactive()) {
 
   # Try to get the data frame from the global environment if not provided
   if (is.null(data_frame)) {
@@ -405,6 +405,125 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # Exclude REDCap completion fields (e.g., "impact_demo_complete")
   # These are REDCap-specific and should not be included in NDA data definitions
   selected_columns <- selected_columns[!grepl("_complete$", selected_columns)]
+
+  # Check for required fields from ndar_subject01 that exist in the structure
+  # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
+  super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+  
+  # Get structure field names once for reuse
+  structure_field_names <- character(0)
+  if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
+    structure_field_names <- if (is.data.frame(nda_structure$dataElements)) {
+      nda_structure$dataElements$name
+    } else {
+      character(0)
+    }
+    
+    # Automatically include super-required fields if they exist in the structure and are not already selected
+    missing_super_required <- setdiff(
+      intersect(super_required_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_super_required) > 0) {
+      selected_columns <- c(selected_columns, missing_super_required)
+      if (interactive_mode) {
+        message(sprintf("\nAutomatically including super-required fields: %s", 
+                       paste(missing_super_required, collapse = ", ")))
+      }
+    }
+    
+    # Get required fields from ndar_subject01 that exist in the current structure
+    ndar_required_in_structure <- character(0)
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            ndar_required <- subject_structure$dataElements[
+              subject_structure$dataElements$required == "Required", 
+            ]
+            if (nrow(ndar_required) > 0) {
+              ndar_required_names <- ndar_required$name
+              # Get required fields that exist in structure but are not super-required
+              ndar_required_in_structure <- setdiff(
+                intersect(ndar_required_names, structure_field_names),
+                super_required_fields
+              )
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      # Silently fail if API call fails
+    })
+  } else {
+    ndar_required_in_structure <- character(0)
+  }
+  
+  # In interactive mode, prompt user to include other required fields that exist in structure
+  if (interactive_mode && length(ndar_required_in_structure) > 0) {
+    # Check which ones are not already in selected_columns
+    missing_required_in_structure <- setdiff(ndar_required_in_structure, selected_columns)
+    
+    if (length(missing_required_in_structure) > 0) {
+      message("\nThe following NDA required fields exist in this structure but are not currently selected:")
+      message(paste("  ", paste(missing_required_in_structure, collapse = ", ")))
+      
+      # Helper function for safe readline
+      safe_readline <- function(prompt, default = "") {
+        if (!interactive()) return(default)
+        result <- tryCatch({
+          readline(prompt = prompt)
+        }, error = function(e) default)
+        if (is.null(result) || result == "") default else result
+      }
+      
+      user_input <- safe_readline(
+        prompt = sprintf("Would you like to include these %d required field(s)? (y/n): ", 
+                         length(missing_required_in_structure)),
+        default = "y"
+      )
+      
+      # Validate input
+      while (!tolower(user_input) %in% c("y", "n", "yes", "no")) {
+        user_input <- safe_readline(
+          prompt = "Please enter 'y' for yes or 'n' for no: ",
+          default = "y"
+        )
+      }
+      
+      if (tolower(user_input) %in% c("y", "yes")) {
+        selected_columns <- c(selected_columns, missing_required_in_structure)
+        message(sprintf("Added %d required field(s) to selected columns.", 
+                       length(missing_required_in_structure)))
+      } else {
+        message("Skipping required fields. Note: These fields may be needed for NDA submission.")
+      }
+    }
+  }
+  
+  # Filter selected_columns to only include fields that exist in the current structure
+  # This ensures we don't include required fields from ndar_subject01 that aren't in this structure
+  # BUT only do this for existing (non-modified) structures, not for new structures
+  # Check if this is an existing structure by seeing if we have NDA lookup data
+  is_existing_structure <- length(structure_field_names) > 0 && 
+                          !is.null(nda_structure) && 
+                          "dataElements" %in% names(nda_structure) &&
+                          (is.data.frame(nda_structure$dataElements) && nrow(nda_structure$dataElements) > 0)
+  
+  if (is_existing_structure) {
+    # Only keep selected columns that are in the current structure
+    removed <- setdiff(selected_columns, structure_field_names)
+    selected_columns <- intersect(selected_columns, structure_field_names)
+    if (interactive_mode && length(removed) > 0) {
+      message(sprintf("Removed %d field(s) not in current structure: %s", 
+                     length(removed), paste(removed, collapse = ", ")))
+    }
+  }
 
   # Extract NDA data elements
   nda_elements <- NULL

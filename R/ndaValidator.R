@@ -2157,16 +2157,19 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     # Check for unknown fields
     results$unknown_fields <- setdiff(df_cols, valid_fields)
     if(length(results$unknown_fields) > 0) {
-      # Automatically identify and drop .1 fields that correspond to renamed fields
+      # Automatically identify and drop .1 fields that correspond to renamed/standardized fields
+      # If a .1 field exists and its base name (without .1) also exists in the dataframe,
+      # it means the base field is present and the .1 is an old pre-transformed version that should be dropped
       old_transformed_fields <- results$unknown_fields[grepl("\\.\\d+$", results$unknown_fields)]
       fields_to_auto_drop <- character(0)
       
-      if(length(old_transformed_fields) > 0 && length(renamed_fields) > 0) {
+      if(length(old_transformed_fields) > 0) {
         for(old_field in old_transformed_fields) {
           # Extract base name by removing .1, .2, etc. suffix
           base_name <- sub("\\.\\d+$", "", old_field)
-          # Check if this base name was renamed
-          if(base_name %in% renamed_fields) {
+          # Drop .1 field if base name exists in dataframe (meaning the field was renamed/standardized)
+          # This covers all cases: explicitly renamed fields, standardized fields, etc.
+          if(base_name %in% df_cols) {
             fields_to_auto_drop <- c(fields_to_auto_drop, old_field)
           }
         }
@@ -2333,6 +2336,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         # Update column names after dropping fields
         df_cols <- names(df)
+        }
       } else {
         if(verbose) cat("\nKeeping unknown fields in the dataset")
 
