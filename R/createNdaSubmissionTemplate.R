@@ -113,6 +113,31 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
     template <- df
   }
 
+  # Drop old pre-transformed fields (ending with .1, .2, etc.) that correspond to renamed fields
+  # These are old versions of fields that were renamed during validation
+  template_cols <- names(template)
+  old_transformed_fields <- template_cols[grepl("\\.\\d+$", template_cols)]
+  
+  if (length(old_transformed_fields) > 0) {
+    fields_to_drop <- character(0)
+    for (old_field in old_transformed_fields) {
+      # Extract base name by removing .1, .2, etc. suffix
+      base_name <- sub("\\.\\d+$", "", old_field)
+      # Check if the base name (without suffix) exists in the template
+      if (base_name %in% template_cols) {
+        # This is an old version of a renamed field - drop it
+        fields_to_drop <- c(fields_to_drop, old_field)
+      }
+    }
+    
+    if (length(fields_to_drop) > 0) {
+      template <- template[, !names(template) %in% fields_to_drop, drop = FALSE]
+      message(sprintf("Dropped %d old pre-transformed field(s): %s", 
+                     length(fields_to_drop), paste(fields_to_drop, collapse = ", ")))
+      template_cols <- names(template)  # Update after dropping
+    }
+  }
+
   # Define fields to exclude from submission templates
   excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
   

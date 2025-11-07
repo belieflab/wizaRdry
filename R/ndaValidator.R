@@ -1495,6 +1495,17 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
             # Use [[ ]] to safely handle special characters in field names
             field_data <- df[[field]]
             df[[best_match]] <- field_data
+            
+            # Automatically drop .1 version of the renamed field if it exists
+            old_field_with_suffix <- paste0(field, ".1")
+            if(old_field_with_suffix %in% names(df)) {
+              df <- df[, !names(df) %in% old_field_with_suffix, drop = FALSE]
+              if(verbose) {
+                message(sprintf("Auto-dropped old pre-transformed field: '%s'\n", old_field_with_suffix))
+              }
+              renamed$columns_to_drop <- c(renamed$columns_to_drop, old_field_with_suffix)
+            }
+            
             # Track rename
             renamed$renamed_fields <- c(renamed$renamed_fields, field)
             renamed$renames <- c(renamed$renames,
@@ -1654,6 +1665,17 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                     }
                     field_data <- df[[field]]
                     df[[selected_match]] <- field_data
+                    
+                    # Automatically drop .1 version of the renamed field if it exists
+                    old_field_with_suffix <- paste0(field, ".1")
+                    if(old_field_with_suffix %in% names(df)) {
+                      df <- df[, !names(df) %in% old_field_with_suffix, drop = FALSE]
+                      if(verbose) {
+                        message(sprintf("Auto-dropped old pre-transformed field: '%s'\n", old_field_with_suffix))
+                      }
+                      renamed$columns_to_drop <- c(renamed$columns_to_drop, old_field_with_suffix)
+                    }
+                    
                     # Track rename
                     renamed$renamed_fields <- c(renamed$renamed_fields, field)
                     renamed$renames <- c(renamed$renames,
@@ -1682,6 +1704,17 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                 # Use [[ ]] to safely handle special characters in field names
                 field_data <- df[[field]]
                 df[[selected_match]] <- field_data
+                
+                # Automatically drop .1 version of the renamed field if it exists
+                old_field_with_suffix <- paste0(field, ".1")
+                if(old_field_with_suffix %in% names(df)) {
+                  df <- df[, !names(df) %in% old_field_with_suffix, drop = FALSE]
+                  if(verbose) {
+                    message(sprintf("Auto-dropped old pre-transformed field: '%s'\n", old_field_with_suffix))
+                  }
+                  renamed$columns_to_drop <- c(renamed$columns_to_drop, old_field_with_suffix)
+                }
+                
                 # Track rename
                 renamed$renamed_fields <- c(renamed$renamed_fields, field)
                 renamed$renames <- c(renamed$renames,
@@ -2090,7 +2123,8 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                                auto_drop_unknown = FALSE,
                                missing_required_fields = character(0),
                                interactive_mode = TRUE,
-                               collect_only = FALSE) {
+                               collect_only = FALSE,
+                               renamed_fields = character(0)) {
   if(verbose) cat("\nValidating data structure...")
 
   results <- list(
@@ -2123,12 +2157,67 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     # Check for unknown fields
     results$unknown_fields <- setdiff(df_cols, valid_fields)
     if(length(results$unknown_fields) > 0) {
-      if(verbose) {
-        cat("\n\nUnknown fields detected:")
-        cat(sprintf("\n  %s", paste(results$unknown_fields, collapse=", ")))
+      # Automatically identify and drop .1 fields that correspond to renamed fields
+      old_transformed_fields <- results$unknown_fields[grepl("\\.\\d+$", results$unknown_fields)]
+      fields_to_auto_drop <- character(0)
+      
+      if(length(old_transformed_fields) > 0 && length(renamed_fields) > 0) {
+        for(old_field in old_transformed_fields) {
+          # Extract base name by removing .1, .2, etc. suffix
+          base_name <- sub("\\.\\d+$", "", old_field)
+          # Check if this base name was renamed
+          if(base_name %in% renamed_fields) {
+            fields_to_auto_drop <- c(fields_to_auto_drop, old_field)
+          }
+        }
       }
+      
+      # Auto-drop .1 fields that correspond to renamed fields
+      if(length(fields_to_auto_drop) > 0) {
+        if(verbose) {
+          cat("\n\nAuto-dropping old pre-transformed fields (from renamed fields):")
+          cat(sprintf("\n  %s", paste(fields_to_auto_drop, collapse=", ")))
+        }
+        
+        # Track which fields were auto-dropped
+        results$unknown_fields_dropped <- c(results$unknown_fields_dropped, fields_to_auto_drop)
+        
+        # Drop the old transformed fields
+        df <- df[, !names(df) %in% fields_to_auto_drop, drop = FALSE]
+        
+        # Update the dataframe in the appropriate environment
+        env_to_use <- NULL
+        calling_env <- parent.frame(2)
+        
+        if(exists(measure_name, envir = calling_env)) {
+          env_to_use <- calling_env
+        } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
+          env_to_use <- .wizaRdry_env
+        }
+        
+        if(!is.null(env_to_use)) {
+          assign(measure_name, df, envir = env_to_use)
+        }
+        
+        if(verbose) {
+          cat("\nDropped old pre-transformed data fields automatically")
+        }
+        
+        # Update column names after dropping fields
+        df_cols <- names(df)
+        
+        # Remove auto-dropped fields from unknown fields list
+        results$unknown_fields <- setdiff(results$unknown_fields, fields_to_auto_drop)
+      }
+      
+      # Handle remaining unknown fields (prompt if interactive, or use auto_drop_unknown setting)
+      if(length(results$unknown_fields) > 0) {
+        if(verbose) {
+          cat("\n\nUnknown fields detected:")
+          cat(sprintf("\n  %s", paste(results$unknown_fields, collapse=", ")))
+        }
 
-      drop_fields <- FALSE
+        drop_fields <- FALSE
       if(interactive_mode) {
         # Prompt user for confirmation
         user_input <- safe_readline(prompt = "Do you want to drop these unknown fields? (y/n): ",
@@ -3472,7 +3561,8 @@ ndaValidator <- function(measure_name,
                                              auto_drop_unknown = auto_drop_unknown,
                                              missing_required_fields = missing_required_fields,
                                              interactive_mode = interactive_mode,
-                                             collect_only = TRUE)  # Don't update script yet
+                                             collect_only = TRUE,  # Don't update script yet
+                                             renamed_fields = renamed_results$renamed_fields)  # Pass renamed fields
 
     # Add the unknown fields that were identified during validation
     # BUT exclude fields that were successfully renamed
