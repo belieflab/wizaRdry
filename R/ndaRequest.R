@@ -1103,8 +1103,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     # if (DEBUG) message("[DEBUG] Creating NDA template")
     # createNdaSubmissionTemplate(measure)
 
-    # Create data definition
-    if (DEBUG) message("[DEBUG] Creating NDA data definition")
+    # Create data definition ONLY for new or modified structures
+    # Existing unmodified structures should only have submission templates, not data definitions
+    if (DEBUG) message("[DEBUG] Checking if data definition is needed")
     tryCatch({
       df <- base::get0(measure)
       if (!is.null(df) && is.data.frame(df) &&
@@ -1114,8 +1115,50 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         nda_structure <- attr(validation_results, "nda_structure")
 
         if (!is.null(nda_structure)) {
-          submission_template <- list(columns = names(df))
-          createNdaDataDefinition(submission_template, nda_structure, measure)
+          # Check if this is a new structure (bypassed validation)
+          is_new_structure <- isTRUE(validation_results$bypassed_validation)
+          
+          # For existing structures, check if there are modifications
+          # Only create data definition if structure has new fields or modified value ranges
+          is_modified_structure <- FALSE
+          if (!is_new_structure && "dataElements" %in% names(nda_structure)) {
+            structure_field_names <- if (is.data.frame(nda_structure$dataElements)) {
+              nda_structure$dataElements$name
+            } else {
+              character(0)
+            }
+            df_field_names <- names(df)
+            
+            # Check for new fields (not in structure)
+            new_fields <- setdiff(df_field_names, structure_field_names)
+            # Exclude REDCap completion fields and super-required fields from new field check
+            new_fields <- new_fields[!grepl("_complete$", new_fields)]
+            super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+            new_fields <- setdiff(new_fields, super_required_fields)
+            
+            if (length(new_fields) > 0) {
+              is_modified_structure <- TRUE
+              if (DEBUG) message(sprintf("[DEBUG] Found %d new field(s): %s", 
+                                        length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+            }
+            
+            # Note: Value range modifications are complex to detect without full data processing
+            # If no new fields found, we assume unmodified (existing structure)
+            # User can manually trigger data definition if value ranges were modified
+          }
+          
+          # Only create data definition for new or modified structures
+          if (is_new_structure) {
+            message("Creating data definition for new structure")
+            submission_template <- list(columns = names(df))
+            createNdaDataDefinition(submission_template, nda_structure, measure)
+          } else if (is_modified_structure) {
+            message("Creating data definition for modified structure (new fields detected)")
+            submission_template <- list(columns = names(df))
+            createNdaDataDefinition(submission_template, nda_structure, measure)
+          } else {
+            message("Skipping data definition creation - existing unmodified structure (only submission template created)")
+          }
         } else {
           message("NDA structure not available from validation results")
         }

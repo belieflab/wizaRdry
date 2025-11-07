@@ -511,27 +511,61 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   
   # Filter selected_columns to only include fields that exist in the current structure
   # This ensures we don't include required fields from ndar_subject01 that aren't in this structure
-  # BUT only filter out fields that were added by the prompt and don't exist in structure
-  # Preserve all originally selected columns (they may be new/modified fields)
+  # ALWAYS filter: only include fields that exist in structure (except super-required)
+  # This applies to both existing and new/modified structures
   if (length(structure_field_names) > 0 && 
       !is.null(nda_structure) && 
       "dataElements" %in% names(nda_structure) &&
       (is.data.frame(nda_structure$dataElements) && nrow(nda_structure$dataElements) > 0)) {
     
-    # Find fields that were added by the prompt (not in original selection)
+    # Check if this is a new/modified structure (has fields not in structure in original selection)
+    has_new_or_modified_fields <- any(!original_selected_columns %in% structure_field_names)
+    
+    # Get list of required fields from ndar_subject01 (for filtering logic)
+    ndar_required_all <- character(0)
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            ndar_required <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
+            if (nrow(ndar_required) > 0) {
+              ndar_required_all <- ndar_required$name
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      # Silently fail
+    })
+    
+    # Track which fields were added via the prompt (for filtering logic)
     fields_added_by_prompt <- setdiff(selected_columns, original_selected_columns)
     
-    # Of those, find ones that don't exist in the structure
-    fields_to_remove <- setdiff(fields_added_by_prompt, structure_field_names)
+    # Always keep all original fields (they're in the user's data)
+    fields_to_keep <- original_selected_columns
     
-    # Only remove non-super-required fields that were added by prompt and don't exist in structure
-    # Super-required fields should stay even if added by prompt (they're always needed)
-    fields_to_remove <- setdiff(fields_to_remove, super_required_fields)
+    # Add super-required fields (even if not in structure)
+    super_required_in_selected <- intersect(selected_columns, super_required_fields)
+    fields_to_keep <- unique(c(fields_to_keep, super_required_in_selected))
+    
+    # For fields added by prompt: only keep them if they exist in structure (or are super-required)
+    if (length(fields_added_by_prompt) > 0) {
+      prompt_fields_in_structure <- intersect(fields_added_by_prompt, structure_field_names)
+      prompt_fields_super_required <- intersect(fields_added_by_prompt, super_required_fields)
+      fields_to_keep <- unique(c(fields_to_keep, prompt_fields_in_structure, prompt_fields_super_required))
+    }
+    
+    fields_to_remove <- setdiff(selected_columns, fields_to_keep)
     
     if (length(fields_to_remove) > 0) {
-      selected_columns <- setdiff(selected_columns, fields_to_remove)
+      selected_columns <- fields_to_keep
       if (interactive_mode) {
-        message(sprintf("Removed %d required field(s) not in current structure: %s", 
+        message(sprintf("Removed %d field(s) not in current structure: %s", 
                        length(fields_to_remove), paste(fields_to_remove, collapse = ", ")))
       }
     }
@@ -939,10 +973,17 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     new_fields <- setdiff(selected_columns, excluded_from_change)
   }
 
-  # Include fields that are new, modified, OR essential NDA fields
-  # Essential NDA fields are always included even if unchanged
-  essential_fields <- intersect(selected_columns, essential_nda_fields)
-  ordered_columns <- c(new_fields, modified_fields, essential_fields)
+  # Include fields that are new, modified, OR selected unchanged fields
+  # Only include fields that were explicitly selected (not all essential_nda_fields)
+  # The selected_columns already contains only the fields the user wants
+  ordered_columns <- c(new_fields, modified_fields)
+  
+  # Add any remaining selected columns that are unchanged NDA fields
+  # (but only if they're in selected_columns - user explicitly selected them)
+  unchanged_selected <- intersect(unchanged_fields, selected_columns)
+  if (length(unchanged_selected) > 0) {
+    ordered_columns <- c(ordered_columns, unchanged_selected)
+  }
 
   # Ensure we don't drop any selected columns: append remaining ones and de-duplicate
   remaining_columns <- setdiff(selected_columns, ordered_columns)
@@ -960,9 +1001,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     message(sprintf("Including %d modified fields in data definition: %s",
                     length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
   }
-  if (length(essential_fields) > 0) {
-    message(sprintf("Including %d essential NDA fields in data definition: %s",
-                    length(essential_fields), paste(head(essential_fields, 5), collapse = ", ")))
+  if (length(unchanged_selected) > 0) {
+    message(sprintf("Including %d unchanged NDA fields in data definition: %s",
+                    length(unchanged_selected), paste(head(unchanged_selected, 5), collapse = ", ")))
   }
   if (length(unchanged_fields) > 0) {
     message(sprintf("Excluding %d unchanged NDA fields from data definition: %s",
