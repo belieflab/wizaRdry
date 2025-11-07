@@ -406,6 +406,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   # These are REDCap-specific and should not be included in NDA data definitions
   selected_columns <- selected_columns[!grepl("_complete$", selected_columns)]
 
+  # Store original selected_columns before any modifications (for filtering logic later)
+  original_selected_columns <- selected_columns
+
   # Check for required fields from ndar_subject01 that exist in the structure
   # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
   super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
@@ -508,20 +511,29 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   
   # Filter selected_columns to only include fields that exist in the current structure
   # This ensures we don't include required fields from ndar_subject01 that aren't in this structure
-  # BUT only do this for existing (non-modified) structures, not for new structures
-  # Check if this is an existing structure by seeing if we have NDA lookup data
-  is_existing_structure <- length(structure_field_names) > 0 && 
-                          !is.null(nda_structure) && 
-                          "dataElements" %in% names(nda_structure) &&
-                          (is.data.frame(nda_structure$dataElements) && nrow(nda_structure$dataElements) > 0)
-  
-  if (is_existing_structure) {
-    # Only keep selected columns that are in the current structure
-    removed <- setdiff(selected_columns, structure_field_names)
-    selected_columns <- intersect(selected_columns, structure_field_names)
-    if (interactive_mode && length(removed) > 0) {
-      message(sprintf("Removed %d field(s) not in current structure: %s", 
-                     length(removed), paste(removed, collapse = ", ")))
+  # BUT only filter out fields that were added by the prompt and don't exist in structure
+  # Preserve all originally selected columns (they may be new/modified fields)
+  if (length(structure_field_names) > 0 && 
+      !is.null(nda_structure) && 
+      "dataElements" %in% names(nda_structure) &&
+      (is.data.frame(nda_structure$dataElements) && nrow(nda_structure$dataElements) > 0)) {
+    
+    # Find fields that were added by the prompt (not in original selection)
+    fields_added_by_prompt <- setdiff(selected_columns, original_selected_columns)
+    
+    # Of those, find ones that don't exist in the structure
+    fields_to_remove <- setdiff(fields_added_by_prompt, structure_field_names)
+    
+    # Only remove non-super-required fields that were added by prompt and don't exist in structure
+    # Super-required fields should stay even if added by prompt (they're always needed)
+    fields_to_remove <- setdiff(fields_to_remove, super_required_fields)
+    
+    if (length(fields_to_remove) > 0) {
+      selected_columns <- setdiff(selected_columns, fields_to_remove)
+      if (interactive_mode) {
+        message(sprintf("Removed %d required field(s) not in current structure: %s", 
+                       length(fields_to_remove), paste(fields_to_remove, collapse = ", ")))
+      }
     }
   }
 
