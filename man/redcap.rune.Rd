@@ -6,7 +6,6 @@
 \usage{
 redcap.rune(
   instrument_name,
-  prefix = NULL,
   raw_or_label = "raw",
   redcap_event_name = NULL,
   batch_size = 1000,
@@ -20,8 +19,6 @@ redcap.rune(
 }
 \arguments{
 \item{instrument_name}{Name of the REDCap instrument}
-
-\item{prefix}{Character string; default NULL, if specified returns only the dataframe with this prefix}
 
 \item{raw_or_label}{Whether to return raw or labeled values}
 
@@ -42,8 +39,7 @@ redcap.rune(
 \item{lower}{default TRUE convert prefixes to lower case}
 }
 \value{
-If prefix is specified, returns a single dataframe with that prefix. Otherwise,
-creates multiple dataframes in the parent environment, one for each survey
+Creates multiple dataframes in the parent environment, one for each survey
 detected in the data. Each dataframe is named after its survey prefix.
 }
 \description{

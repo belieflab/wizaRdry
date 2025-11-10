@@ -6,18 +6,14 @@
 \usage{
 qualtrics.rune(
   qualtrics_alias,
-  prefix = NULL,
   institution = NULL,
   label = FALSE,
   interview_date = NULL,
-  complete = FALSE,
   lower = TRUE
 )
 }
 \arguments{
 \item{qualtrics_alias}{Character string specifying the Qualtrics survey alias to retrieve.}
-
-\item{prefix}{Character string; default NULL, if specified returns only the dataframe with this prefix}
 
 \item{institution}{Character string; default NULL, specify location}
 
@@ -25,13 +21,10 @@ qualtrics.rune(
 
 \item{interview_date}{Logical or Date String, returns all data before date}
 
-\item{complete}{Logical; default FALSE, if TRUE only returns rows where Progress == 100}
-
 \item{lower}{default TRUE convert prefixes to lower case}
 }
 \value{
-If prefix is specified, returns a single dataframe with that prefix. Otherwise,
-creates multiple dataframes in the global environment, one for each survey
+Creates multiple dataframes in the global environment, one for each survey
 detected in the data. Each dataframe is named after its survey prefix.
 }
 \description{
