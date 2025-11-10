@@ -125,6 +125,8 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
     }
   }
 
+  names(output) <- tolower(survey_prefixes)
+
   # If prefix is specified, return only that dataframe
   if (!is.null(prefix)) {
     # Normalize prefix to match the output list keys (lowercase)
@@ -267,6 +269,8 @@ mongo.rune <- function(collection, prefix = NULL, db_name = NULL, lower = TRUE )
     }
   }
 
+  names(output) <- tolower(survey_prefixes)
+
   # If prefix is specified, return only that dataframe
   if (!is.null(prefix)) {
     # Normalize prefix to match the output list keys (lowercase)
@@ -394,6 +398,12 @@ redcap.rune <- function(instrument_name, prefix = NULL, raw_or_label = "raw",
         output[[prefix]] <- subset_df
       }
     }
+  }
+
+  if (lower) {
+    names(output) <- tolower(survey_prefixes)
+  } else {
+    names(output) <- survey_prefixes
   }
 
   # If prefix is specified, return only that dataframe
