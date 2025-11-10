@@ -6,15 +6,13 @@
 #' and splits the data based on column name prefixes.
 #'
 #' @param qualtrics_alias Character string specifying the Qualtrics survey alias to retrieve.
-#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param institution Character string; default NULL, specify location
 #' @param label Logical; default TRUE, returns coded values as labels instead of raw values.
 #' @param interview_date Logical or Date String, returns all data before date
 #' @param complete Logical; default FALSE, if TRUE only returns rows where Progress == 100
 #' @param lower default TRUE convert prefixes to lower case
 #'
-#' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
-#'   creates multiple dataframes in the global environment, one for each survey
+#' @return Creates multiple dataframes in the global environment, one for each survey
 #'   detected in the data. Each dataframe is named after its survey prefix.
 #'
 #' @details
@@ -39,7 +37,7 @@
 #'
 #' @importFrom dplyr filter select
 #' @export
-qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, label = FALSE, interview_date = NULL, complete = FALSE, lower = TRUE){
+qualtrics.rune <- function(qualtrics_alias, institution = NULL, label = FALSE, interview_date = NULL, lower = TRUE){
 
   df <- qualtrics(qualtrics_alias, institution = institution, label = label, interview_date = interview_date, complete = complete)
 
@@ -127,17 +125,6 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
 
   names(output) <- tolower(survey_prefixes)
 
-  # If prefix is specified, return only that dataframe
-  if (!is.null(prefix)) {
-    # Normalize prefix to match the output list keys (lowercase)
-    prefix_key <- if (lower) tolower(prefix) else prefix
-    if (prefix_key %in% names(output)) {
-      return(output[[prefix_key]])
-    } else {
-      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
-    }
-  }
-
   # Use parent.frame() instead of globalenv() for CRAN compliance
   list2env(output, parent.frame())
   # Add an explicit return of invisible(NULL) to suppress output
@@ -152,12 +139,10 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
 #' and splits the data based on column name prefixes.
 #'
 #' @param collection Character string specifying the Mongo collection
-#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param db_name Character string specifying the Mongo database
 #' @param lower default TRUE convert prefixes to lower case
 #'
-#' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
-#'   creates multiple dataframes in the global environment, one for each survey
+#' @return Creates multiple dataframes in the global environment, one for each survey
 #'   detected in the data. Each dataframe is named after its survey prefix.
 #'
 #' @details
@@ -182,7 +167,7 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
 #'
 #' @importFrom dplyr filter select
 #' @export
-mongo.rune <- function(collection, prefix = NULL, db_name = NULL, lower = TRUE ){
+mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 
   df <- mongo(collection, db_name)
 
@@ -271,17 +256,6 @@ mongo.rune <- function(collection, prefix = NULL, db_name = NULL, lower = TRUE )
 
   names(output) <- tolower(survey_prefixes)
 
-  # If prefix is specified, return only that dataframe
-  if (!is.null(prefix)) {
-    # Normalize prefix to match the output list keys (lowercase)
-    prefix_key <- if (lower) tolower(prefix) else prefix
-    if (prefix_key %in% names(output)) {
-      return(output[[prefix_key]])
-    } else {
-      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
-    }
-  }
-
   # Use parent.frame() instead of globalenv() for CRAN compliance
   list2env(output, parent.frame())
   # Add an explicit return of invisible(NULL) to suppress output
@@ -295,7 +269,6 @@ mongo.rune <- function(collection, prefix = NULL, db_name = NULL, lower = TRUE )
 #' It identifies the appropriate identifier column and splits the data accordingly.
 #'
 #' @param instrument_name Name of the REDCap instrument
-#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param raw_or_label Whether to return raw or labeled values
 #' @param redcap_event_name Optional event name filter
 #' @param batch_size Number of records to retrieve per batch
@@ -306,12 +279,11 @@ mongo.rune <- function(collection, prefix = NULL, db_name = NULL, lower = TRUE )
 #' @param date_format Default ymd define date format for interview_date
 #' @param lower default TRUE convert prefixes to lower case
 #'
-#' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
-#'   creates multiple dataframes in the parent environment, one for each survey
+#' @return Creates multiple dataframes in the parent environment, one for each survey
 #'   detected in the data. Each dataframe is named after its survey prefix.
 #'
 #' @export
-redcap.rune <- function(instrument_name, prefix = NULL, raw_or_label = "raw",
+redcap.rune <- function(instrument_name, raw_or_label = "raw",
                         redcap_event_name = NULL, batch_size = 1000,
                         records = NULL, fields = NULL, pii = FALSE,
                         interview_date = NULL, date_format = "ymd", lower = TRUE) {
@@ -404,17 +376,6 @@ redcap.rune <- function(instrument_name, prefix = NULL, raw_or_label = "raw",
     names(output) <- tolower(survey_prefixes)
   } else {
     names(output) <- survey_prefixes
-  }
-
-  # If prefix is specified, return only that dataframe
-  if (!is.null(prefix)) {
-    # Normalize prefix to match the output list keys
-    prefix_key <- if (lower) tolower(prefix) else prefix
-    if (prefix_key %in% names(output)) {
-      return(output[[prefix_key]])
-    } else {
-      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
-    }
   }
 
   # Use parent.frame() instead of globalenv() for CRAN compliance
