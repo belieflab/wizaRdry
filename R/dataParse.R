@@ -6,6 +6,7 @@
 #' and splits the data based on column name prefixes.
 #'
 #' @param qualtrics_alias Character string specifying the Qualtrics survey alias to retrieve.
+#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param institution Character string; default NULL, specify location
 #' @param label Logical; default TRUE, returns coded values as labels instead of raw values.
 #' @param interview_date Logical or Date String, returns all data before date
@@ -37,7 +38,7 @@
 #'
 #' @importFrom dplyr filter select
 #' @export
-qualtrics.rune <- function(qualtrics_alias, institution = NULL, label = FALSE, interview_date = NULL, lower = TRUE){
+qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, label = FALSE, interview_date = NULL, complete = FALSE, lower = TRUE){
 
   df <- qualtrics(qualtrics_alias, institution = institution, label = label, interview_date = interview_date, complete = complete)
 

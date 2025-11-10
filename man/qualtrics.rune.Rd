@@ -6,20 +6,26 @@
 \usage{
 qualtrics.rune(
   qualtrics_alias,
+  prefix = NULL,
   institution = NULL,
   label = FALSE,
   interview_date = NULL,
+  complete = FALSE,
   lower = TRUE
 )
 }
 \arguments{
 \item{qualtrics_alias}{Character string specifying the Qualtrics survey alias to retrieve.}
 
+\item{prefix}{Character string; default NULL, if specified returns only the dataframe with this prefix}
+
 \item{institution}{Character string; default NULL, specify location}
 
 \item{label}{Logical; default TRUE, returns coded values as labels instead of raw values.}
 
 \item{interview_date}{Logical or Date String, returns all data before date}
+
+\item{complete}{Logical; default FALSE, if TRUE only returns rows where Progress == 100}
 
 \item{lower}{default TRUE convert prefixes to lower case}
 }
