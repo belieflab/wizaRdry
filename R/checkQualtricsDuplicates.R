@@ -29,11 +29,28 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type, verbose = TRUE
   df <- base::get(output_df_name)
   
   # possible identifiers
-  identifier <- c("src_subject_id", "workerId", "PROLIFIC_PID", "participantId")
+  possible_identifiers <- c("src_subject_id", "workerId", "PROLIFIC_PID", "participantId")
 
   if (measure_type == "qualtrics") {
-    if (!all(identifier %in% colnames(df))) {
+    # Find which identifiers exist in the dataframe
+    existing_identifiers <- possible_identifiers[possible_identifiers %in% colnames(df)]
+    
+    if (length(existing_identifiers) == 0) {
       stop("Please provide valid identifiers: src_subject_id, workerId, PROLIFIC_PID, participantId")
+    }
+    
+    # Find the first identifier with non-NA values
+    identifier <- NA
+    for (key in existing_identifiers) {
+      non_na_count <- sum(!is.na(df[[key]]))
+      if (non_na_count > 0) {
+        identifier <- key
+        break
+      }
+    }
+    
+    if (is.na(identifier)) {
+      stop(paste("No identifier found with non-NA values. Available identifiers:", paste(existing_identifiers, collapse = ", ")))
     }
 
     for (col in c("visit", "week")) {
