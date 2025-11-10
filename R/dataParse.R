@@ -10,6 +10,7 @@
 #' @param institution Character string; default NULL, specify location
 #' @param label Logical; default TRUE, returns coded values as labels instead of raw values.
 #' @param interview_date Logical or Date String, returns all data before date
+#' @param complete Logical; default FALSE, if TRUE only returns rows where Progress == 100
 #' @param lower default TRUE convert prefixes to lower case
 #'
 #' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
@@ -38,9 +39,9 @@
 #'
 #' @importFrom dplyr filter select
 #' @export
-qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, label = FALSE, interview_date = NULL, lower = TRUE){
+qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, label = FALSE, interview_date = NULL, complete = FALSE, lower = TRUE){
 
-  df <- qualtrics(qualtrics_alias, institution, label, interview_date)
+  df <- qualtrics(qualtrics_alias, institution = institution, label = label, interview_date = interview_date, complete = complete)
 
   # Define potential identifiers
   identifiers <- c("participantId", "workerId", "PROLIFIC_PID", "src_subject_id")

@@ -9,6 +9,7 @@
 #' @param interview_date Optional; can be either:
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
+#' @param complete Logical; default FALSE, if TRUE only returns rows where Progress == 100
 #'
 #' @return A cleaned and harmonized data frame containing the survey data with superkeys first.
 #' @importFrom dplyr %>% select mutate
@@ -18,7 +19,7 @@
 #' # Get survey by alias (will search all institutions)
 #' survey_data <- qualtrics("rgpts")
 #' }
-qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, interview_date = NULL) {
+qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, interview_date = NULL, complete = FALSE) {
   # Load necessary source files
 
   # Validate config
@@ -81,6 +82,18 @@ qualtrics <- function(qualtrics_alias, ..., institution = NULL, label = FALSE, i
 
   if (!is.data.frame(df)) {
     stop(paste("fetch_survey did not return a data frame for", qualtrics_alias))
+  }
+
+  # Filter for complete responses if requested
+  if (complete) {
+    if ("Progress" %in% names(df)) {
+      original_rows <- nrow(df)
+      df <- df[df$Progress == 100, ]
+      kept_rows <- nrow(df)
+      message(sprintf("Filtered to complete responses (Progress == 100): kept %d of %d rows.", kept_rows, original_rows))
+    } else {
+      warning("'complete = TRUE' was specified but 'Progress' column not found in data. Returning all rows.")
+    }
   }
 
   # Get identifier from config
