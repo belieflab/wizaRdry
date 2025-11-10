@@ -4,17 +4,20 @@
 \alias{mongo.rune}
 \title{Parse composite MongoDB collection into component data frames by variable prefix}
 \usage{
-mongo.rune(collection, db_name = NULL, lower = TRUE)
+mongo.rune(collection, prefix = NULL, db_name = NULL, lower = TRUE)
 }
 \arguments{
 \item{collection}{Character string specifying the Mongo collection}
+
+\item{prefix}{Character string; default NULL, if specified returns only the dataframe with this prefix}
 
 \item{db_name}{Character string specifying the Mongo database}
 
 \item{lower}{default TRUE convert prefixes to lower case}
 }
 \value{
-Creates multiple dataframes in the global environment, one for each survey
+If prefix is specified, returns a single dataframe with that prefix. Otherwise,
+creates multiple dataframes in the global environment, one for each survey
 detected in the data. Each dataframe is named after its survey prefix.
 }
 \description{
