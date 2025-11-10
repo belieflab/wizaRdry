@@ -113,8 +113,138 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
     template <- df
   }
 
+  # Drop old pre-transformed fields (ending with .1, .2, etc.) that correspond to renamed fields
+  # These are old versions of fields that were renamed during validation
+  template_cols <- names(template)
+  old_transformed_fields <- template_cols[grepl("\\.\\d+$", template_cols)]
+  
+  if (length(old_transformed_fields) > 0) {
+    fields_to_drop <- character(0)
+    for (old_field in old_transformed_fields) {
+      # Extract base name by removing .1, .2, etc. suffix
+      base_name <- sub("\\.\\d+$", "", old_field)
+      # Check if the base name (without suffix) exists in the template
+      if (base_name %in% template_cols) {
+        # This is an old version of a renamed field - drop it
+        fields_to_drop <- c(fields_to_drop, old_field)
+      }
+    }
+    
+    if (length(fields_to_drop) > 0) {
+      template <- template[, !names(template) %in% fields_to_drop, drop = FALSE]
+      message(sprintf("Dropped %d old pre-transformed field(s): %s", 
+                     length(fields_to_drop), paste(fields_to_drop, collapse = ", ")))
+      template_cols <- names(template)  # Update after dropping
+    }
+  }
+
   # Define fields to exclude from submission templates
   excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
+  
+  # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
+  super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+  
+  # Get structure field names to check which required fields exist in this structure
+  structure_field_names <- character(0)
+  ndar_required_in_structure <- character(0)
+  
+  # Try to fetch the structure to see which fields it contains
+  tryCatch({
+    nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+    structure_url <- sprintf("%s/datastructure/%s", nda_base_url, structure_name)
+    structure_response <- httr::GET(structure_url, httr::timeout(10))
+    if (httr::status_code(structure_response) == 200) {
+      raw_content <- rawToChar(structure_response$content)
+      if (nchar(raw_content) > 0) {
+        structure_data <- jsonlite::fromJSON(raw_content)
+        if ("dataElements" %in% names(structure_data)) {
+          structure_field_names <- structure_data$dataElements$name
+        }
+      }
+    }
+  }, error = function(e) {
+    # Silently fail if structure fetch fails
+  })
+  
+  # Get required fields from ndar_subject01 that exist in the current structure
+  if (length(structure_field_names) > 0) {
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+      
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            ndar_required <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
+            if (nrow(ndar_required) > 0) {
+              ndar_required_names <- ndar_required$name
+              # Get required fields that exist in structure but are not super-required
+              ndar_required_in_structure <- setdiff(
+                intersect(ndar_required_names, structure_field_names),
+                super_required_fields
+              )
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      # Silently fail if API call fails
+    })
+  }
+  
+  # Automatically include super-required fields if they exist in structure but not in template
+  missing_super_required <- setdiff(
+    intersect(super_required_fields, structure_field_names),
+    template_cols
+  )
+  
+  if (length(missing_super_required) > 0) {
+    # Add missing super-required fields with NA values
+    for (field in missing_super_required) {
+      template[[field]] <- NA
+    }
+    message(sprintf("\nAutomatically including super-required fields: %s", 
+                   paste(missing_super_required, collapse = ", ")))
+    template_cols <- names(template)  # Update after adding fields
+  }
+  
+  # In interactive mode, prompt user to include other required fields that exist in structure
+  if (interactive() && length(ndar_required_in_structure) > 0) {
+    # Check which ones are not already in template
+    missing_required_in_structure <- setdiff(ndar_required_in_structure, template_cols)
+    
+    if (length(missing_required_in_structure) > 0) {
+      message("\nThe following NDA required fields exist in this structure but are not in the template:")
+      message(paste("  ", paste(missing_required_in_structure, collapse = ", ")))
+      
+      user_input <- readline(
+        prompt = sprintf("Would you like to include these %d required field(s)? (y/n): ", 
+                         length(missing_required_in_structure))
+      )
+      
+      # Validate input
+      while (!tolower(user_input) %in% c("y", "n", "yes", "no")) {
+        user_input <- readline(
+          prompt = "Please enter 'y' for yes or 'n' for no: "
+        )
+      }
+      
+      if (tolower(user_input) %in% c("y", "yes")) {
+        # Add missing required fields with NA values
+        for (field in missing_required_in_structure) {
+          template[[field]] <- NA
+        }
+        message(sprintf("Added %d required field(s) to template.", 
+                       length(missing_required_in_structure)))
+        template_cols <- names(template)  # Update after adding fields
+      } else {
+        message("Skipping required fields. Note: These fields may be needed for NDA submission.")
+      }
+    }
+  }
   
   # Get essential NDA fields dynamically from ndar_subject01 API
   # This ensures we always have the current required elements
@@ -155,24 +285,27 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
   
   # Filter template columns:
   # 1. Remove excluded fields
-  # 2. Include essential NDA fields + other non-excluded fields
-  template_cols <- names(template)
+  # 2. Only include fields that exist in the current structure (if structure was fetched)
+  #    OR all fields if structure couldn't be fetched
   excluded_cols <- template_cols[template_cols %in% excluded_from_template]
-  essential_cols <- template_cols[template_cols %in% essential_nda_fields]
-  other_cols <- template_cols[!template_cols %in% c(excluded_from_template, essential_nda_fields)]
   
-  # Create filtered template with essential fields first, then others
-  filtered_cols <- c(essential_cols, other_cols)
+  # Only filter by structure if we successfully fetched it
+  if (length(structure_field_names) > 0) {
+    # Only include fields that are in the current structure
+    # This ensures we don't include required fields from ndar_subject01 that aren't in this structure
+    filtered_cols <- template_cols[template_cols %in% structure_field_names]
+    filtered_cols <- filtered_cols[!filtered_cols %in% excluded_from_template]
+  } else {
+    # If structure couldn't be fetched, just exclude the excluded fields
+    filtered_cols <- template_cols[!template_cols %in% excluded_from_template]
+  }
+  
   template <- template[, filtered_cols, drop = FALSE]
   
   # Report what was filtered
   if (length(excluded_cols) > 0) {
     message(sprintf("Excluded %d fields from submission template: %s", 
                     length(excluded_cols), paste(excluded_cols, collapse = ", ")))
-  }
-  if (length(essential_cols) > 0) {
-    message(sprintf("Included %d essential NDA fields: %s", 
-                    length(essential_cols), paste(essential_cols, collapse = ", ")))
   }
 
   # Open a connection to overwrite the file

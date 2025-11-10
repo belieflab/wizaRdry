@@ -304,4 +304,3 @@ R package version 0.1.0. https://github.com/belieflab/wizaRdry
 ## License
 
 MIT © [Joshua Kenney](LICENSE.md)
-# Test
