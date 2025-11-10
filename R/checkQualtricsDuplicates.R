@@ -27,12 +27,13 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type, verbose = TRUE
   # Generate the name of the dataframe and get it
   output_df_name <- paste0(measure_alias, "_clean")
   df <- base::get(output_df_name)
-
-  identifier <- "src_subject_id"
+  
+  # possible identifiers
+  identifier <- c("src_subject_id", "workerId", "PROLIFIC_PID", "participantId")
 
   if (measure_type == "qualtrics") {
-    if (!(identifier %in% colnames(df))) {
-      stop("Please provide a valid identifier: src_subject_id, workerId, PROLIFIC_PID")
+    if (!all(identifier %in% colnames(df))) {
+      stop("Please provide valid identifiers: src_subject_id, workerId, PROLIFIC_PID, participantId")
     }
 
     for (col in c("visit", "week")) {
