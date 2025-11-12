@@ -47,23 +47,23 @@ checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variable
   non_nda_cols <- dplyr::setdiff(colnames(df), cols_to_exclude)
 
   # Check naming convention for non-NDA columns
+  actual_non_conform <- non_nda_cols[!grepl(paste0("^", measure_alias, "_"), non_nda_cols)]
+  
+  if (length(actual_non_conform) == 0) {
+    base::cat("Columns have correct naming convention ")
+    return(invisible(TRUE))
+  }
+  
+  # If there are non-conforming columns, show error
+  error_msg <- paste0("SCRIPT ERROR: The following non-NDA columns in '", df_name,
+                      "' do not follow the correct naming convention starting with '", measure_alias, "_':\n",
+                      paste(actual_non_conform, collapse = ", "))
+  
   tryCatch({
     test_that("Check column naming convention", {
-      actual_non_conform <- non_nda_cols[!grepl(paste0("^", measure_alias, "_"), non_nda_cols)]
-      is_conforming <- length(actual_non_conform) == 0
-      
-      if (is_conforming) {
-        base::cat("Columns have correct naming convention ")
-      }
-      
-      expect_true(
-        is_conforming,
-        info = paste0("SCRIPT ERROR: The following non-NDA columns in '", df_name,
-                     "' do not follow the correct naming convention starting with '", measure_alias, "_':\n",
-                     paste(actual_non_conform, collapse = ", "))
-      )
+      expect_true(FALSE, info = error_msg)
     })
   }, error = function(e) {
-    message(e$message)
+    message(error_msg)
   })
 }

@@ -68,17 +68,17 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type, verbose = TRUE
             duplicate_extract <- paste0("duplicates_", measure_alias)
             createCsv(df_duplicates, paste0("duplicates_", measure_alias))
 
+            duplicates_summary <- toString(base::unique(df_duplicates[[identifier]]))
+            error_msg <- paste("DATA ERROR: Duplicates detected in '", measure_alias, "': ",
+                              "Offending IDs: ", duplicates_summary,
+                              "\nDetails exported to ", paste0("./tmp/",duplicate_extract,".csv"))
+            
             tryCatch({
               testthat::test_that("Check for Qualtrics duplicates", {
-                testthat::expect_true(base::nrow(df_duplicates) == 0,
-                                      info = paste("DATA ERROR: Duplicates detected in '", measure_alias, "': ",
-                                                   "Offending IDs: ", toString(base::unique(df_duplicates[[identifier]]))))
+                testthat::expect_true(FALSE, info = error_msg)
               })
             }, error = function(e) {
-              duplicates_summary <- toString(base::unique(df_duplicates[[identifier]]))
-              message(paste("Error in testing for duplicates in '", measure_alias, "': ", e$message,
-                            "\nOffending IDs: ", duplicates_summary,
-                            "\nDetails exported to ", paste0("./tmp/",duplicate_extract,".csv")))
+              message(error_msg)
             })
 
             # Optionally view the offending records in RStudio's data viewer
