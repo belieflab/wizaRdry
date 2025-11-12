@@ -28,12 +28,15 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Parse a Qualtrics export containing multiple surveys
+#' # Parse a a Qualtrics survey into its component dataframes
 #' qualtrics.rune("combined_surveys", label = FALSE)
 #'
 #' # After running, access individual survey dataframes directly:
 #' head(pss)  # Access the PSS survey dataframe
 #' head(cesd) # Access the CESD survey dataframe
+#' 
+#' # Parse a single Qualtrics survey from composite survey
+#' rgpts <- qualtrics.rune("combined_surveys", prefix = "rgpts")
 #' }
 #'
 #' @importFrom dplyr filter select
@@ -105,8 +108,8 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
 
   # Create a list of dataframes, one for each survey
   output = list()
-  for (prefix in survey_prefixes) {
-    survey_specific_columns <- grep(paste0("^", prefix, "_"), names(df), value = TRUE)
+  for (survey_prefix in survey_prefixes) {
+    survey_specific_columns <- grep(paste0("^", survey_prefix, "_"), names(df), value = TRUE)
     if (length(survey_specific_columns) > 0) {
       # Create subset dataframe with identifier, common columns, and survey-specific columns
       all_columns <- c(identifier, common_columns_exist, survey_specific_columns)
@@ -120,11 +123,20 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
       }
 
       # Add to output list with lowercase prefix as key
-      output[[tolower(prefix)]] <- subset_df
+      output[[tolower(survey_prefix)]] <- subset_df
     }
   }
 
-  names(output) <- tolower(survey_prefixes)
+  # If prefix parameter is specified, return only that dataframe
+  if (!is.null(prefix)) {
+    # Normalize prefix to match the output list keys (lowercase)
+    prefix_key <- if (lower) tolower(prefix) else prefix
+    if (prefix_key %in% names(output)) {
+      return(output[[prefix_key]])
+    } else {
+      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
+    }
+  }
 
   # Use parent.frame() instead of globalenv() for CRAN compliance
   list2env(output, parent.frame())
@@ -140,10 +152,12 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
 #' and splits the data based on column name prefixes.
 #'
 #' @param collection Character string specifying the Mongo collection
+#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param db_name Character string specifying the Mongo database
 #' @param lower default TRUE convert prefixes to lower case
 #'
-#' @return Creates multiple dataframes in the global environment, one for each survey
+#' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
+#'   creates multiple dataframes in the global environment, one for each survey
 #'   detected in the data. Each dataframe is named after its survey prefix.
 #'
 #' @details
@@ -158,17 +172,20 @@ qualtrics.rune <- function(qualtrics_alias, prefix = NULL, institution = NULL, l
 #'
 #' @examples
 #' \dontrun{
-#' # Parse a Qualtrics export containing multiple surveys
-#' mongo.rune("combined_surveys", label = FALSE)
+#' # Parse a MongoDB collection into its component dataframes
+#' mongo.rune("combined_surveys")
 #'
 #' # After running, access individual survey dataframes directly:
 #' head(pss)  # Access the PSS survey dataframe
 #' head(cesd) # Access the CESD survey dataframe
+#' 
+#' # Parse a single survey from composite collection
+#' rgpts <- mongo.rune("combined_surveys", prefix = "rgpts")
 #' }
 #'
 #' @importFrom dplyr filter select
 #' @export
-mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
+mongo.rune <- function(collection, prefix = NULL, db_name = NULL, lower = TRUE ){
 
   df <- mongo(collection, db_name)
 
@@ -236,8 +253,8 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 
   # Create a list of dataframes, one for each survey
   output = list()
-  for (prefix in survey_prefixes) {
-    survey_specific_columns <- grep(paste0("^", prefix, "_"), names(df), value = TRUE)
+  for (survey_prefix in survey_prefixes) {
+    survey_specific_columns <- grep(paste0("^", survey_prefix, "_"), names(df), value = TRUE)
     if (length(survey_specific_columns) > 0) {
       # Create subset dataframe with identifier, common columns, and survey-specific columns
       all_columns <- c(identifier, common_columns_exist, survey_specific_columns)
@@ -251,11 +268,20 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
       }
 
       # Add to output list with lowercase prefix as key
-      output[[tolower(prefix)]] <- subset_df
+      output[[tolower(survey_prefix)]] <- subset_df
     }
   }
 
-  names(output) <- tolower(survey_prefixes)
+  # If prefix parameter is specified, return only that dataframe
+  if (!is.null(prefix)) {
+    # Normalize prefix to match the output list keys (lowercase)
+    prefix_key <- if (lower) tolower(prefix) else prefix
+    if (prefix_key %in% names(output)) {
+      return(output[[prefix_key]])
+    } else {
+      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
+    }
+  }
 
   # Use parent.frame() instead of globalenv() for CRAN compliance
   list2env(output, parent.frame())
@@ -270,6 +296,7 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 #' It identifies the appropriate identifier column and splits the data accordingly.
 #'
 #' @param instrument_name Name of the REDCap instrument
+#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param raw_or_label Whether to return raw or labeled values
 #' @param redcap_event_name Optional event name filter
 #' @param batch_size Number of records to retrieve per batch
@@ -280,11 +307,25 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 #' @param date_format Default ymd define date format for interview_date
 #' @param lower default TRUE convert prefixes to lower case
 #'
-#' @return Creates multiple dataframes in the parent environment, one for each survey
+#' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
+#'   creates multiple dataframes in the parent environment, one for each survey
 #'   detected in the data. Each dataframe is named after its survey prefix.
 #'
+#' @examples
+#' \dontrun{
+#' # Parse a REDCap instrument into its component dataframes
+#' redcap.rune("baseline_assessment")
+#'
+#' # After running, access individual survey dataframes directly:
+#' head(pss)  # Access the PSS survey dataframe
+#' head(cesd) # Access the CESD survey dataframe
+#' 
+#' # Parse a single survey from composite instrument
+#' rgpts <- redcap.rune("baseline_assessment", prefix = "rgpts")
+#' }
+#'
 #' @export
-redcap.rune <- function(instrument_name, raw_or_label = "raw",
+redcap.rune <- function(instrument_name, prefix = NULL, raw_or_label = "raw",
                         redcap_event_name = NULL, batch_size = 1000,
                         records = NULL, fields = NULL, pii = FALSE,
                         interview_date = NULL, date_format = "ymd", lower = TRUE) {
@@ -348,8 +389,8 @@ redcap.rune <- function(instrument_name, raw_or_label = "raw",
 
   # Create a list of dataframes, one for each survey
   output = list()
-  for (prefix in survey_prefixes) {
-    survey_specific_columns <- grep(paste0("^", prefix, "_"), names(df), value = TRUE)
+  for (survey_prefix in survey_prefixes) {
+    survey_specific_columns <- grep(paste0("^", survey_prefix, "_"), names(df), value = TRUE)
     if (length(survey_specific_columns) > 0) {
       # Create subset dataframe with identifier, common columns, and survey-specific columns
       all_columns <- c(identifier, common_columns_exist, survey_specific_columns)
@@ -366,17 +407,22 @@ redcap.rune <- function(instrument_name, raw_or_label = "raw",
 
       # Add to output list with lowercase prefix as key if requested
       if (lower) {
-        output[[tolower(prefix)]] <- subset_df
+        output[[tolower(survey_prefix)]] <- subset_df
       } else {
-        output[[prefix]] <- subset_df
+        output[[survey_prefix]] <- subset_df
       }
     }
   }
 
-  if (lower) {
-    names(output) <- tolower(survey_prefixes)
-  } else {
-    names(output) <- survey_prefixes
+  # If prefix parameter is specified, return only that dataframe
+  if (!is.null(prefix)) {
+    # Normalize prefix to match the output list keys
+    prefix_key <- if (lower) tolower(prefix) else prefix
+    if (prefix_key %in% names(output)) {
+      return(output[[prefix_key]])
+    } else {
+      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
+    }
   }
 
   # Use parent.frame() instead of globalenv() for CRAN compliance
@@ -394,9 +440,11 @@ redcap.rune <- function(instrument_name, raw_or_label = "raw",
 #' and splits the data based on column name prefixes.
 #'
 #' @param df a dataframe containing multiple, prefixed measures
+#' @param prefix Character string; default NULL, if specified returns only the dataframe with this prefix
 #' @param lower default TRUE convert prefixes to lower case
 #'
-#' @return Creates multiple dataframes in the global environment, one for each survey
+#' @return If prefix is specified, returns a single dataframe with that prefix. Otherwise,
+#'   creates multiple dataframes in the global environment, one for each survey
 #'   detected in the data. Each dataframe is named after its survey prefix.
 #'
 #' @details
@@ -431,10 +479,13 @@ redcap.rune <- function(instrument_name, raw_or_label = "raw",
 #' # After running, access individual survey dataframes directly:
 #' head(foo)  # Access the foo dataframe
 #' head(bar)  # Access the bar dataframe
+#' 
+#' # Parse a single survey from composite dataframe
+#' foo_df <- rune(combined_df, prefix = "foo")
 #'
 #' @importFrom dplyr filter select
 #' @export
-rune <- function(df, lower = TRUE){
+rune <- function(df, prefix = NULL, lower = TRUE){
 
   # Define potential identifiers
   identifiers <- c("participantId", "workerId", "PROLIFIC_PID", "src_subject_id")
@@ -500,8 +551,8 @@ rune <- function(df, lower = TRUE){
 
   # Create a list of dataframes, one for each survey
   output = list()
-  for (prefix in survey_prefixes) {
-    survey_specific_columns <- grep(paste0("^", prefix, "_"), names(df), value = TRUE)
+  for (survey_prefix in survey_prefixes) {
+    survey_specific_columns <- grep(paste0("^", survey_prefix, "_"), names(df), value = TRUE)
     if (length(survey_specific_columns) > 0) {
       # Create subset dataframe with identifier, common columns, and survey-specific columns
       all_columns <- c(identifier, common_columns_exist, survey_specific_columns)
@@ -515,11 +566,20 @@ rune <- function(df, lower = TRUE){
       }
 
       # Add to output list with lowercase prefix as key
-      output[[tolower(prefix)]] <- subset_df
+      output[[tolower(survey_prefix)]] <- subset_df
     }
   }
 
-  names(output) <- tolower(survey_prefixes)
+  # If prefix parameter is specified, return only that dataframe
+  if (!is.null(prefix)) {
+    # Normalize prefix to match the output list keys (lowercase)
+    prefix_key <- if (lower) tolower(prefix) else prefix
+    if (prefix_key %in% names(output)) {
+      return(output[[prefix_key]])
+    } else {
+      stop(paste("Prefix '", prefix, "' not found. Available prefixes:", paste(names(output), collapse = ", ")))
+    }
+  }
 
   # Use parent.frame() instead of globalenv() for CRAN compliance
   list2env(output, parent.frame())
