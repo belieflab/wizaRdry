@@ -212,6 +212,23 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
     template_cols <- names(template)  # Update after adding fields
   }
   
+  # Automatically include timepoint fields (visit or week) if they exist in structure
+  timepoint_fields <- c("visit", "week")
+  missing_timepoint_fields <- setdiff(
+    intersect(timepoint_fields, structure_field_names),
+    template_cols
+  )
+  
+  if (length(missing_timepoint_fields) > 0) {
+    # Add missing timepoint fields with NA values
+    for (field in missing_timepoint_fields) {
+      template[[field]] <- NA
+    }
+    message(sprintf("Automatically including timepoint fields: %s", 
+                   paste(missing_timepoint_fields, collapse = ", ")))
+    template_cols <- names(template)  # Update after adding fields
+  }
+  
   # In interactive mode, prompt user to include other required fields that exist in structure
   if (interactive() && length(ndar_required_in_structure) > 0) {
     # Check which ones are not already in template

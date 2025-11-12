@@ -435,6 +435,20 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
     
+    # Automatically include timepoint fields (visit or week) if they exist in structure
+    timepoint_fields <- c("visit", "week")
+    missing_timepoint_fields <- setdiff(
+      intersect(timepoint_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_timepoint_fields) > 0) {
+      selected_columns <- c(selected_columns, missing_timepoint_fields)
+      if (interactive_mode) {
+        message(sprintf("Automatically including timepoint fields: %s", 
+                       paste(missing_timepoint_fields, collapse = ", ")))
+      }
+    }
+    
     # Get required fields from ndar_subject01 that exist in the current structure
     ndar_required_in_structure <- character(0)
     tryCatch({
