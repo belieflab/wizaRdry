@@ -34,7 +34,7 @@ checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variable
   }
   
   # Always add identifier to excluded columns
-  cols_to_exclude <- c(cols_to_exclude, identifier)
+  cols_to_exclude <- c(cols_to_exclude, identifier, "interview_date")
   
   # Add measure-specific columns to exclude
   if (measure_type == "qualtrics") {
