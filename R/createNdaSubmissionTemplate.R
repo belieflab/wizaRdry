@@ -142,7 +142,8 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
   excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
   
   # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
-  super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex", "site", "subsiteid", "phenotype", "phenotype_description")
+
   
   # Get structure field names to check which required fields exist in this structure
   structure_field_names <- character(0)

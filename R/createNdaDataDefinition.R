@@ -411,8 +411,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
   # Check for required fields from ndar_subject01 that exist in the structure
   # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
-  super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
-  
+  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex", "site", "subsiteid", "phenotype", "phenotype_description")
+
   # Get structure field names once for reuse
   structure_field_names <- character(0)
   if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
