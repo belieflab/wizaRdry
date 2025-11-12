@@ -2,57 +2,25 @@
 % Please edit documentation in R/getRedcap.R
 \name{getRedcap}
 \alias{getRedcap}
-\title{Alias for 'redcap'}
+\title{Alias for 'redcap' (DEPRECATED)}
 \usage{
-getRedcap(
-  instrument_name = NULL,
-  ...,
-  raw_or_label = "raw",
-  redcap_event_name = NULL,
-  batch_size = 1000,
-  records = NULL,
-  fields = NULL,
-  exclude_pii = TRUE,
-  interview_date = NULL,
-  date_format = "ymd",
-  complete = NULL
-)
+getRedcap(...)
 }
 \arguments{
-\item{instrument_name}{Name of the REDCap instrument}
-
 \item{...}{Optional column names to filter for. Only rows with non-missing values
 in ALL specified columns will be returned. This is useful for filtering
 data to only include complete cases for specific variables of interest.}
-
-\item{raw_or_label}{Whether to return raw or labeled values}
-
-\item{redcap_event_name}{Optional event name filter}
-
-\item{batch_size}{Number of records to retrieve per batch}
-
-\item{records}{Optional vector of specific record IDs}
-
-\item{fields}{Optional vector of specific fields}
-
-\item{exclude_pii}{Default TRUE remove all fields marked as identifiable}
-
-\item{interview_date}{Optional; can be either:
-- A date string in various formats (ISO, US, etc.) to filter data up to that date
-- A boolean TRUE to return only rows with non-NA interview_date values}
-
-\item{date_format}{Default ymd define date format for interview_date}
-
-\item{complete}{Option boolean TRUE will return only forms marked as complete in REDCap}
 }
 \value{
 A data frame containing the requested REDCap data
 }
 \description{
+This function is deprecated. Please use 'redcap' instead.
 This is a legacy alias for the 'redcap' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use redcap() instead
 survey_data <- getRedcap("demographics")
 }
 }

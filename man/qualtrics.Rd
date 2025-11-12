@@ -9,7 +9,8 @@ qualtrics(
   ...,
   institution = NULL,
   label = FALSE,
-  interview_date = NULL
+  interview_date = NULL,
+  complete = FALSE
 )
 }
 \arguments{
@@ -26,6 +27,8 @@ data to only include complete cases for specific variables of interest.}
 \item{interview_date}{Optional; can be either:
 - A date string in various formats (ISO, US, etc.) to filter data up to that date
 - A boolean TRUE to return only rows with non-NA interview_date values}
+
+\item{complete}{Logical; default FALSE, if TRUE only returns rows where Progress == 100}
 }
 \value{
 A cleaned and harmonized data frame containing the survey data with superkeys first.

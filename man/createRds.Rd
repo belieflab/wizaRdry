@@ -2,32 +2,24 @@
 % Please edit documentation in R/createRda.R
 \name{createRds}
 \alias{createRds}
-\title{Alias for 'to.rds'}
+\title{Alias for 'to.rds' (DEPRECATED)}
 \usage{
-createRds(df, df_name = NULL, path = ".", skip_prompt = TRUE)
+createRds(...)
 }
 \arguments{
-\item{df}{Data frame to be exported to RDS format.}
-
-\item{df_name}{Optional; a custom file name for the saved RDS file.
-If not provided, the name of the data frame variable is used.
-The function adds the ".rds" extension automatically.}
-
-\item{path}{Character string specifying the directory path where the "tmp" folder
-and RDS file should be created. Defaults to the current working directory.}
-
-\item{skip_prompt}{Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
-will prompt for confirmation unless the user has previously chosen to remember their preference.}
+\item{...}{Additional arguments passed through to \code{to.rds()}.}
 }
 \value{
 Invisible TRUE if successful. The function writes an RDS file to the specified path
 and prints a message indicating the file's location.
 }
 \description{
+This function is deprecated. Please use 'to.rds' instead.
 This is a legacy alias for the 'to.rds' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
+# DEPRECATED - use to.rds() instead
 createRds(prl01)
 }
 }

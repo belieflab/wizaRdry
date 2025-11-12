@@ -2,30 +2,23 @@
 % Please edit documentation in R/dataRequest.R
 \name{dataRequest}
 \alias{dataRequest}
-\title{Alias for 'clean'}
+\title{Alias for 'clean' (DEPRECATED)}
 \usage{
-dataRequest(..., csv = FALSE, rdata = FALSE, spss = FALSE, skip_prompt = TRUE)
+dataRequest(...)
 }
 \arguments{
 \item{...}{Strings, specifying the measures to process, which can be a Mongo collection, REDCap instrument, or Qualtrics survey.}
-
-\item{csv}{Optional; Boolean, if TRUE creates a .csv extract in ./tmp.}
-
-\item{rdata}{Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.}
-
-\item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp.}
-
-\item{skip_prompt}{Logical. If TRUE (default), skips confirmation prompts. If FALSE,
-prompts for confirmation unless the user has previously chosen to remember their preference.}
 }
 \value{
 Prints the time taken for the data request process.
 }
 \description{
+This function is deprecated. Please use 'clean' instead.
 This is a legacy alias for the 'clean' function to maintain compatibility with older code.
 }
 \examples{
 \dontrun{
-prl <- clean("prl")
+# DEPRECATED - use clean() instead
+prl <- dataRequest("prl")
 }
 }

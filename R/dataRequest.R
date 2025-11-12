@@ -422,8 +422,9 @@ disconnectMongo <- function(mongo) {
   }
 }
 
-#' Alias for 'clean'
+#' Alias for 'clean' (DEPRECATED)
 #'
+#' This function is deprecated. Please use 'clean' instead.
 #' This is a legacy alias for the 'clean' function to maintain compatibility with older code.
 #'
 #' @inheritParams clean
@@ -431,6 +432,10 @@ disconnectMongo <- function(mongo) {
 #' @export
 #' @examples
 #' \dontrun{
-#' prl <- clean("prl")
+#' # DEPRECATED - use clean() instead
+#' prl <- dataRequest("prl")
 #' }
-dataRequest <- clean
+dataRequest <- function(...) {
+  .Deprecated("clean", package = "wizaRdry")
+  clean(...)
+}

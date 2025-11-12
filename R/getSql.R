@@ -13,7 +13,7 @@
 #' @param max_rows Optional limit on the number of rows to return
 #' @param date_format Optional format for date fields (default uses ISO format)
 #' @param batch_size Number of records to retrieve per batch for large datasets
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @param interview_date Optional; can be either:
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
@@ -36,7 +36,7 @@
 #' }
 sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                 join_primary_keys = TRUE, custom_query = NULL, max_rows = NULL,
-                date_format = NULL, batch_size = 1000, exclude_pii = TRUE,
+                date_format = NULL, batch_size = 1000, pii = FALSE,
                 interview_date = NULL, all = FALSE) {
   # Check if required packages are available
   if (!requireNamespace("RMariaDB", quietly = TRUE)) {
@@ -73,8 +73,8 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$database)) {
+    config$sql$database  # Use configured database name
   } else {
     "mysql"  # Fallback default database
   }
@@ -131,9 +131,35 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     }
   }
 
+  # Determine if the requested table is the configured superkey table
+  is_superkey_request <- FALSE
+  if (!is.null(superkey_table) && !is.null(table_name)) {
+    # Extract table name without schema for comparison
+    table_name_only <- if (grepl("\\.", table_name)) {
+      strsplit(table_name, "\\.")[[1]][2]
+    } else {
+      table_name
+    }
+    
+    # Extract superkey table name without schema for comparison
+    superkey_name_only <- if (grepl("\\.", superkey_table)) {
+      strsplit(superkey_table, "\\.")[[1]][2]
+    } else {
+      superkey_table
+    }
+    
+    # Check if the requested table matches the superkey table
+    is_superkey_request <- identical(trimws(toupper(table_name_only)), trimws(toupper(superkey_name_only)))
+    
+    if (is_superkey_request) {
+      message("Requested table matches configured superkey; returning without joins.")
+      join_primary_keys <- FALSE
+    }
+  }
+
   # Determine fields to exclude if PII exclusion is enabled
   pii_fields <- character(0)
-  if (exclude_pii && !is.null(config$sql$pii_fields)) {
+  if (!pii && !is.null(config$sql$pii_fields)) {
     pii_fields <- config$sql$pii_fields
     if (length(pii_fields) > 0) {
       message(sprintf("Will exclude %d PII fields: %s",
@@ -163,36 +189,28 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   }
 
   # Check if we need to add a schema to the table name
-  if (!is.null(table_name) && !grepl("\\.", table_name) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    # Try to find which schema contains the table
-    schema_found <- FALSE
+  if (!is.null(table_name) && !grepl("\\.", table_name) && !is.null(config$sql$database)) {
+    # Use the configured database as schema context
+    schema <- config$sql$database
+    
+    # Build a query to check if the table exists in this schema
+    check_query <- sprintf(
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' AND table_name = '%s' LIMIT 1",
+      schema, table_name
+    )
 
-    # First, check if table exists in any of the configured schemas
-    for (schema in config$sql$schemas) {
-      # Build a query to check if the table exists in this schema
-      check_query <- sprintf(
-        "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s' AND table_name = '%s' LIMIT 1",
-        schema, table_name
-      )
+    # Execute the query
+    check_result <- DBI::dbGetQuery(db_conn, check_query)
 
-      # Execute the query
-      check_result <- DBI::dbGetQuery(db_conn, check_query)
-
-      # If table exists in this schema, use it
-      if (nrow(check_result) > 0) {
-        message("Found table '", table_name, "' in schema '", schema, "'")
-        table_name <- paste0(schema, ".", table_name)
-        schema_found <- TRUE
-        break
-      }
-    }
-
-    # If table not found in any schema, show an informative error
-    if (!schema_found) {
-      available_schemas <- paste(config$sql$schemas, collapse = ", ")
+    # If table exists in this schema, use it
+    if (nrow(check_result) > 0) {
+      message("Found table '", table_name, "' in schema '", schema, "'")
+      table_name <- paste0(schema, ".", table_name)
+    } else {
+      # If table not found in the configured schema, show an informative error
       stop(sprintf(
-        "Table '%s' not found in any configured schema (%s). Please check your config.yml or specify the schema explicitly with '%s.%s'.",
-        table_name, available_schemas, config$sql$schemas[1], table_name
+        "Table '%s' not found in configured database '%s'. Please check your config.yml or specify explicitly with '%s.%s'.",
+        table_name, schema, schema, table_name
       ))
     }
   }
@@ -205,11 +223,15 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       result_data <- DBI::dbGetQuery(db_conn, custom_query)
 
       # If PII exclusion is enabled, filter out PII columns from the result
-      if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0) {
+      if (!pii && !is.null(pii_fields) && length(pii_fields) > 0) {
         pii_cols_in_result <- intersect(names(result_data), pii_fields)
+        pii_cols_missing <- setdiff(pii_fields, names(result_data))
         if (length(pii_cols_in_result) > 0) {
           message("Removing PII columns from result: ", paste(pii_cols_in_result, collapse = ", "))
           result_data <- result_data[, !(names(result_data) %in% pii_fields), drop = FALSE]
+        }
+        if (length(pii_cols_missing) > 0) {
+          message("Configured PII columns not present in result (skipped): ", paste(pii_cols_missing, collapse = ", "))
         }
       }
     } else {
@@ -217,7 +239,7 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       # with this updated version:
 
       # For PII exclusion with SELECT *, we need to get all column names first
-      if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0 && is.null(fields)) {
+      if (!pii && !is.null(pii_fields) && length(pii_fields) > 0 && is.null(fields)) {
         # Check if we're joining tables
         if (!is.null(superkey_table) && !is.null(primary_key_column)) {
           # Get column names from both tables
@@ -353,7 +375,7 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
           superkey_table = if (join_primary_keys) superkey_table else NULL,
           primary_key_column = if (join_primary_keys) primary_key_column else NULL,
           max_rows = max_rows,
-          pii_fields = if (exclude_pii) pii_fields else NULL,
+          pii_fields = if (!pii) pii_fields else NULL,
           all = all
         )
       }
@@ -362,11 +384,15 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       result_data <- DBI::dbGetQuery(db_conn, query)
 
       # Double-check PII exclusion on the result
-      if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0) {
+      if (!pii && !is.null(pii_fields) && length(pii_fields) > 0) {
         pii_cols_in_result <- intersect(names(result_data), pii_fields)
+        pii_cols_missing <- setdiff(pii_fields, names(result_data))
         if (length(pii_cols_in_result) > 0) {
           message("Removing PII columns from result: ", paste(pii_cols_in_result, collapse = ", "))
           result_data <- result_data[, !(names(result_data) %in% pii_fields), drop = FALSE]
+        }
+        if (length(pii_cols_missing) > 0) {
+          message("Configured PII columns not present in result (skipped): ", paste(pii_cols_missing, collapse = ", "))
         }
       }
     }
@@ -475,8 +501,8 @@ sql.index <- function(schema = NULL) {
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }
@@ -598,16 +624,16 @@ sql.desc <- function(table_name) {
     table_only <- parts[2]
   } else {
     # No schema specified, use the first configured schema
-    if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-      schema_name <- config$sql$schemas[1]
+    if (!is.null(config) && !is.null(config$sql$schema)) {
+      schema_name <- config$sql$schema
       message(sprintf("No schema specified. Using default schema: %s", schema_name))
     }
   }
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }
@@ -713,10 +739,10 @@ sql.desc <- function(table_name) {
 #' Perform a direct SQL query with minimal processing
 #'
 #' @param query The SQL query to execute
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @return A data frame with the query results
 #' @export
-sql.query <- function(query, exclude_pii = FALSE) {
+sql.query <- function(query, pii = FALSE) {
   # Check if required packages are available
   if (!requireNamespace("RMariaDB", quietly = TRUE)) {
     stop("Package 'RMariaDB' is needed for this function to work. Please install it.",
@@ -742,8 +768,8 @@ sql.query <- function(query, exclude_pii = FALSE) {
 
   # Parse the host value to extract database name and port if present
   # Default values
-  db_name <- if (!is.null(config) && !is.null(config$sql$schemas) && length(config$sql$schemas) > 0) {
-    config$sql$schemas[1]  # Use first configured schema
+  db_name <- if (!is.null(config) && !is.null(config$sql$schema)) {
+    config$sql$schema  # Use first configured schema
   } else {
     "mysql"  # Fallback default database
   }
@@ -772,7 +798,7 @@ sql.query <- function(query, exclude_pii = FALSE) {
   # Get config for PII exclusion if needed
   config <- NULL
   pii_fields <- NULL
-  if (exclude_pii) {
+  if (!pii) {
     tryCatch({
       config <- validate_config("sql")
       if (!is.null(config$sql$pii_fields)) {
@@ -805,7 +831,7 @@ sql.query <- function(query, exclude_pii = FALSE) {
     result <- DBI::dbGetQuery(db_conn, query)
 
     # Apply PII exclusion if enabled
-    if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0) {
+    if (!pii && !is.null(pii_fields) && length(pii_fields) > 0) {
       pii_cols_present <- intersect(names(result), pii_fields)
       if (length(pii_cols_present) > 0) {
         message(sprintf("Removing %d PII fields from results: %s",

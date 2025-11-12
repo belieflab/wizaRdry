@@ -1393,7 +1393,7 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
       # Store all similarity scores
       renamed$similarity_scores[[field]] <- sort(similarities, decreasing = TRUE)
 
-      if(verbose) {
+      if(verbose && !interactive_mode) {
         cat(sprintf("\nField: %s\n", field))
         cat("Top matches:\n")
         # Get all matches sorted by similarity
@@ -1495,6 +1495,17 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
             # Use [[ ]] to safely handle special characters in field names
             field_data <- df[[field]]
             df[[best_match]] <- field_data
+            
+            # Automatically drop .1 version of the renamed field if it exists
+            old_field_with_suffix <- paste0(field, ".1")
+            if(old_field_with_suffix %in% names(df)) {
+              df <- df[, !names(df) %in% old_field_with_suffix, drop = FALSE]
+              if(verbose) {
+                message(sprintf("Auto-dropped old pre-transformed field: '%s'\n", old_field_with_suffix))
+              }
+              renamed$columns_to_drop <- c(renamed$columns_to_drop, old_field_with_suffix)
+            }
+            
             # Track rename
             renamed$renamed_fields <- c(renamed$renamed_fields, field)
             renamed$renames <- c(renamed$renames,
@@ -1654,6 +1665,17 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                     }
                     field_data <- df[[field]]
                     df[[selected_match]] <- field_data
+                    
+                    # Automatically drop .1 version of the renamed field if it exists
+                    old_field_with_suffix <- paste0(field, ".1")
+                    if(old_field_with_suffix %in% names(df)) {
+                      df <- df[, !names(df) %in% old_field_with_suffix, drop = FALSE]
+                      if(verbose) {
+                        message(sprintf("Auto-dropped old pre-transformed field: '%s'\n", old_field_with_suffix))
+                      }
+                      renamed$columns_to_drop <- c(renamed$columns_to_drop, old_field_with_suffix)
+                    }
+                    
                     # Track rename
                     renamed$renamed_fields <- c(renamed$renamed_fields, field)
                     renamed$renames <- c(renamed$renames,
@@ -1682,6 +1704,17 @@ find_and_rename_fields <- function(df, elements, structure_name, measure_name, a
                 # Use [[ ]] to safely handle special characters in field names
                 field_data <- df[[field]]
                 df[[selected_match]] <- field_data
+                
+                # Automatically drop .1 version of the renamed field if it exists
+                old_field_with_suffix <- paste0(field, ".1")
+                if(old_field_with_suffix %in% names(df)) {
+                  df <- df[, !names(df) %in% old_field_with_suffix, drop = FALSE]
+                  if(verbose) {
+                    message(sprintf("Auto-dropped old pre-transformed field: '%s'\n", old_field_with_suffix))
+                  }
+                  renamed$columns_to_drop <- c(renamed$columns_to_drop, old_field_with_suffix)
+                }
+                
                 # Track rename
                 renamed$renamed_fields <- c(renamed$renamed_fields, field)
                 renamed$renames <- c(renamed$renames,
@@ -2090,7 +2123,8 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                                auto_drop_unknown = FALSE,
                                missing_required_fields = character(0),
                                interactive_mode = TRUE,
-                               collect_only = FALSE) {
+                               collect_only = FALSE,
+                               renamed_fields = character(0)) {
   if(verbose) cat("\nValidating data structure...")
 
   results <- list(
@@ -2123,12 +2157,70 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
     # Check for unknown fields
     results$unknown_fields <- setdiff(df_cols, valid_fields)
     if(length(results$unknown_fields) > 0) {
-      if(verbose) {
-        cat("\n\nUnknown fields detected:")
-        cat(sprintf("\n  %s", paste(results$unknown_fields, collapse=", ")))
+      # Automatically identify and drop .1 fields that correspond to renamed/standardized fields
+      # If a .1 field exists and its base name (without .1) also exists in the dataframe,
+      # it means the base field is present and the .1 is an old pre-transformed version that should be dropped
+      old_transformed_fields <- results$unknown_fields[grepl("\\.\\d+$", results$unknown_fields)]
+      fields_to_auto_drop <- character(0)
+      
+      if(length(old_transformed_fields) > 0) {
+        for(old_field in old_transformed_fields) {
+          # Extract base name by removing .1, .2, etc. suffix
+          base_name <- sub("\\.\\d+$", "", old_field)
+          # Drop .1 field if base name exists in dataframe (meaning the field was renamed/standardized)
+          # This covers all cases: explicitly renamed fields, standardized fields, etc.
+          if(base_name %in% df_cols) {
+            fields_to_auto_drop <- c(fields_to_auto_drop, old_field)
+          }
+        }
       }
+      
+      # Auto-drop .1 fields that correspond to renamed fields
+      if(length(fields_to_auto_drop) > 0) {
+        if(verbose) {
+          cat("\n\nAuto-dropping old pre-transformed fields (from renamed fields):")
+          cat(sprintf("\n  %s", paste(fields_to_auto_drop, collapse=", ")))
+        }
+        
+        # Track which fields were auto-dropped
+        results$unknown_fields_dropped <- c(results$unknown_fields_dropped, fields_to_auto_drop)
+        
+        # Drop the old transformed fields
+        df <- df[, !names(df) %in% fields_to_auto_drop, drop = FALSE]
+        
+        # Update the dataframe in the appropriate environment
+        env_to_use <- NULL
+        calling_env <- parent.frame(2)
+        
+        if(exists(measure_name, envir = calling_env)) {
+          env_to_use <- calling_env
+        } else if(exists(".wizaRdry_env") && exists(measure_name, envir = .wizaRdry_env)) {
+          env_to_use <- .wizaRdry_env
+        }
+        
+        if(!is.null(env_to_use)) {
+          assign(measure_name, df, envir = env_to_use)
+        }
+        
+        if(verbose) {
+          cat("\nDropped old pre-transformed data fields automatically")
+        }
+        
+        # Update column names after dropping fields
+        df_cols <- names(df)
+        
+        # Remove auto-dropped fields from unknown fields list
+        results$unknown_fields <- setdiff(results$unknown_fields, fields_to_auto_drop)
+      }
+      
+      # Handle remaining unknown fields (prompt if interactive, or use auto_drop_unknown setting)
+      if(length(results$unknown_fields) > 0) {
+        if(verbose) {
+          cat("\n\nUnknown fields detected:")
+          cat(sprintf("\n  %s", paste(results$unknown_fields, collapse=", ")))
+        }
 
-      drop_fields <- FALSE
+        drop_fields <- FALSE
       if(interactive_mode) {
         # Prompt user for confirmation
         user_input <- safe_readline(prompt = "Do you want to drop these unknown fields? (y/n): ",
@@ -2244,6 +2336,7 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
 
         # Update column names after dropping fields
         df_cols <- names(df)
+        }
       } else {
         if(verbose) cat("\nKeeping unknown fields in the dataset")
 
@@ -3196,6 +3289,90 @@ extract_bidirectional_mappings <- function(notes, direction = "string_to_numeric
   return(list(mapping = mapping, source = source))
 }
 
+# Function to parse RedCap select_choices_or_calculations and convert to NDA ValueRange format
+parse_redcap_choices_to_value_range <- function(choices_string) {
+  if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+    return("")
+  }
+  
+  # Split by pipe (|) to get individual choices
+  choices <- strsplit(choices_string, "\\|")[[1]]
+  choices <- trimws(choices)
+  
+  # Parse each choice (format: "value, label" or "value, label")
+  parsed_choices <- character(0)
+  for (choice in choices) {
+    if (choice != "") {
+      # Split by comma to separate value and label
+      parts <- strsplit(choice, ",")[[1]]
+      if (length(parts) >= 2) {
+        value <- trimws(parts[1])
+        label <- trimws(paste(parts[-1], collapse = ","))  # In case label contains commas
+        # Format as NDA ValueRange: "value; label"
+        parsed_choices <- c(parsed_choices, paste0(value, "; ", label))
+      } else if (length(parts) == 1) {
+        # If no comma, treat the whole thing as a value
+        parsed_choices <- c(parsed_choices, trimws(parts[1]))
+      }
+    }
+  }
+  
+  # Join with semicolons for NDA format
+  return(paste(parsed_choices, collapse = "; "))
+}
+
+# Function to enhance NDA elements with RedCap metadata
+enhance_elements_with_redcap_metadata <- function(elements, redcap_metadata) {
+  if (is.null(redcap_metadata) || !is.data.frame(redcap_metadata)) {
+    return(elements)
+  }
+  
+  # Create mappings from RedCap metadata
+  redcap_label_map <- NULL
+  redcap_choices_map <- NULL
+  
+  if (all(c("field_name", "field_label") %in% names(redcap_metadata))) {
+    redcap_label_map <- redcap_metadata$field_label
+    names(redcap_label_map) <- redcap_metadata$field_name
+  }
+  
+  if ("select_choices_or_calculations" %in% names(redcap_metadata)) {
+    redcap_choices_map <- redcap_metadata$select_choices_or_calculations
+    names(redcap_choices_map) <- redcap_metadata$field_name
+    # Remove NA values
+    redcap_choices_map <- redcap_choices_map[!is.na(redcap_choices_map) & redcap_choices_map != ""]
+  }
+  
+  # Enhance elements with RedCap metadata
+  for (i in 1:nrow(elements)) {
+    field_name <- elements$name[i]
+    
+    # Enhance description with field_label if available
+    if (!is.null(redcap_label_map) && field_name %in% names(redcap_label_map)) {
+      current_desc <- elements$description[i]
+      if (is.null(current_desc) || current_desc == "" || is.na(current_desc)) {
+        elements$description[i] <- as.character(redcap_label_map[[field_name]])
+      }
+    }
+    
+    # Enhance valueRange with select_choices_or_calculations if available
+    if (!is.null(redcap_choices_map) && field_name %in% names(redcap_choices_map)) {
+      current_value_range <- elements$valueRange[i]
+      if (is.null(current_value_range) || current_value_range == "" || is.na(current_value_range)) {
+        redcap_choices <- redcap_choices_map[[field_name]]
+        if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
+          parsed_value_range <- parse_redcap_choices_to_value_range(redcap_choices)
+          if (parsed_value_range != "") {
+            elements$valueRange[i] <- parsed_value_range
+          }
+        }
+      }
+    }
+  }
+  
+  return(elements)
+}
+
 # Updated ndaValidator to incorporate better missing value handling
 # Updated ndaValidator to incorporate better missing value handling
 ndaValidator <- function(measure_name,
@@ -3217,6 +3394,22 @@ ndaValidator <- function(measure_name,
 
     # Get the dataframe from the environment
     df <- base::get(measure_name, envir = .wizaRdry_env)
+
+    # Enhance with RedCap metadata if available and api is "redcap"
+    redcap_metadata <- NULL
+    if (api == "redcap") {
+      try({
+        # Try to get RedCap metadata
+        if (!is.null(attr(df, "redcap_instrument"))) {
+          redcap_metadata <- redcap.dict(df)
+        } else {
+          redcap_metadata <- redcap.dict(measure_name)
+        }
+        if (verbose && !is.null(redcap_metadata)) {
+          message("Enhanced validation with RedCap metadata")
+        }
+      }, silent = TRUE)
+    }
 
     # Force all complex/problematic data types to character immediately
     for (col in names(df)) {
@@ -3284,6 +3477,14 @@ ndaValidator <- function(measure_name,
 
     if (is.null(elements) || nrow(elements) == 0) {
       stop("No elements found in the structure definition")
+    }
+
+    # Enhance elements with RedCap metadata if available
+    if (!is.null(redcap_metadata)) {
+      elements <- enhance_elements_with_redcap_metadata(elements, redcap_metadata)
+      if (verbose) {
+        message("Enhanced NDA elements with RedCap metadata")
+      }
     }
 
     # PHASE 1: NA Value Mapping
@@ -3364,7 +3565,8 @@ ndaValidator <- function(measure_name,
                                              auto_drop_unknown = auto_drop_unknown,
                                              missing_required_fields = missing_required_fields,
                                              interactive_mode = interactive_mode,
-                                             collect_only = TRUE)  # Don't update script yet
+                                             collect_only = TRUE,  # Don't update script yet
+                                             renamed_fields = renamed_results$renamed_fields)  # Pass renamed fields
 
     # Add the unknown fields that were identified during validation
     # BUT exclude fields that were successfully renamed

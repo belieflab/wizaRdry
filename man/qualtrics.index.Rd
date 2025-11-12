@@ -4,17 +4,22 @@
 \alias{qualtrics.index}
 \title{Display table of available Qualtrics surveys}
 \usage{
-qualtrics.index(institution = NULL)
+qualtrics.index(institution = NULL, all = FALSE)
 }
 \arguments{
 \item{institution}{Optional; the institution identifier to use. If NULL, uses all
-institutions specified in the configuration file.}
+institutions specified in the configuration file (or all available credentials if no config).}
+
+\item{all}{Logical; deprecated parameter kept for backward compatibility. All surveys
+are now shown by default. Default is FALSE.}
 }
 \value{
 A data frame containing the IDs and names of all available surveys
-in the configured Qualtrics account. Can be used to identify surveys for
-further data retrieval.
+from the Qualtrics API. Surveys with aliases configured in config.yml will
+show the alias and institution; unmapped surveys will show NA for these fields.
 }
 \description{
-Retrieves a list of all available surveys in the configured Qualtrics account.
+Retrieves a list of all available surveys from the Qualtrics API. Shows all
+surveys pulled down from Qualtrics, with alias and institution information
+merged from config.yml where available.
 }

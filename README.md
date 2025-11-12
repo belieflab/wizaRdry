@@ -24,7 +24,7 @@ Alternativley, you can install the latest development version from GitHub:
 ```r
 remove.packages("wizaRdry")
 rstudioapi::restartSession()
-install.packages("devtools")
+if(!require(devtools)) {install.packages("devtools")}; library(devtools)
 devtools::install_github("belieflab/wizaRdry")
 ```
 
@@ -304,4 +304,3 @@ R package version 0.1.0. https://github.com/belieflab/wizaRdry
 ## License
 
 MIT © [Joshua Kenney](LICENSE.md)
-# Test

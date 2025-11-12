@@ -1,24 +1,5 @@
-#' Create Data Definition from NDA Structure and Submission Template
-#'
-#' This function creates a data definition by intersecting the columns selected
-#' for the final submission template against the data structure pulled from NDA.
-#' It provides metadata about each field including validation rules, data types,
-#' and submission-specific information. For fields not found in NDA, it computes
-#' metadata by analyzing the actual data.
-#'
-#' @param submission_template List containing the submission template with selected columns
-#' @param nda_structure List containing the complete NDA data structure from API
-#' @param measure_name Character string of the measure/data structure name
-#' @param data_frame Optional data frame to analyze for computing missing metadata
-#' @return List containing the intersected data definition with metadata
-#' @export
-#' @examples
-#' \dontrun{
-#'   # After creating submission template
-#'   template <- createTemplate(selected_columns, nda_data)
-#'   data_def <- createDataDefinition(template, nda_data, "prl01")
-#' }
-createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL) {
+#' @noRd
+createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL, interactive_mode = interactive()) {
 
   # Try to get the data frame from the global environment if not provided
   if (is.null(data_frame)) {
@@ -26,7 +7,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       base::get0(measure_name)
     }, error = function(e) NULL)
   }
-  
+
   # Load missing data codes from config if available
   missing_data_codes <- NULL
   tryCatch({
@@ -36,6 +17,295 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     # Silently fail if config can't be loaded
     missing_data_codes <- NULL
   })
+
+  # Build optional description maps from external sources (REDCap/Qualtrics)
+  redcap_label_map <- NULL
+  redcap_choices_map <- NULL
+  qualtrics_label_map <- NULL
+
+  # Attempt to fetch REDCap metadata and map field_name -> field_label and field_name -> select_choices_or_calculations
+  try({
+    # Prefer using the provided data_frame if it carries instrument attribute
+    if (is.data.frame(data_frame) && !is.null(attr(data_frame, "redcap_instrument"))) {
+      rc_meta <- redcap.dict(data_frame)
+    } else {
+      rc_meta <- redcap.dict(measure_name)
+    }
+    if (is.data.frame(rc_meta) && all(c("field_name", "field_label") %in% names(rc_meta))) {
+      # Create a named vector mapping field names to labels
+      redcap_label_map <- rc_meta$field_label
+      names(redcap_label_map) <- rc_meta$field_name
+
+      # Create a named vector mapping field names to select_choices_or_calculations for ValueRange
+      if ("select_choices_or_calculations" %in% names(rc_meta)) {
+        redcap_choices_map <- rc_meta$select_choices_or_calculations
+        names(redcap_choices_map) <- rc_meta$field_name
+        # Remove NA values
+        redcap_choices_map <- redcap_choices_map[!is.na(redcap_choices_map) & redcap_choices_map != ""]
+      } else {
+        redcap_choices_map <- NULL
+      }
+    } else {
+      redcap_choices_map <- NULL
+    }
+  }, silent = TRUE)
+
+  # Function to parse RedCap select_choices_or_calculations and convert to NDA ValueRange format
+  parse_redcap_choices_to_value_range <- function(choices_string) {
+    if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+      return("")
+    }
+
+    # Split by pipe (|) to get individual choices
+    choices <- strsplit(choices_string, "\\|")[[1]]
+    choices <- trimws(choices)
+
+    # Parse each choice (format: "value, label" or "value, label")
+    parsed_choices <- character(0)
+    for (choice in choices) {
+      if (choice != "") {
+        # Split by comma to separate value and label
+        parts <- strsplit(choice, ",")[[1]]
+        if (length(parts) >= 2) {
+          value <- trimws(parts[1])
+          label <- trimws(paste(parts[-1], collapse = ","))  # In case label contains commas
+          # Format as NDA ValueRange: "value; label"
+          parsed_choices <- c(parsed_choices, paste0(value, "; ", label))
+        } else if (length(parts) == 1) {
+          # If no comma, treat the whole thing as a value
+          parsed_choices <- c(parsed_choices, trimws(parts[1]))
+        }
+      }
+    }
+
+    # Join with semicolons for NDA format
+    return(paste(parsed_choices, collapse = "; "))
+  }
+
+  # Function to infer value ranges from data tuples when choices are not available
+  infer_value_range_from_data <- function(data_vector, data_type) {
+    if (is.null(data_vector) || length(data_vector) == 0) {
+      return("")
+    }
+
+    # Remove NAs for analysis
+    clean_data <- data_vector[!is.na(data_vector)]
+    if (length(clean_data) == 0) {
+      return("")
+    }
+
+    unique_vals <- unique(clean_data)
+    unique_count <- length(unique_vals)
+
+    if (data_type == "Integer") {
+      # For integers, check if values look like categorical codes
+      if (unique_count <= 20 && all(clean_data >= 0 & clean_data <= 99)) {
+        # Likely categorical data - list all values
+        sorted_vals <- sort(as.numeric(unique_vals))
+        return(paste(sorted_vals, collapse = ";"))
+      } else {
+        # Likely continuous data - use range notation
+        min_val <- min(clean_data, na.rm = TRUE)
+        max_val <- max(clean_data, na.rm = TRUE)
+        return(paste0(as.integer(min_val), "::", as.integer(max_val)))
+      }
+    } else if (data_type == "String") {
+      # For strings, list unique values if reasonable number
+      if (unique_count <= 20) {
+        sorted_vals <- sort(as.character(unique_vals))
+        return(paste(sorted_vals, collapse = ";"))
+      } else {
+        return(paste0("Multiple categorical values (", unique_count, " unique)"))
+      }
+    } else if (data_type == "Float") {
+      # For floats, don't specify value ranges (too restrictive)
+      return("")
+    }
+
+    return("")
+  }
+
+  # Helper: clean HTML breaks from labels
+  rc_clean_label <- function(x) {
+    if (is.null(x) || is.na(x)) return("")
+    gsub("<br>", " ", x, fixed = TRUE)
+  }
+
+  # Helper: enrich REDCap checkbox children (e.g., parent___1 or parent_other)
+  # Using parent field's label and choices to derive description/valueRange/notes
+  rc_enrich_checkbox_child <- function(column_name, rc_meta) {
+    out <- list(description = NULL, valueRange = NULL, notes = NULL, data_type = NULL, size = NULL)
+    if (is.null(rc_meta) || !is.data.frame(rc_meta) || !all(c("field_name", "field_type") %in% names(rc_meta))) return(out)
+
+    parent <- NULL
+    suffix <- NULL
+    if (grepl("___", column_name, fixed = TRUE)) {
+      parent <- sub("___.*$", "", column_name)
+      suffix <- sub("^.*___", "", column_name)
+    } else if (grepl("_other$", column_name)) {
+      parent <- sub("_other$", "", column_name)
+      suffix <- "other"
+    }
+
+    # Attempt to infer parent via branching_logic if name heuristic fails
+    if ((is.null(parent) || !(parent %in% rc_meta$field_name)) && "branching_logic" %in% names(rc_meta)) {
+      this_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+      if (nrow(this_row) == 1) {
+        bl <- as.character(this_row$branching_logic %||% "")
+        m <- regmatches(bl, regexpr("\\[([A-Za-z0-9_]+)\\(", bl, perl = TRUE))
+        if (length(m) == 1 && nzchar(m)) {
+          parent_candidate <- sub("^\\[", "", m)
+          parent_candidate <- sub("\\($", "", parent_candidate)
+          if (parent_candidate %in% rc_meta$field_name) parent <- parent_candidate
+        }
+      }
+    }
+
+    if (is.null(parent) || parent == "") return(out)
+
+    parent_row <- rc_meta[rc_meta$field_name == parent, , drop = FALSE]
+    if (nrow(parent_row) != 1) return(out)
+    if (!identical(as.character(parent_row$field_type), "checkbox")) return(out)
+
+    parent_label <- as.character(parent_row$field_label %||% "")
+    parent_label <- rc_clean_label(parent_label)
+    choices <- as.character(parent_row$select_choices_or_calculations %||% "")
+
+    # Build map from coded value -> label
+    choice_map <- list()
+    if (nzchar(choices)) {
+      parts <- strsplit(choices, "\\|")[[1]]
+      for (p in trimws(parts)) {
+        kv <- strsplit(p, ",")[[1]]
+        if (length(kv) >= 2) {
+          key <- trimws(kv[1])
+          val <- trimws(paste(kv[-1], collapse = ","))
+          val <- rc_clean_label(val)
+          choice_map[[key]] <- val
+        }
+      }
+    }
+
+    # Numeric child like parent___1
+    if (!is.null(suffix) && grepl("^[0-9]+$", suffix)) {
+      label <- choice_map[[suffix]] %||% parent_label
+      # Compose description as single line: Parent label - choice label
+      if (nzchar(parent_label) && nzchar(label) && parent_label != label) {
+        out$description <- paste0(parent_label, " - ", label)
+      } else {
+        out$description <- label
+      }
+      out$valueRange <- "0;1"
+      out$notes <- "0=No;1=Yes"
+      # Per current expectation: keep as String with Size 255
+      out$data_type <- "String"
+      out$size <- 255
+      return(out)
+    }
+
+    # Other text child
+    if (!is.null(suffix) && identical(tolower(suffix), "other")) {
+      out$description <- paste0(parent_label, ": If you selected 'other', please describe.")
+      out$valueRange <- ""
+      out$notes <- ""
+      out$data_type <- "String"
+      out$size <- 255
+      return(out)
+    }
+
+    out
+  }
+
+  # Helper: parse REDCap choices -> numeric codes only for ValueRange + mapping text for Notes
+  rc_parse_choices_codes_and_notes <- function(choices_string) {
+    if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+      return(list(codes = "", notes = ""))
+    }
+    parts <- strsplit(choices_string, "\\|")[[1]]
+    parts <- trimws(parts)
+    codes <- character(0)
+    note_pairs <- character(0)
+    for (p in parts) {
+      if (p == "") next
+      kv <- strsplit(p, ",")[[1]]
+      if (length(kv) >= 2) {
+        code <- trimws(kv[1])
+        label <- trimws(paste(kv[-1], collapse = ","))
+        label <- rc_clean_label(label)
+        codes <- c(codes, code)
+        note_pairs <- c(note_pairs, paste0(code, "=", label))
+      } else {
+        # fallback: if no comma, treat as bare code
+        code <- trimws(kv[1])
+        codes <- c(codes, code)
+      }
+    }
+    list(
+      codes = if (length(codes)) paste(codes, collapse = "; ") else "",
+      notes = if (length(note_pairs)) paste(note_pairs, collapse = "; ") else ""
+    )
+  }
+
+  # Helper: use REDCap validation/type to derive ValueRange when appropriate
+  rc_derive_value_range_from_validation <- function(meta_row) {
+    if (is.null(meta_row) || nrow(meta_row) == 0) return("")
+    vtype <- meta_row$text_validation_type_or_show_slider_number
+    vmin <- suppressWarnings(as.numeric(meta_row$text_validation_min))
+    vmax <- suppressWarnings(as.numeric(meta_row$text_validation_max))
+    ftype <- meta_row$field_type
+
+    # Integer-like
+    if (!is.null(vtype) && !is.na(vtype) && grepl("integer", vtype, ignore.case = TRUE)) {
+      if (!is.na(vmin) && !is.na(vmax)) return(paste0(as.integer(vmin), "::", as.integer(vmax)))
+      return("")
+    }
+
+    # Slider (numeric)
+    if (!is.null(vtype) && !is.na(vtype) && grepl("slider|number", vtype, ignore.case = TRUE)) {
+      if (!is.na(vmin) && !is.na(vmax)) return(paste0(vmin, "::", vmax))
+      return("")
+    }
+
+    # Field type specific
+    if (!is.null(ftype) && ftype %in% c("radio", "checkbox", "dropdown")) {
+      # Handled via choices, not validation
+      return("")
+    }
+
+    # Date/time: let NDA handle as type; no numeric range
+    if (!is.null(vtype) && grepl("date|datetime", vtype, ignore.case = TRUE)) {
+      return("")
+    }
+
+    return("")
+  }
+
+  # Attempt to fetch Qualtrics column map and map variable -> question text
+  try({
+    # qualtrics.dict accepts either a data frame or an alias
+    if (is.data.frame(data_frame)) {
+      q_map <- qualtrics.dict(data_frame)
+    } else {
+      q_map <- qualtrics.dict(measure_name)
+    }
+    if (is.data.frame(q_map)) {
+      # Heuristically identify variable and question-text columns
+      var_cols <- c("qname", "VariableName", "variable", "Variable", "col_name", "column", "Column", "name", "Name")
+      txt_cols <- c("description", "QuestionText", "question_text", "Question", "Label", "label", "Description")
+      var_col <- var_cols[var_cols %in% names(q_map)]
+      txt_col <- txt_cols[txt_cols %in% names(q_map)]
+      if (length(var_col) > 0 && length(txt_col) > 0) {
+        var_col <- var_col[1]
+        txt_col <- txt_col[1]
+        # Filter out NAs and create mapping
+        valid_rows <- !is.na(q_map[[var_col]]) & !is.na(q_map[[txt_col]])
+        if (any(valid_rows)) {
+          qualtrics_label_map <- q_map[[txt_col]][valid_rows]
+          names(qualtrics_label_map) <- q_map[[var_col]][valid_rows]
+        }
+      }
+    }
+  }, silent = TRUE)
 
   # Handle both character vector and list formats
   if (is.character(submission_template)) {
@@ -68,11 +338,272 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     stop("Could not extract selected columns from submission_template")
   }
 
+  # Define fields that should never be included as new or modified structures
+  # They can still be included only if part of essential ndar_subject01 and unchanged
+  excluded_from_change <- c("state", "lost_to_followup", "lost_to_follow-up", "study_status")
+
+  # Get essential NDA fields dynamically from ndar_subject01 API
+  # This ensures we always have the current required elements with complete metadata
+  essential_nda_fields <- tryCatch({
+    # Try to get required field metadata from the global environment or nda_structure
+    required_metadata <- NULL
+
+    # First, try to get from nda_structure if it contains ndar_subject01 data
+    if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
+      required_elements <- nda_structure$dataElements[nda_structure$dataElements$required == "Required", ]
+      if (nrow(required_elements) > 0) {
+        required_metadata <- required_elements
+      }
+    }
+
+    # If not found in nda_structure, try to fetch from API directly
+    if (is.null(required_metadata)) {
+      message("Fetching current ndar_subject01 required elements from NDA API...")
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            required_metadata <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
+          }
+        }
+      }
+    }
+
+    # Extract field names from metadata
+    if (!is.null(required_metadata) && nrow(required_metadata) > 0) {
+      field_names <- required_metadata$name
+      # Exclude internal fields that should never appear
+      field_names <- setdiff(field_names, excluded_from_change)
+      message(sprintf("Found %d required ndar_subject01 elements: %s",
+                      length(field_names), paste(head(field_names, 5), collapse = ", ")))
+      field_names
+    } else {
+      # Fallback to essential fields if API fails
+      message("Using fallback essential fields list")
+      setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date",
+        "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name"), excluded_from_change)
+    }
+  }, error = function(e) {
+    message("Error fetching ndar_subject01 elements: ", e$message)
+    message("Using fallback essential fields list")
+    setdiff(c("src_subject_id", "subjectkey", "sex", "interview_age", "interview_date",
+      "phenotype", "site", "race", "handedness", "visit", "week", "redcap_event_name"), excluded_from_change)
+  })
+
   # Convert to character vector if needed
   if (is.data.frame(selected_columns)) {
     selected_columns <- names(selected_columns)
   } else if (is.list(selected_columns) && all(sapply(selected_columns, is.character))) {
     selected_columns <- unlist(selected_columns)
+  }
+  
+  # Exclude REDCap completion fields (e.g., "impact_demo_complete")
+  # These are REDCap-specific and should not be included in NDA data definitions
+  selected_columns <- selected_columns[!grepl("_complete$", selected_columns)]
+
+  # Store original selected_columns before any modifications (for filtering logic later)
+  original_selected_columns <- selected_columns
+
+  # Check for required fields from ndar_subject01 that exist in the structure
+  # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
+  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+  
+  # DCC required fields (always included if they exist in structure)
+  dcc_required_fields <- c("site", "subsiteid", "phenotype", "phenotype_description")
+
+  # Get structure field names once for reuse
+  structure_field_names <- character(0)
+  if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
+    structure_field_names <- if (is.data.frame(nda_structure$dataElements)) {
+      nda_structure$dataElements$name
+    } else {
+      character(0)
+    }
+    
+    # Automatically include super-required fields if they exist in the structure and are not already selected
+    missing_super_required <- setdiff(
+      intersect(super_required_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_super_required) > 0) {
+      selected_columns <- c(selected_columns, missing_super_required)
+      if (interactive_mode) {
+        message(sprintf("\nAutomatically including super-required fields: %s", 
+                       paste(missing_super_required, collapse = ", ")))
+      }
+    }
+    
+    # Automatically include DCC required fields if they exist in structure
+    missing_dcc_required <- setdiff(
+      intersect(dcc_required_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_dcc_required) > 0) {
+      selected_columns <- c(selected_columns, missing_dcc_required)
+      if (interactive_mode) {
+        message(sprintf("Automatically including DCC required fields: %s", 
+                       paste(missing_dcc_required, collapse = ", ")))
+      }
+    }
+    
+    # Automatically include timepoint fields (visit or week) if they exist in structure
+    timepoint_fields <- c("visit", "week")
+    missing_timepoint_fields <- setdiff(
+      intersect(timepoint_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_timepoint_fields) > 0) {
+      selected_columns <- c(selected_columns, missing_timepoint_fields)
+      if (interactive_mode) {
+        message(sprintf("Automatically including timepoint fields: %s", 
+                       paste(missing_timepoint_fields, collapse = ", ")))
+      }
+    }
+    
+    # Get required fields from ndar_subject01 that exist in the current structure
+    ndar_required_in_structure <- character(0)
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            ndar_required <- subject_structure$dataElements[
+              subject_structure$dataElements$required == "Required", 
+            ]
+            if (nrow(ndar_required) > 0) {
+              ndar_required_names <- ndar_required$name
+              # Get required fields that exist in structure but are not super-required or DCC required
+              ndar_required_in_structure <- setdiff(
+                intersect(ndar_required_names, structure_field_names),
+                c(super_required_fields, dcc_required_fields)
+              )
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      # Silently fail if API call fails
+    })
+  } else {
+    ndar_required_in_structure <- character(0)
+  }
+  
+  # In interactive mode, prompt user to include other required fields that exist in structure
+  if (interactive_mode && length(ndar_required_in_structure) > 0) {
+    # Check which ones are not already in selected_columns
+    missing_required_in_structure <- setdiff(ndar_required_in_structure, selected_columns)
+    
+    if (length(missing_required_in_structure) > 0) {
+      message("\nThe following NDA required fields exist in this structure but are not currently selected:")
+      message(paste("  ", paste(missing_required_in_structure, collapse = ", ")))
+      
+      # Helper function for safe readline
+      safe_readline <- function(prompt, default = "") {
+        if (!interactive()) return(default)
+        result <- tryCatch({
+          readline(prompt = prompt)
+        }, error = function(e) default)
+        if (is.null(result) || result == "") default else result
+      }
+      
+      user_input <- safe_readline(
+        prompt = sprintf("Would you like to include these %d required field(s)? (y/n): ", 
+                         length(missing_required_in_structure)),
+        default = "y"
+      )
+      
+      # Validate input
+      while (!tolower(user_input) %in% c("y", "n", "yes", "no")) {
+        user_input <- safe_readline(
+          prompt = "Please enter 'y' for yes or 'n' for no: ",
+          default = "y"
+        )
+      }
+      
+      if (tolower(user_input) %in% c("y", "yes")) {
+        selected_columns <- c(selected_columns, missing_required_in_structure)
+        message(sprintf("Added %d required field(s) to selected columns.", 
+                       length(missing_required_in_structure)))
+      } else {
+        message("Skipping required fields. Note: These fields may be needed for NDA submission.")
+      }
+    }
+  }
+  
+  # Filter selected_columns to only include fields that exist in the current structure
+  # This ensures we don't include required fields from ndar_subject01 that aren't in this structure
+  # ALWAYS filter: only include fields that exist in structure (except super-required)
+  # This applies to both existing and new/modified structures
+  if (length(structure_field_names) > 0 && 
+      !is.null(nda_structure) && 
+      "dataElements" %in% names(nda_structure) &&
+      (is.data.frame(nda_structure$dataElements) && nrow(nda_structure$dataElements) > 0)) {
+    
+    # Check if this is a new/modified structure (has fields not in structure in original selection)
+    has_new_or_modified_fields <- any(!original_selected_columns %in% structure_field_names)
+    
+    # Get list of required fields from ndar_subject01 (for filtering logic)
+    ndar_required_all <- character(0)
+    tryCatch({
+      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
+      response <- httr::GET(url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        raw_content <- rawToChar(response$content)
+        if (nchar(raw_content) > 0) {
+          subject_structure <- jsonlite::fromJSON(raw_content)
+          if ("dataElements" %in% names(subject_structure)) {
+            ndar_required <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
+            if (nrow(ndar_required) > 0) {
+              ndar_required_all <- ndar_required$name
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      # Silently fail
+    })
+    
+    # Track which fields were added via the prompt (for filtering logic)
+    fields_added_by_prompt <- setdiff(selected_columns, original_selected_columns)
+    
+    # Always keep all original fields (they're in the user's data)
+    fields_to_keep <- original_selected_columns
+    
+    # Add super-required fields (even if not in structure)
+    super_required_in_selected <- intersect(selected_columns, super_required_fields)
+    fields_to_keep <- unique(c(fields_to_keep, super_required_in_selected))
+    
+    # Add DCC required fields (even if not in structure)
+    dcc_required_in_selected <- intersect(selected_columns, dcc_required_fields)
+    fields_to_keep <- unique(c(fields_to_keep, dcc_required_in_selected))
+    
+    # For fields added by prompt: only keep them if they exist in structure (or are super-required or DCC required)
+    if (length(fields_added_by_prompt) > 0) {
+      prompt_fields_in_structure <- intersect(fields_added_by_prompt, structure_field_names)
+      prompt_fields_super_required <- intersect(fields_added_by_prompt, super_required_fields)
+      prompt_fields_dcc_required <- intersect(fields_added_by_prompt, dcc_required_fields)
+      fields_to_keep <- unique(c(fields_to_keep, prompt_fields_in_structure, prompt_fields_super_required, prompt_fields_dcc_required))
+    }
+    
+    fields_to_remove <- setdiff(selected_columns, fields_to_keep)
+    
+    if (length(fields_to_remove) > 0) {
+      selected_columns <- fields_to_keep
+      if (interactive_mode) {
+        message(sprintf("Removed %d field(s) not in current structure: %s", 
+                       length(fields_to_remove), paste(fields_to_remove, collapse = ", ")))
+      }
+    }
   }
 
   # Extract NDA data elements
@@ -110,11 +641,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     if (is.null(data_vector) || length(data_vector) == 0) {
       return(list(
         data_type = "String",
-        description = paste("Missing field:", field_name),
+        description = "",
         size = 255,
         valueRange = "",
         required = "Recommended",
-        notes = "Field not found in dataset. Default metadata applied.",
+        notes = "",
         aliases = ""
       ))
     }
@@ -128,11 +659,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     if (valid_count == 0) {
       return(list(
         data_type = "String",
-        description = paste("Empty field:", field_name, "- all values are NA"),
+        description = "",
         size = 255,
         valueRange = "",
         required = "Recommended",
-        notes = paste0("Field contains only NA values (", total_count, " total rows). Missing: 100%"),
+        notes = "",
         aliases = "",
         missing_info = list(
           missing_count = missing_count,
@@ -177,7 +708,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     unique_vals <- unique(clean_data)
     unique_count <- length(unique_vals)
     value_range <- ""
-    
+
     # Detect user-defined missing value codes from config and data
     user_defined_codes <- character(0)
     if (data_type %in% c("Integer", "Float") && !is.null(missing_data_codes)) {
@@ -196,33 +727,15 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
 
-    if (data_type == "Integer") {
-      min_val <- min(clean_data, na.rm = TRUE)
-      max_val <- max(clean_data, na.rm = TRUE)
+    # Use the enhanced inference function to determine value range
+    value_range <- infer_value_range_from_data(data_vector, data_type)
 
-      # Always use range notation for integer data (less restrictive)
-      value_range <- paste0(as.integer(min_val), "::", as.integer(max_val))
-      
-      # Append user-defined missing value codes if they exist
-      if (length(user_defined_codes) > 0) {
-        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
-      }
-    } else if (data_type == "Float") {
-      # For float variables, keep it simple - no value ranges
-      value_range <- ""
-      
-      # Only append user-defined missing value codes if they exist
-      if (length(user_defined_codes) > 0) {
+    # Append user-defined missing value codes if they exist
+    if (length(user_defined_codes) > 0) {
+      if (value_range == "") {
         value_range <- paste(user_defined_codes, collapse = ";")
-      }
-    } else {
-      # For categorical/string data, list unique values (up to 20)
-      if (unique_count <= 20) {
-        # Sort string values alphabetically
-        sorted_vals <- sort(as.character(unique_vals))
-        value_range <- paste(sorted_vals, collapse = ";")
       } else {
-        value_range <- paste0("Multiple categorical values (", unique_count, " unique)")
+        value_range <- paste0(value_range, ";", paste(user_defined_codes, collapse = ";"))
       }
     }
 
@@ -234,10 +747,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
     # Keep notes minimal for all field types
     notes_parts <- c()
-    
+
     # Calculate missing percentage for missing_info (still needed)
     missing_pct <- round((missing_count / total_count) * 100, 1)
-    
+
     # Document user-defined missing value codes if they exist
     if (length(user_defined_codes) > 0 && !is.null(missing_data_codes)) {
       code_descriptions <- character(0)
@@ -258,19 +771,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
 
-    if (data_type == "Integer") {
-      mean_val <- round(mean(clean_data, na.rm = TRUE), 3)
-      sd_val <- round(stats::sd(clean_data, na.rm = TRUE), 3)
-      notes_parts <- c(notes_parts, paste0("Mean: ", mean_val, ", SD: ", sd_val))
-    }
-    # For Float fields, skip statistical information to keep them clean
-
-    if (unique_count <= 10 && data_type == "String") {
-      # For categorical data with few categories, show frequency
-      freq_table <- table(clean_data)
-      most_common <- names(freq_table)[which.max(freq_table)]
-      notes_parts <- c(notes_parts, paste0("Most common: '", most_common, "' (", max(freq_table), " cases)"))
-    }
+    # Do not append Mean/SD or other statistical summaries to notes
 
     notes <- paste(notes_parts, collapse = "; ")
 
@@ -373,26 +874,60 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   }
 
+  # Map REDCap field_type/validation to NDA data type
+  rc_map_redcap_to_nda_type <- function(meta_row, current_type = NULL) {
+    if (is.null(meta_row) || nrow(meta_row) == 0) return(current_type %||% "String")
+    ftype <- as.character(meta_row$field_type %||% "")
+    vtype <- as.character(meta_row$text_validation_type_or_show_slider_number %||% "")
+
+    # Choice-based
+    if (ftype %in% c("radio", "dropdown", "checkbox")) return("Integer")
+
+    # Numeric validations
+    if (nzchar(vtype)) {
+      if (grepl("^integer$", vtype, ignore.case = TRUE)) return("Integer")
+      if (grepl("^(number|float|decimal)$", vtype, ignore.case = TRUE)) return("Float")
+      if (grepl("^slider|show_slider_number", vtype, ignore.case = TRUE)) return("Integer")
+      if (grepl("date|datetime", vtype, ignore.case = TRUE)) return("Date")
+      if (grepl("zipcode|email|phone", vtype, ignore.case = TRUE)) return("String")
+    }
+
+    # Calculated fields numeric
+    if (ftype %in% c("calc")) return("Float")
+
+    # Text default
+    if (ftype %in% c("text", "notes")) return(current_type %||% "String")
+
+    return(current_type %||% "String")
+  }
+
   # For modified data definitions, focus ONLY on changes:
   # 1. New fields (not in NDA)
   # 2. Modified fields (in NDA but changed)
   # Exclude unchanged NDA fields
   # IMPORTANT: ndar_subject01 variables can NEVER be modified
-  
+
   all_nda_fields <- names(nda_lookup)
   user_added_fields <- selected_columns[!selected_columns %in% all_nda_fields]
-  
+
   # Identify ndar_subject01 variables that should never be modified
   ndar_subject01_fields <- all_nda_fields[grepl("^ndar_subject01", all_nda_fields)]
-  
+
   # Initialize lists for different field categories
   new_fields <- character(0)
   modified_fields <- character(0)
   unchanged_fields <- character(0)
-  
+
   if (!is.null(data_frame)) {
     # Categorize fields based on whether they exist in data and NDA
     for (field in selected_columns) {
+      # Skip change categorization for excluded fields: force unchanged
+      if (field %in% excluded_from_change) {
+        if (field %in% names(data_frame) && field %in% all_nda_fields) {
+          unchanged_fields <- c(unchanged_fields, field)
+        }
+        next
+      }
       if (field %in% names(data_frame)) {
         if (field %in% all_nda_fields) {
           # Field exists in both data and NDA - check if it's modified
@@ -402,16 +937,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           } else {
             # Check if this field has actual modifications
             is_modified <- FALSE
-            
+
             # Check for missing value code modifications
             if (!is.null(missing_data_codes)) {
               field_data <- data_frame[[field]]
               field_type <- if ("type" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$type else "String"
-              
+
               if (field_type %in% c("Integer", "Float")) {
                 # Check if field has missing value codes not in original NDA range
                 original_value_range <- if ("valueRange" %in% names(nda_lookup[[field]])) nda_lookup[[field]]$valueRange else ""
-                
+
                 # Detect missing value codes in the data
                 user_defined_codes <- character(0)
                 for (category in names(missing_data_codes)) {
@@ -426,7 +961,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                     }
                   }
                 }
-                
+
                 # Check if any of these codes are not in the original value range
                 if (length(user_defined_codes) > 0) {
                   original_codes <- character(0)
@@ -439,7 +974,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                       }
                     }
                   }
-                  
+
                   # Find new codes that aren't in the original
                   new_codes <- setdiff(user_defined_codes, original_codes)
                   if (length(new_codes) > 0) {
@@ -448,7 +983,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                 }
               }
             }
-            
+
             if (is_modified) {
               modified_fields <- c(modified_fields, field)
             } else {
@@ -457,7 +992,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           }
         } else {
           # Field exists in data but not in NDA - it's new
-          new_fields <- c(new_fields, field)
+          if (!(field %in% excluded_from_change)) {
+            new_fields <- c(new_fields, field)
+          } else {
+            unchanged_fields <- c(unchanged_fields, field)
+          }
         }
       } else {
         # Field doesn't exist in data - skip it
@@ -466,23 +1005,43 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   } else {
     # If no data frame available, treat all selected columns as new
-    new_fields <- selected_columns
+    new_fields <- setdiff(selected_columns, excluded_from_change)
   }
 
-  # Only include fields that are new or modified (focus on changes only)
+  # Include fields that are new, modified, OR selected unchanged fields
+  # Only include fields that were explicitly selected (not all essential_nda_fields)
+  # The selected_columns already contains only the fields the user wants
   ordered_columns <- c(new_fields, modified_fields)
   
+  # Add any remaining selected columns that are unchanged NDA fields
+  # (but only if they're in selected_columns - user explicitly selected them)
+  unchanged_selected <- intersect(unchanged_fields, selected_columns)
+  if (length(unchanged_selected) > 0) {
+    ordered_columns <- c(ordered_columns, unchanged_selected)
+  }
+
+  # Ensure we don't drop any selected columns: append remaining ones and de-duplicate
+  remaining_columns <- setdiff(selected_columns, ordered_columns)
+  if (length(remaining_columns) > 0) {
+    ordered_columns <- c(ordered_columns, remaining_columns)
+  }
+  ordered_columns <- unique(ordered_columns)
+
   # Report what's being included in the data definition
   if (length(new_fields) > 0) {
-    message(sprintf("Including %d new fields in data definition: %s", 
+    message(sprintf("Including %d new fields in data definition: %s",
                     length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
   }
   if (length(modified_fields) > 0) {
-    message(sprintf("Including %d modified fields in data definition: %s", 
+    message(sprintf("Including %d modified fields in data definition: %s",
                     length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
   }
+  if (length(unchanged_selected) > 0) {
+    message(sprintf("Including %d unchanged NDA fields in data definition: %s",
+                    length(unchanged_selected), paste(head(unchanged_selected, 5), collapse = ", ")))
+  }
   if (length(unchanged_fields) > 0) {
-    message(sprintf("Excluding %d unchanged NDA fields from data definition: %s", 
+    message(sprintf("Excluding %d unchanged NDA fields from data definition: %s",
                     length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
   }
 
@@ -508,9 +1067,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     )
   )
 
+  # Persist NDA element names for downstream export/formatting without relying on outer scope
+  data_definition$metadata$nda_element_names <- names(nda_lookup)
+
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
     column_name <- ordered_columns[i]
+    # Skip internal/excluded fields unconditionally
+    if (column_name %in% excluded_from_change) next
+    # Skip REDCap completion fields (ending with "_complete")
+    if (grepl("_complete$", column_name)) next
 
     # Check if column exists in NDA structure
     if (column_name %in% names(nda_lookup)) {
@@ -521,14 +1087,14 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       missing_info <- NULL
       field_data <- NULL
       field_exists_in_data <- FALSE
-      
+
       if (!is.null(data_frame) && column_name %in% names(data_frame)) {
         field_data <- data_frame[[column_name]]
         field_exists_in_data <- TRUE
         total_count <- length(field_data)
         missing_count <- sum(is.na(field_data))
         missing_percentage <- round((missing_count / total_count) * 100, 1)
-        
+
         missing_info <- list(
           missing_count = missing_count,
           missing_percentage = missing_percentage,
@@ -540,7 +1106,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       is_modified_structure <- FALSE
       updated_value_range <- NULL
       modification_notes <- NULL
-      
+
       # IMPORTANT: ndar_subject01 variables can NEVER be modified
       if (column_name %in% ndar_subject01_fields) {
         # Force ndar_subject01 fields to remain unchanged
@@ -548,7 +1114,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       } else if (field_exists_in_data && !is.null(missing_data_codes)) {
         original_value_range <- if ("valueRange" %in% names(nda_field)) nda_field$valueRange else ""
         field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
-        
+
         # Only check numeric fields for missing value codes
         if (field_type %in% c("Integer", "Float")) {
           # Detect missing value codes in the data
@@ -565,7 +1131,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
               }
             }
           }
-          
+
           # Check if any of these codes are not in the original value range
           if (length(user_defined_codes) > 0) {
             original_codes <- character(0)
@@ -578,19 +1144,19 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
                 }
               }
             }
-            
+
             # Find new codes that aren't in the original
             new_codes <- setdiff(user_defined_codes, original_codes)
             if (length(new_codes) > 0) {
               is_modified_structure <- TRUE
-              
+
               # Create updated value range
               if (original_value_range == "") {
                 updated_value_range <- paste(new_codes, collapse = ";")
               } else {
                 updated_value_range <- paste0(original_value_range, ";", paste(new_codes, collapse = ";"))
               }
-              
+
               # Create modification notes
               code_descriptions <- character(0)
               for (code in new_codes) {
@@ -620,16 +1186,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           allowed_values = updated_value_range,
           pattern = if ("pattern" %in% names(nda_field)) nda_field$pattern else NULL
         )
-        
+
         # Update NDA metadata with modified value range
         modified_nda_metadata <- nda_field
         modified_nda_metadata$valueRange <- updated_value_range
-        if (!is.null(modification_notes)) {
-          modified_nda_metadata$notes <- paste0(if ("notes" %in% names(nda_field)) nda_field$notes else "", 
-                                               if ("notes" %in% names(nda_field) && nda_field$notes != "") " | " else "",
-                                               modification_notes)
-        }
-        
+              # Do not append internal modification notes to exportable metadata
+
         nda_metadata_to_use <- modified_nda_metadata
         data_definition$metadata$validation_summary$modified_fields <-
           (data_definition$metadata$validation_summary$modified_fields %||% 0) + 1
@@ -647,6 +1209,67 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           data_definition$metadata$validation_summary$matched_fields + 1
       }
 
+      # Determine final description with fallback hierarchy:
+      # 1) NDA description (if present and non-empty)
+      # 2) REDCap field_label (if available) - ONLY for non-ndar_subject01 fields
+      # 3) Qualtrics question text (if available) - ONLY for non-ndar_subject01 fields
+      # 4) Keep as empty (will be handled downstream)
+      nda_desc <- if ("description" %in% names(nda_field)) nda_field$description else ""
+      fallback_desc <- nda_desc
+      if (is.null(fallback_desc) || identical(fallback_desc, "") || is.na(fallback_desc)) {
+        # Only apply external fallbacks for fields NOT matched to NDA
+        if (!(column_name %in% names(nda_lookup))) {
+          if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
+            fallback_desc <- as.character(redcap_label_map[[column_name]])
+          } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+            fallback_desc <- as.character(qualtrics_label_map[[column_name]])
+          }
+          if (!is.null(fallback_desc) && fallback_desc != "") {
+            fallback_desc <- rc_clean_label(fallback_desc)
+          }
+          # If we found a fallback, also enrich nda_metadata to carry it through export
+          if (!identical(fallback_desc, "")) {
+            nda_metadata_to_use$description <- fallback_desc
+          }
+        } else {
+          fallback_desc <- ""
+        }
+      }
+
+      # Enrich ValueRange/Notes from REDCap choices ONLY for non-NDA fields
+      if (!(column_name %in% names(nda_lookup)) && !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
+        redcap_choices <- redcap_choices_map[[column_name]]
+        if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
+          parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
+          if (parsed$codes != "") {
+            current_value_range <- if ("valueRange" %in% names(nda_metadata_to_use)) nda_metadata_to_use$valueRange else ""
+            if (is.null(current_value_range) || current_value_range == "" || is.na(current_value_range)) {
+              nda_metadata_to_use$valueRange <- parsed$codes
+              validation_rules$allowed_values <- parsed$codes
+            }
+          }
+          # Append mapping into notes (preserve existing)
+          if (parsed$notes != "") {
+            existing_notes <- if ("notes" %in% names(nda_metadata_to_use)) (nda_metadata_to_use$notes %||% "") else ""
+            nda_metadata_to_use$notes <- paste0(existing_notes, ifelse(existing_notes != "", " | ", ""), parsed$notes)
+          }
+        }
+      }
+
+      # If still no ValueRange, attempt to derive from validation/type where possible using REDCap metadata row
+      if (!(column_name %in% names(nda_lookup)) && (is.null(nda_metadata_to_use$valueRange) || nda_metadata_to_use$valueRange == "" || is.na(nda_metadata_to_use$valueRange))) {
+        if (exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
+          rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+          if (nrow(rc_row) == 1) {
+            derived <- rc_derive_value_range_from_validation(rc_row)
+            if (derived != "") {
+              nda_metadata_to_use$valueRange <- derived
+              validation_rules$allowed_values <- derived
+            }
+          }
+        }
+      }
+
       data_definition$fields[[column_name]] <- list(
         name = column_name,
         selection_order = i,
@@ -655,7 +1278,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
         # Copy NDA metadata
         data_type = if ("type" %in% names(nda_field)) nda_field$type else "unknown",
-        description = if ("description" %in% names(nda_field)) nda_field$description else "",
+        description = fallback_desc,
         required = if ("required" %in% names(nda_field)) as.logical(nda_field$required) else FALSE,
 
         # Validation rules
@@ -663,10 +1286,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
         # Additional NDA metadata
         nda_metadata = nda_metadata_to_use,
-        
+
         # Missing value information
         missing_info = missing_info,
-        
+
         # Modification information
         is_modified = is_modified_structure,
         modification_notes = modification_notes
@@ -687,11 +1310,104 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       # Compute metadata
       computed_metadata <- compute_field_metadata(column_name, column_data)
 
+      # Apply external fallback descriptions to computed fields when available
+      computed_desc <- computed_metadata$description
+      rc_label <- NULL
+      if (!is.null(redcap_label_map) && column_name %in% names(redcap_label_map)) {
+        rc_label <- as.character(redcap_label_map[[column_name]])
+        rc_label <- rc_clean_label(rc_label)
+      }
+      if (!is.null(rc_label) && nzchar(rc_label)) {
+        computed_desc <- rc_label
+      } else if (is.null(computed_desc) || identical(computed_desc, "") || is.na(computed_desc)) {
+        if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+          computed_desc <- as.character(qualtrics_label_map[[column_name]])
+        }
+      }
+
+      # REDCap checkbox child handling: derive from parent metadata first
+      if (exists("rc_meta") && is.data.frame(rc_meta)) {
+        cbx <- rc_enrich_checkbox_child(column_name, rc_meta)
+        if (!is.null(cbx$description) && cbx$description != "") {
+          computed_desc <- cbx$description
+        }
+        if (!is.null(cbx$valueRange)) {
+          computed_metadata$valueRange <- cbx$valueRange
+        }
+        if (!is.null(cbx$notes) && cbx$notes != "") {
+          existing_notes <- computed_metadata$notes %||% ""
+          computed_metadata$notes <- paste0(existing_notes, ifelse(existing_notes != "", " | ", ""), cbx$notes)
+        }
+        if (!is.null(cbx$data_type) && cbx$data_type != "") {
+          computed_metadata$data_type <- cbx$data_type
+        }
+        if (!is.null(cbx$size)) {
+          computed_metadata$size <- cbx$size
+        }
+      }
+
+      # Enhance computed ValueRange with RedCap choices if available
+      computed_value_range <- computed_metadata$valueRange
+      if ((is.null(computed_value_range) || computed_value_range == "" || is.na(computed_value_range)) &&
+          !is.null(redcap_choices_map) && column_name %in% names(redcap_choices_map)) {
+        redcap_choices <- redcap_choices_map[[column_name]]
+        if (!is.null(redcap_choices) && !is.na(redcap_choices) && redcap_choices != "") {
+          parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
+          if (parsed$codes != "") {
+            computed_metadata$valueRange <- parsed$codes
+          }
+          # Add mapping to notes
+          if (parsed$notes != "") {
+            existing_notes <- computed_metadata$notes %||% ""
+            computed_metadata$notes <- paste0(existing_notes, ifelse(existing_notes != "", " | ", ""), parsed$notes)
+          }
+        }
+      }
+
+      # If still no ValueRange, attempt derive from REDCap validation/type
+      if ((is.null(computed_metadata$valueRange) || computed_metadata$valueRange == "" || is.na(computed_metadata$valueRange)) && exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
+        rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+        if (nrow(rc_row) == 1) {
+          derived <- rc_derive_value_range_from_validation(rc_row)
+          if (derived != "") {
+            computed_metadata$valueRange <- derived
+          }
+        }
+      }
+
+      # Clean description for <br>
+      if (!is.null(computed_desc) && computed_desc != "") {
+        computed_desc <- rc_clean_label(computed_desc)
+      }
+
+      # Apply REDCap-to-NDA type mapping for computed fields if metadata available
+      if (exists("rc_meta") && is.data.frame(rc_meta) && "field_name" %in% names(rc_meta)) {
+        rc_row <- rc_meta[rc_meta$field_name == column_name, , drop = FALSE]
+        if (nrow(rc_row) == 1) {
+          computed_metadata$data_type <- rc_map_redcap_to_nda_type(rc_row, computed_metadata$data_type %||% "String")
+        }
+      }
+
       # Adjust warning message based on whether field exists in data
       if (field_exists_in_data) {
-        warning_msg <- paste("Column", column_name, "not found in NDA data structure - computing metadata from data")
+        # Determine enrichment source
+        enrichment <- if (exists("rc_meta") && is.data.frame(rc_meta) && column_name %in% rc_meta$field_name) {
+          "from REDCap"
+        } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+          "from Qualtrics"
+        } else {
+          "from dataframe"
+        }
+        warning_msg <- paste("Column", column_name, "not found in NDA data structure - computing metadata", enrichment)
       } else {
-        warning_msg <- paste("Column", column_name, "not found in NDA data structure or data frame - using placeholder metadata")
+        enrichment <- if (exists("rc_meta") && is.data.frame(rc_meta) && column_name %in% rc_meta$field_name) {
+          "from REDCap"
+        } else if (!is.null(qualtrics_label_map) && column_name %in% names(qualtrics_label_map)) {
+          "from Qualtrics"
+        } else {
+          "from template"
+        }
+        warning_msg <- paste("Column", column_name, "not found in NDA data structure or data frame - using placeholder metadata", enrichment)
       }
 
       data_definition$metadata$validation_summary$warnings <-
@@ -703,7 +1419,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
         selected_for_submission = TRUE,
         source = if (field_exists_in_data) "computed_from_data" else "template_only",
         data_type = computed_metadata$data_type,
-        description = computed_metadata$description,
+        description = computed_desc,
         required = computed_metadata$required == "Required",
         validation_rules = list(
           min_value = NULL,
@@ -717,7 +1433,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
           type = computed_metadata$data_type,
           size = computed_metadata$size,
           required = computed_metadata$required,
-          description = computed_metadata$description,
+          description = computed_desc,
           valueRange = computed_metadata$valueRange,
           notes = computed_metadata$notes,
           aliases = computed_metadata$aliases
@@ -747,12 +1463,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       2
     )
   )
-  
+
   # Add missing value summary across all fields
   total_missing_count <- 0
   total_rows <- 0
   fields_with_missing <- 0
-  
+
   for (field_name in names(data_definition$fields)) {
     field <- data_definition$fields[[field_name]]
     if (!is.null(field$missing_info)) {
@@ -763,7 +1479,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
   }
-  
+
   if (total_rows > 0) {
     data_definition$summary$missing_data_summary <- list(
       total_missing_values = total_missing_count,
@@ -782,7 +1498,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   cat("Modified NDA structures:", data_definition$summary$modified_fields, "\n")
   cat("Computed from data:", data_definition$summary$computed_fields, "\n")
   cat("Match percentage:", paste0(data_definition$summary$match_percentage, "%"), "\n")
-  
+
   # Print missing value summary
   if (!is.null(data_definition$summary$missing_data_summary)) {
     missing_summary <- data_definition$summary$missing_data_summary
@@ -800,9 +1516,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     }
   }
 
-  # Auto-export to CSV
+  # Auto-export to XLSX
   tryCatch({
-    exportDataDefinition(data_definition, "csv")
+    exportDataDefinition(data_definition, "xlsx")
   }, error = function(e) {
     warning("Could not export data definition: ", e$message)
   })
@@ -810,14 +1526,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
   return(data_definition)
 }
 
-#' Validate Data Definition
-#'
-#' Validates the created data definition against submission requirements
-#'
-#' @param data_definition List containing the data definition
-#' @param strict_validation Logical, whether to enforce strict validation rules
-#' @return List with validation results
-#' @export
+#' @noRd
 validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 
   validation_result <- list(
@@ -894,19 +1603,16 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
   return(validation_result)
 }
 
-#' Export Data Definition
-#'
-#' Exports the data definition to various formats
-#'
-#' @param data_definition List containing the data definition
-#' @param format Character string specifying export format ("json", "csv", "yaml")
-#' @export
+#' @noRd
 exportDataDefinition <- function(data_definition, format = "csv") {
   # Create directory structure if it doesn't exist
   tmp_path <- file.path(".", "tmp")
   if (!dir.exists(tmp_path)) {
     dir.create(tmp_path, recursive = TRUE)
   }
+
+  # Internal-only fields that must never be exported
+  excluded_internal <- c("state", "lost_to_followup", "lost_to_follow-up", "study_status")
 
   # Create file path with appropriate extension
   file_path <- file.path(tmp_path, paste0(data_definition$measure_name, "_definitions.", format))
@@ -924,6 +1630,17 @@ exportDataDefinition <- function(data_definition, format = "csv") {
          "csv" = {
            # Flatten the fields for CSV export with exact NDA column names and case
            field_names <- names(data_definition$fields)
+           # Ensure field_names is a character vector
+           if (is.null(field_names)) {
+             field_names <- character(0)
+           }
+           if (!is.character(field_names)) {
+             field_names <- as.character(field_names)
+           }
+           # Filter out excluded fields from final export
+           field_names <- setdiff(field_names, excluded_internal)
+           # Also exclude REDCap completion fields (ending with "_complete")
+           field_names <- field_names[!grepl("_complete$", field_names)]
 
            if (length(field_names) == 0) {
              warning("No fields to export")
@@ -974,7 +1691,11 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                tryCatch({
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "description" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$description %||% "")
+                  desc_val <- as.character(x$nda_metadata$description %||% "")
+                  # Strip boilerplate
+                  desc_val <- gsub("^Missing field: ", "", desc_val)
+                  desc_val <- gsub("^Empty field: ", "", desc_val)
+                  desc_val
                  } else {
                    as.character(x$description %||% "")
                  }
@@ -993,6 +1714,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  }
                }, error = function(e) "")
              })
+            # Compress numeric ranges
+            value_ranges <- vapply(value_ranges, compress_value_range, character(1))
 
              notes <- sapply(field_names, function(fname) {
                tryCatch({
@@ -1001,6 +1724,8 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                    notes_val <- x$nda_metadata$notes %||% ""
                    # Clean up NA values and convert to empty string
                    if (is.na(notes_val) || notes_val == "NA" || notes_val == "character(0)") "" else as.character(notes_val)
+                 } else if (!is.null(x$notes)) {
+                   as.character(x$notes %||% "")
                  } else {
                    ""
                  }
@@ -1012,28 +1737,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  x <- data_definition$fields[[fname]]
                  if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
                    alias_val <- x$nda_metadata$aliases %||% ""
-                   
-                   # Handle different alias formats
-                   if (is.null(alias_val) || is.na(alias_val) || alias_val == "" || alias_val == "character(0)") {
-                     ""
-                   } else if (is.vector(alias_val) && length(alias_val) > 0) {
-                     # If it's a vector with elements, join with commas
-                     paste(alias_val, collapse = ", ")
-                   } else if (is.character(alias_val) && length(alias_val) == 1) {
-                     # If it's a string, clean up R syntax
-                     cleaned <- gsub("^c\\(|\\)$", "", alias_val)
-                     # Remove quotes around individual items and clean up
-                     cleaned <- gsub('"([^"]*)"', "\\1", cleaned)
-                     # Split by comma and clean up whitespace, then rejoin
-                     if (nchar(cleaned) > 0) {
-                       items <- trimws(strsplit(cleaned, ",")[[1]])
-                       paste(items, collapse = ", ")
-                     } else {
-                       ""
-                     }
-                   } else {
-                     ""
-                   }
+                   normalize_aliases_export(alias_val)
                  } else {
                    ""
                  }
@@ -1063,8 +1767,66 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                }, error = function(e) "0%")
              })
 
+             # Curator notes to summarize changes
+             # Check if field exists in NDA to avoid marking existing fields as "New field"
+             nda_element_names <- data_definition$metadata$nda_element_names
+             if (is.null(nda_element_names) || !is.character(nda_element_names) || length(nda_element_names) == 0) {
+               nda_element_names <- character(0)
+             }
+             # Ensure field_names is a character vector
+             if (is.null(field_names) || !is.character(field_names)) {
+               field_names <- character(0)
+             }
+             curator_notes <- sapply(field_names, function(fname) {
+               if (is.null(fname) || !is.character(fname) || length(fname) != 1) {
+                 return("")
+               }
+               x <- data_definition$fields[[fname]]
+               if (is.null(x)) return("")
+               parts <- character(0)
+               # Check if field exists in NDA (ensure both are character vectors)
+               exists_in_nda <- if (is.character(fname) && is.character(nda_element_names) && length(fname) == 1) {
+                 fname %in% nda_element_names
+               } else {
+                 FALSE
+               }
+               # Source summary
+               if (!is.null(x$source)) {
+                 if (identical(x$source, "computed_from_data")) {
+                   # If field exists in NDA but was marked as computed, it's likely a modified value range
+                   if (exists_in_nda || isTRUE(x$is_modified)) {
+                     parts <- c(parts, "Modified value range")
+                   } else {
+                     parts <- c(parts, "New field (not in NDA)")
+                   }
+                 } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
+                   parts <- c(parts, "Modified value range")
+                 } else if (identical(x$source, "template_only")) {
+                   parts <- c(parts, "In template only; no data observed")
+                 } else if (identical(x$source, "nda_validated")) {
+                   parts <- c(parts, "Matched NDA field")
+                 }
+               }
+               # Required status
+               reqFlag <- NULL
+               if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+                 reqFlag <- x$nda_metadata$required
+               } else if (!is.null(x$required)) {
+                 reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
+               }
+               if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
+                 parts <- c(parts, "Required by NDA")
+               }
+               # Skip missing percentage in curator notes
+               note <- paste(parts, collapse = " | ")
+               if (identical(note, "")) {
+                 note <- paste0("Requesting to add ", fname, " as is")
+               }
+               note
+             })
+
              # Create data frame with explicit length checking
-             fields_df <- data.frame(
+            fields_df <- data.frame(
                ElementName = element_names,
                DataType = data_types,
                Size = sizes,
@@ -1073,8 +1835,43 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                ValueRange = value_ranges,
                Notes = notes,
                Aliases = aliases,
-               stringsAsFactors = FALSE
+              `Notes for Data Curator` = curator_notes,
+              stringsAsFactors = FALSE,
+              check.names = FALSE
              )
+
+             # --- Safe export sanitization ---
+             # Drop rows with empty ElementName
+             fields_df$ElementName <- as.character(fields_df$ElementName)
+             fields_df <- fields_df[!is.na(fields_df$ElementName) & fields_df$ElementName != "", , drop = FALSE]
+
+             # NA -> ""
+             for (nm in names(fields_df)) {
+               fields_df[[nm]][is.na(fields_df[[nm]])] <- ""
+             }
+
+             # Normalize DataType and Required
+             fields_df$DataType <- as.character(fields_df$DataType)
+             fields_df$Required <- as.character(fields_df$Required)
+             fields_df$DataType[!fields_df$DataType %in% c("String", "Integer", "Float", "Date", "GUID", "Boolean")] <- "String"
+             fields_df$Required[!fields_df$Required %in% c("Required", "Recommended", "Conditional", "No")] <- "No"
+
+             # Coerce Size to numeric-like text or empty
+             suppressWarnings(sz <- as.numeric(fields_df$Size))
+             sz[is.na(sz)] <- NA_real_
+             fields_df$Size <- ifelse(is.na(sz), "", as.character(sz))
+
+             # Only Strings have Size; clear Size for non-String types
+             non_string_idx <- which(fields_df$DataType != "String")
+             if (length(non_string_idx) > 0) {
+               fields_df$Size[non_string_idx] <- ""
+             }
+
+             # Compress numeric ValueRange and normalize spacing
+             fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
+
+             # Normalize Aliases to comma-separated without quotes/c()
+             fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
 
              write.csv(fields_df, file_path, row.names = FALSE)
              cat("Data definition exported to:", file_path, "\n")
@@ -1084,6 +1881,543 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              cat("Debug info - field count:", length(field_names), "\n")
              cat("Debug info - fields:", paste(head(field_names, 5), collapse = ", "), "\n")
            })
+         },
+
+         "xlsx" = {
+           # openxlsx is a hard dependency (Imports); proceed directly
+
+           # Reuse the same field assembly as CSV branch
+           field_names <- names(data_definition$fields)
+           # Ensure field_names is a character vector
+           if (is.null(field_names)) {
+             field_names <- character(0)
+           }
+           if (!is.character(field_names)) {
+             field_names <- as.character(field_names)
+           }
+           field_names <- setdiff(field_names, excluded_internal)
+           # Also exclude REDCap completion fields (ending with "_complete")
+           field_names <- field_names[!grepl("_complete$", field_names)]
+           if (length(field_names) == 0) {
+             warning("No fields to export")
+             return(invisible(NULL))
+           }
+
+           element_names <- field_names
+
+           data_types <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "type" %in% names(x$nda_metadata)) {
+                 as.character(x$nda_metadata$type %||% "String")
+               } else {
+                 as.character(x$data_type %||% "String")
+               }
+             }, error = function(e) "String")
+           })
+
+           sizes <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "size" %in% names(x$nda_metadata)) {
+                 size_val <- x$nda_metadata$size
+                 if (is.null(size_val) || is.na(size_val)) "" else as.numeric(size_val)
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+
+           required_vals <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+                 as.character(x$nda_metadata$required %||% "No")
+               } else if (!is.null(x$required)) {
+                 ifelse(isTRUE(x$required), "Required", "No")
+               } else {
+                 "No"
+               }
+             }, error = function(e) "No")
+           })
+
+           descriptions <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "description" %in% names(x$nda_metadata)) {
+                desc_val <- as.character(x$nda_metadata$description %||% "")
+                desc_val <- gsub("^Missing field: ", "", desc_val)
+                desc_val <- gsub("^Empty field: ", "", desc_val)
+                desc_val
+               } else {
+                 as.character(x$description %||% "")
+               }
+             }, error = function(e) "")
+           })
+
+           value_ranges <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "valueRange" %in% names(x$nda_metadata)) {
+                 val_range <- x$nda_metadata$valueRange %||% ""
+                 if (is.na(val_range) || val_range == "NA") "" else as.character(val_range)
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+           value_ranges <- vapply(value_ranges, compress_value_range, character(1))
+
+           notes <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "notes" %in% names(x$nda_metadata)) {
+                 notes_val <- x$nda_metadata$notes %||% ""
+                 notes_val <- if (is.na(notes_val) || notes_val == "NA" || notes_val == "character(0)") "" else as.character(notes_val)
+                 # Strip internal modification text if ever present
+                 notes_val <- gsub("\\bModified structure: Added missing value codes:.*$", "", notes_val)
+                 trimws(notes_val)
+               } else if (!is.null(x$notes)) {
+                 as.character(x$notes %||% "")
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+
+           aliases <- sapply(field_names, function(fname) {
+             tryCatch({
+               x <- data_definition$fields[[fname]]
+               if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
+                 alias_val <- x$nda_metadata$aliases %||% ""
+                 normalize_aliases_export(alias_val)
+               } else {
+                 ""
+               }
+             }, error = function(e) "")
+           })
+
+           # Curator notes to summarize changes (mirror CSV branch)
+           # Check if field exists in NDA to avoid marking existing fields as "New field"
+           nda_element_names <- data_definition$metadata$nda_element_names
+           if (is.null(nda_element_names) || !is.character(nda_element_names) || length(nda_element_names) == 0) {
+             nda_element_names <- character(0)
+           }
+           # Ensure field_names is a character vector
+           if (is.null(field_names) || !is.character(field_names)) {
+             field_names <- character(0)
+           }
+           curator_notes <- sapply(field_names, function(fname) {
+             if (is.null(fname) || !is.character(fname) || length(fname) != 1) {
+               return("")
+             }
+             x <- data_definition$fields[[fname]]
+             if (is.null(x)) return("")
+             parts <- character(0)
+             # Check if field exists in NDA (ensure both are character vectors)
+             exists_in_nda <- if (is.character(fname) && is.character(nda_element_names) && length(fname) == 1) {
+               fname %in% nda_element_names
+             } else {
+               FALSE
+             }
+             if (!is.null(x$source)) {
+               if (identical(x$source, "computed_from_data")) {
+                 # If field exists in NDA but was marked as computed, it's likely a modified value range
+                 if (exists_in_nda || isTRUE(x$is_modified)) {
+                   parts <- c(parts, "Modified value range")
+                 } else {
+                   parts <- c(parts, "New field (not in NDA)")
+                 }
+               } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
+                 parts <- c(parts, "Modified value range")
+               } else if (identical(x$source, "template_only")) {
+                 parts <- c(parts, "In template only; no data observed")
+               } else if (identical(x$source, "nda_validated")) {
+                 parts <- c(parts, "Matched NDA field")
+               }
+             }
+             reqFlag <- NULL
+             if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+               reqFlag <- x$nda_metadata$required
+             } else if (!is.null(x$required)) {
+               reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
+             }
+             if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
+               parts <- c(parts, "Required by NDA")
+             }
+             # Skip missing percentage in curator notes
+             note <- paste(parts, collapse = " | ")
+             if (identical(note, "")) {
+               note <- paste0("Requesting to add ", fname, " as is")
+             }
+             note
+           })
+
+          fields_df <- data.frame(
+             ElementName = element_names,
+             DataType = data_types,
+             Size = sizes,
+             Required = required_vals,
+             ElementDescription = descriptions,
+             ValueRange = value_ranges,
+             Notes = notes,
+             Aliases = aliases,
+            `Notes for Data Curator` = curator_notes,
+            stringsAsFactors = FALSE,
+            check.names = FALSE
+           )
+
+           # Sanitize (same as CSV)
+           fields_df$ElementName <- as.character(fields_df$ElementName)
+           fields_df <- fields_df[!is.na(fields_df$ElementName) & fields_df$ElementName != "", , drop = FALSE]
+           for (nm in names(fields_df)) {
+             fields_df[[nm]][is.na(fields_df[[nm]])] <- ""
+           }
+           fields_df$DataType <- as.character(fields_df$DataType)
+           fields_df$Required <- as.character(fields_df$Required)
+           fields_df$DataType[!fields_df$DataType %in% c("String", "Integer", "Float", "Date", "GUID", "Boolean")] <- "String"
+           fields_df$Required[!fields_df$Required %in% c("Required", "Recommended", "Conditional", "No")] <- "No"
+           suppressWarnings(sz <- as.numeric(fields_df$Size))
+           sz[is.na(sz)] <- NA_real_
+           fields_df$Size <- ifelse(is.na(sz), "", as.character(sz))
+           non_string_idx <- which(fields_df$DataType != "String")
+           if (length(non_string_idx) > 0) {
+             fields_df$Size[non_string_idx] <- ""
+           }
+           fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
+           fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
+
+           # Build workbook with formatting
+           wb <- openxlsx::createWorkbook()
+           openxlsx::addWorksheet(wb, "Data Definitions")
+           openxlsx::writeData(wb, "Data Definitions", fields_df, startRow = 1, startCol = 1, withFilter = TRUE)
+
+           # Header style: yellow fill, bold
+           headerStyle <- openxlsx::createStyle(textDecoration = "bold", fgFill = "#FFF2CC", halign = "left", valign = "top", border = "Bottom")
+           openxlsx::addStyle(wb, "Data Definitions", headerStyle, rows = 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
+
+           # Wrap text for description/notes/valueRange
+           wrapStyle <- openxlsx::createStyle(wrapText = TRUE, valign = "top")
+           wrapCols <- which(colnames(fields_df) %in% c("ElementDescription", "ValueRange", "Notes", "Notes for Data Curator"))
+           if (length(wrapCols) > 0 && nrow(fields_df) > 0) {
+             openxlsx::addStyle(wb, "Data Definitions", wrapStyle, rows = 2:(nrow(fields_df) + 1), cols = wrapCols, gridExpand = TRUE)
+           }
+
+            # Red text for Required == "Required"
+           if (nrow(fields_df) > 0) {
+             reqRows <- which(fields_df$Required == "Required")
+             if (length(reqRows) > 0) {
+                redText <- openxlsx::createStyle(fontColour = "#FF0000")
+               openxlsx::addStyle(wb, "Data Definitions", redText, rows = reqRows + 1, cols = which(colnames(fields_df) == "Required"), gridExpand = TRUE)
+             }
+           }
+
+           # NDA Highlighting Rules
+           if (nrow(fields_df) > 0) {
+             elementCol <- which(colnames(fields_df) == "ElementName")
+             valueCols <- which(colnames(fields_df) %in% c("ValueRange", "Notes"))
+
+            blueFill <- openxlsx::createStyle(fgFill = "#00B0F0")
+            yellowFill <- openxlsx::createStyle(fgFill = "#FFFF00")
+            redFont <- openxlsx::createStyle(fontColour = "#FF0000")
+            # Collect rich text edits to apply post-save via openxlsx2
+            rich_text_edits <- list()
+
+            # Determine whether each element exists in NDA by lookup retained in metadata,
+            # falling back to NDA API element search when not found locally
+            nda_element_names <- data_definition$metadata$nda_element_names
+            # Ensure nda_element_names is a character vector
+            if (is.null(nda_element_names) || !is.character(nda_element_names)) {
+              nda_element_names <- character(0)
+            }
+            in_local_nda <- element_names %in% nda_element_names
+
+             # Cached API checker to minimize network calls
+             .nda_exists_cache <- new.env(parent = emptyenv())
+             nda_element_exists_api <- function(el_name) {
+               if (!nzchar(el_name)) return(FALSE)
+               if (!is.null(.nda_exists_cache[[el_name]])) return(.nda_exists_cache[[el_name]])
+               base_url <- "https://nda.nih.gov/api/datadictionary/v2/datastructure/dataElement/"
+               url <- paste0(base_url, utils::URLencode(el_name, reserved = TRUE))
+               exists_flag <- FALSE
+               try({
+                 resp <- httr::GET(url, httr::timeout(8))
+                 if (httr::status_code(resp) == 200) {
+                   raw <- rawToChar(resp$content)
+                   if (nzchar(raw)) {
+                     parsed <- tryCatch(jsonlite::fromJSON(raw), error = function(e) NULL)
+                     # Endpoint returns an array of structures containing the element; non-empty => exists
+                     if (!is.null(parsed) && length(parsed) > 0) exists_flag <- TRUE
+                   }
+                 }
+               }, silent = TRUE)
+               .nda_exists_cache[[el_name]] <- exists_flag
+               exists_flag
+             }
+
+             api_check_needed <- which(!in_local_nda)
+             api_exists <- rep(FALSE, length(element_names))
+             if (length(api_check_needed) > 0) {
+               for (idx in api_check_needed) {
+                 api_exists[idx] <- nda_element_exists_api(element_names[idx])
+               }
+             }
+
+             element_is_in_nda <- in_local_nda | api_exists
+
+             # Fetch NDA element metadata for allowed range comparison (cached)
+             .nda_meta_cache <- new.env(parent = emptyenv())
+             nda_fetch_element <- function(el_name) {
+               if (!nzchar(el_name)) return(NULL)
+               if (!is.null(.nda_meta_cache[[el_name]])) return(.nda_meta_cache[[el_name]])
+               base_url <- "https://nda.nih.gov/api/datadictionary/v2/dataelement/"
+               url <- paste0(base_url, utils::URLencode(el_name, reserved = TRUE))
+               out <- NULL
+               try({
+                 resp <- httr::GET(url, httr::timeout(8))
+                 if (httr::status_code(resp) == 200) {
+                   raw <- rawToChar(resp$content)
+                   if (nzchar(raw)) {
+                     out <- tryCatch(jsonlite::fromJSON(raw), error = function(e) NULL)
+                   }
+                 }
+               }, silent = TRUE)
+               .nda_meta_cache[[el_name]] <- out
+               out
+             }
+
+             # Helper to expand numeric valueRange string into a set of allowed integer values
+             expand_numeric_value_range <- function(val_range_str) {
+               if (is.null(val_range_str) || identical(val_range_str, "") || is.na(val_range_str)) return(NULL)
+               parts <- trimws(strsplit(as.character(val_range_str), ";")[[1]])
+               parts <- parts[nzchar(parts)]
+               if (length(parts) == 0) return(NULL)
+               out_vals <- integer(0)
+               for (p in parts) {
+                 if (grepl("::", p, fixed = TRUE)) {
+                   bounds <- suppressWarnings(as.numeric(strsplit(p, "::", fixed = TRUE)[[1]]))
+                   if (length(bounds) == 2 && !any(is.na(bounds))) {
+                     a <- floor(bounds[1]); b <- floor(bounds[2])
+                     if (b >= a && (b - a) <= 10000) { # safety bound
+                       out_vals <- c(out_vals, seq(a, b))
+                     }
+                   }
+                 } else {
+                   num <- suppressWarnings(as.numeric(p))
+                   if (!is.na(num)) out_vals <- c(out_vals, floor(num))
+                 }
+               }
+               unique(out_vals)
+             }
+
+             # Determine which rows are modified (our proposal changes)
+             row_modified <- vapply(field_names, function(fname) {
+               x <- data_definition$fields[[fname]]
+               isTRUE(x$is_modified) || identical(as.character(x$source %||% ""), "nda_modified")
+             }, logical(1))
+
+             # Track diagnostics for a Routes sheet
+             route_source <- vapply(field_names, function(fname) {
+               x <- data_definition$fields[[fname]]
+               as.character(x$source %||% "")
+             }, character(1))
+             applied_blue <- rep(FALSE, length(field_names))
+             applied_yellow <- rep(FALSE, length(field_names))
+             applied_red <- rep(FALSE, length(field_names))
+             nda_range_mismatch <- rep(FALSE, length(field_names))
+
+             # Blue: all rows whose ElementName exists in NDA
+             idx_in_nda <- which(element_is_in_nda)
+             if (length(idx_in_nda) > 0) {
+               openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_in_nda + 1, cols = elementCol, gridExpand = TRUE)
+               applied_blue[idx_in_nda] <- TRUE
+             }
+
+             # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
+             idx_modified <- which(row_modified & element_is_in_nda)
+             if (length(idx_modified) > 0 && length(valueCols) > 0) {
+               # Yellow highlight on ValueRange and Notes cells
+               openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
+               # Additionally make the ValueRange cell text red for modified elements
+               vr_col_only <- which(colnames(fields_df) == "ValueRange")
+               if (length(vr_col_only) == 1) {
+                 openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
+               }
+               applied_yellow[idx_modified] <- TRUE
+             }
+
+             # Yellow + red text on ValueRange for NDA elements whose exported ValueRange extends beyond NDA-allowed values
+             if (length(valueCols) > 0) {
+               cat("Comparing NDA value ranges for mismatches...\n")
+              for (i in which(element_is_in_nda)) {
+                # Fast skip when our ValueRange is empty
+                ours_str <- as.character(fields_df$ValueRange[i] %||% "")
+                if (!nzchar(ours_str)) next
+                # Fetch NDA metadata only when needed
+                el <- element_names[i]
+                nda_meta <- nda_fetch_element(el)
+                if (is.null(nda_meta)) next
+                nda_allowed <- expand_numeric_value_range(nda_meta$valueRange)
+                if (is.null(nda_allowed) || length(nda_allowed) == 0) next
+                ours_vals <- expand_numeric_value_range(ours_str)
+                if (is.null(ours_vals)) next
+                  if (length(setdiff(ours_vals, nda_allowed)) > 0) {
+                  # Clear definition columns except ValueRange and Notes
+                  clear_cols <- c("DataType", "Size", "Required", "ElementDescription")
+                  clear_idx <- which(colnames(fields_df) %in% clear_cols)
+                  if (length(clear_idx) > 0) {
+                    for (cc in clear_idx) {
+                      openxlsx::writeData(wb, "Data Definitions", "", startRow = i + 1, startCol = cc, colNames = FALSE)
+                    }
+                  }
+
+                  # Apply yellow fill to ValueRange and Notes cells to indicate change
+                  vr_col <- which(colnames(fields_df) == "ValueRange")
+                  notes_col <- which(colnames(fields_df) == "Notes")
+                  if (length(vr_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = vr_col, gridExpand = TRUE)
+                  }
+                  if (length(notes_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = notes_col, gridExpand = TRUE)
+                  }
+
+                  # Build rich-text instructions to apply later with openxlsx2
+                  tokens <- trimws(strsplit(ours_str, ";")[[1]])
+                  tokens <- tokens[nzchar(tokens)]
+                  added_tokens <- character(0)
+                  token_is_added <- logical(length(tokens))
+                  for (ti in seq_along(tokens)) {
+                    tok <- tokens[ti]
+                    # Support tokens like "9999=Prefer not to say" by extracting leading code before '='
+                    leading_code <- suppressWarnings(as.numeric(sub("=.*$", "", tok)))
+                    if (!is.na(leading_code)) {
+                      tok_vals <- leading_code
+                    } else {
+                      tok_vals <- expand_numeric_value_range(tok)
+                    }
+                    token_is_added[ti] <- length(setdiff(tok_vals %||% numeric(0), nda_allowed)) > 0
+                    if (token_is_added[ti]) added_tokens <- c(added_tokens, tok)
+                  }
+                  rich_text_edits[[length(rich_text_edits) + 1]] <- list(
+                    row = i + 1,
+                    vr_col = if (length(vr_col) == 1) vr_col else NA_integer_,
+                    notes_col = if (length(notes_col) == 1) notes_col else NA_integer_,
+                    tokens = tokens,
+                    token_is_added = token_is_added,
+                    added_tokens = added_tokens
+                  )
+                  applied_yellow[i] <- TRUE
+                  nda_range_mismatch[i] <- TRUE
+                  # Update curator notes to "Modified value range" for fields with mismatches
+                  notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+                  if (length(notes_col) == 1) {
+                    openxlsx::writeData(wb, "Data Definitions", "Modified value range", startRow = i + 1, startCol = notes_col, colNames = FALSE)
+                  }
+                }
+              }
+              cat("Value range comparison complete.\n")
+            }
+
+            # Red text only (no yellow fill): elements not in NDA (new/proposed elements)
+            idx_not_in_nda <- which(!element_is_in_nda)
+            if (length(idx_not_in_nda) > 0) {
+              openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
+              applied_red[idx_not_in_nda] <- TRUE
+            }
+
+             # Add diagnostics worksheet summarizing route and highlighting decisions
+             routes_df <- data.frame(
+               ElementName = element_names,
+               InNDA = element_is_in_nda,
+               Source = route_source,
+               Modified = row_modified,
+               BlueApplied = applied_blue,
+               YellowApplied = applied_yellow,
+               RedApplied = applied_red,
+               NdaRangeMismatch = nda_range_mismatch,
+               stringsAsFactors = FALSE,
+               check.names = FALSE
+             )
+             openxlsx::addWorksheet(wb, "Routes")
+             openxlsx::writeData(wb, "Routes", routes_df, startRow = 1, startCol = 1, withFilter = TRUE)
+             openxlsx::setColWidths(wb, "Routes", cols = seq_len(ncol(routes_df)), widths = "auto")
+
+             # Ensure Notes for Data Curator defaults for unchanged NDA elements
+             idx_no_change <- which(element_is_in_nda & !row_modified & !nda_range_mismatch)
+             if (length(idx_no_change) > 0) {
+               notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+               default_notes <- paste0("Requesting to add ", element_names[idx_no_change], " as is.")
+               # Overwrite cells in worksheet to guarantee desired phrasing
+               for (k in seq_along(idx_no_change)) {
+                 openxlsx::writeData(wb, "Data Definitions", default_notes[k], startRow = idx_no_change[k] + 1, startCol = notes_col, colNames = FALSE)
+               }
+
+               # For unchanged NDA elements, clear all definition columns
+               cols_to_clear <- c("DataType", "Size", "Required", "ElementDescription", "ValueRange", "Notes", "Aliases")
+               clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
+               if (length(clear_cols_idx) > 0) {
+                 for (cc in clear_cols_idx) {
+                   # write empty strings into each target row for this column
+                   for (r in idx_no_change) {
+                     openxlsx::writeData(wb, "Data Definitions", "", startRow = r + 1, startCol = cc, colNames = FALSE)
+                   }
+                 }
+               }
+
+              # Do not populate Notes with version string for unchanged elements
+             }
+           }
+          
+          # Auto widths
+          openxlsx::setColWidths(wb, "Data Definitions", cols = seq_len(ncol(fields_df)), widths = "auto")
+
+          openxlsx::saveWorkbook(wb, file_path, overwrite = TRUE)
+
+          # Post-process with openxlsx2 to apply per-token rich text if needed
+          if (length(rich_text_edits) > 0) {
+            # Helper to convert numeric column index to Excel column letters
+            num_to_col <- function(n) {
+              letters <- c()
+              while (n > 0) {
+                r <- (n - 1) %% 26
+                letters <- c(LETTERS[r + 1], letters)
+                n <- (n - 1) %/% 26
+              }
+              paste0(letters, collapse = "")
+            }
+            wb2 <- openxlsx2::wb_load(file_path)
+            # Resolve exported functions dynamically to avoid R CMD check NOTE/WARNING
+            create_rich_text_fn <- get("create_rich_text", asNamespace("openxlsx2"))
+            wb_add_rich_text_fn <- get("wb_add_rich_text", asNamespace("openxlsx2"))
+            for (edit in rich_text_edits) {
+              # ValueRange rich text
+              if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
+                runs <- list()
+                for (ti in seq_along(edit$tokens)) {
+                  tok <- edit$tokens[ti]
+                  col <- if (edit$token_is_added[ti]) "FF0000" else "000000"
+                  runs[[length(runs) + 1]] <- create_rich_text_fn(text = tok, color = col)
+                  if (ti < length(edit$tokens)) {
+                    runs[[length(runs) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                  }
+                }
+                dims <- paste0(num_to_col(edit$vr_col), edit$row)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
+              }
+              # Notes rich text
+              if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
+                runs2 <- list()
+                for (j in seq_along(edit$added_tokens)) {
+                  runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
+                  if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                }
+                dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
+                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
+              }
+            }
+            openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
+          }
+          cat("Data definition exported to:", file_path, "\n")
          },
 
          "yaml" = {
@@ -1103,3 +2437,105 @@ exportDataDefinition <- function(data_definition, format = "csv") {
 
 # Helper function for null coalescing
 `%||%` <- function(x, y) if (is.null(x)) y else x
+
+# Compress numeric ValueRange like "1; 2; 3; 4; 5; 9999" -> "1::5;9999"
+compress_value_range <- function(val_range) {
+  if (is.null(val_range) || identical(val_range, "") || is.na(val_range)) return("")
+  parts <- trimws(strsplit(as.character(val_range), ";")[[1]])
+  parts <- parts[nzchar(parts)]
+  if (length(parts) == 0) return("")
+  suppressWarnings(nums <- as.numeric(parts))
+  if (any(is.na(nums))) {
+    # Not purely numeric; normalize spacing only
+    return(paste(parts, collapse = "; "))
+  }
+
+  # Keep special outliers separate (e.g., 77, 88, 99, 777, 999, -7, -8, -9, 9999) if they are not contiguous with the main run
+  # Strategy: sort ascending to find contiguous runs, then join. This also fixes descending inputs like 5;4;3;2;1;0.
+  nums_sorted <- sort(unique(nums))
+
+  runs <- list()
+  run_start <- nums_sorted[1]
+  run_prev <- nums_sorted[1]
+  for (i in seq_along(nums_sorted)) {
+    if (i == 1) next
+    if (nums_sorted[i] == run_prev + 1) {
+      run_prev <- nums_sorted[i]
+    } else {
+      runs[[length(runs) + 1]] <- c(run_start, run_prev)
+      run_start <- nums_sorted[i]
+      run_prev <- nums_sorted[i]
+    }
+  }
+  # close last run
+  runs[[length(runs) + 1]] <- c(run_start, run_prev)
+
+  # Build tokens: ranges as a::b when length >= 3, otherwise list numbers individually
+  tokens <- character(0)
+  for (r in runs) {
+    a <- r[1]; b <- r[2]
+    if (b - a + 1 >= 3) {
+      tokens <- c(tokens, paste0(a, "::", b))
+    } else if (a == b) {
+      tokens <- c(tokens, as.character(a))
+    } else {
+      tokens <- c(tokens, as.character(a), as.character(b))
+    }
+  }
+
+  # Preserve any values from the original list that were not numeric (already handled above) or out-of-order duplicates (deduped)
+  paste(tokens, collapse = ";")
+}
+
+# Normalize aliases to plain comma-separated (no quotes), stripping c() and character(0)
+normalize_aliases_export <- function(alias_val) {
+  if (is.null(alias_val)) return("")
+  # If it's a list, flatten first
+  if (is.list(alias_val)) {
+    alias_val <- unlist(alias_val, use.names = FALSE)
+    if (length(alias_val) == 0) return("")
+  }
+  # Vector case (after possible flatten)
+  if (is.vector(alias_val) && !is.list(alias_val)) {
+    alias_vec <- as.character(alias_val)
+    alias_vec <- alias_vec[!is.na(alias_vec) & nzchar(alias_vec)]
+    if (length(alias_vec) == 0) return("")
+    # remove any embedded quotes in vector elements and suppress 'list()'
+    alias_vec <- gsub('"', "", alias_vec, fixed = TRUE)
+    alias_vec <- alias_vec[alias_vec != "list()"]
+    if (length(alias_vec) == 0) return("")
+    return(paste(alias_vec, collapse = ","))
+  }
+  # Character scalar that might contain c() or quotes
+  if (is.character(alias_val) && length(alias_val) == 1) {
+    s <- as.character(alias_val)
+    if (is.na(s) || !nzchar(s)) return("")
+    if (identical(trimws(s), "character(0)") || identical(trimws(s), "list()")) return("")
+    # remove all embedded quotes first
+    s <- gsub('"', "", s, fixed = TRUE)
+    # handle character(0) anywhere
+    if (grepl("character\\(0\\)", s)) return("")
+    # strip c( ... ) wrapper, tolerate spaces using POSIX classes and proper escaping
+    if (grepl("^c[[:space:]]*\\(.*\\)[[:space:]]*$", s, perl = TRUE)) {
+      s <- sub("^c[[:space:]]*\\((.*)\\)[[:space:]]*$", "\\1", s, perl = TRUE)
+    }
+    # split by comma
+    parts <- trimws(strsplit(s, ",")[[1]])
+    parts <- parts[!is.na(parts) & nzchar(parts) & parts != "list()"]
+    if (length(parts) == 0) return("")
+    return(paste(parts, collapse = ","))
+  }
+  # Fallback: coerce to character, join, then strip like scalar path
+  as_char <- as.character(alias_val)
+  as_char <- gsub('"', "", as_char, fixed = TRUE)
+  as_char <- as_char[!is.na(as_char) & nzchar(as_char) & !grepl("character\\(0\\)|^list\\(\\)$", as_char)]
+  if (length(as_char) == 0) return("")
+  s <- paste(as_char, collapse = ",")
+  if (grepl("^c[[:space:]]*\\(.*\\)[[:space:]]*$", s, perl = TRUE)) {
+    s <- sub("^c[[:space:]]*\\((.*)\\)[[:space:]]*$", "\\1", s, perl = TRUE)
+  }
+  parts <- trimws(strsplit(s, ",")[[1]])
+  parts <- parts[!is.na(parts) & nzchar(parts) & parts != "list()"]
+  if (length(parts) == 0) return("")
+  paste(parts, collapse = ",")
+}

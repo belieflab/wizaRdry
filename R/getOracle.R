@@ -13,7 +13,7 @@
 #' @param max_rows Optional limit on the number of rows to return
 #' @param date_format Optional format for date fields (default uses ISO format)
 #' @param batch_size Number of records to retrieve per batch for large datasets
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @param interview_date Optional; can be either:
 #'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
 #'        - A boolean TRUE to return only rows with non-NA interview_date values
@@ -41,7 +41,7 @@
 #' }
 oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                    join_primary_keys = TRUE, custom_query = NULL, max_rows = NULL,
-                   date_format = NULL, batch_size = 1000, exclude_pii = TRUE,
+                   date_format = NULL, batch_size = 1000, pii = FALSE,
                    interview_date = NULL, all = FALSE, schema = NULL) {
 
   # Check if required packages are available
@@ -55,6 +55,29 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   # Validate secrets and config - MUST COME FIRST
   validate_secrets("sql")
   config <- validate_config("sql")
+
+  # If no schema provided and config specifies a default schema, use it
+  if (is.null(schema)) {
+    cfg_schema <- tryCatch({
+      if (!is.null(config) && !is.null(config$sql) && !is.null(config$sql$database)) {
+        as.character(config$sql$database)
+      } else NULL
+    }, error = function(e) NULL)
+    if (!is.null(cfg_schema) && nzchar(cfg_schema)) {
+      schema <- cfg_schema
+    }
+  }
+
+  # If table_name includes schema (e.g., SCHEMA.TABLE) and no schema arg provided,
+  # extract schema for consistent handling and checks
+  if (is.null(schema) && !is.null(table_name) && grepl("\\.", table_name)) {
+    parts <- strsplit(table_name, "\\.")[[1]]
+    if (length(parts) >= 2) {
+      schema <- parts[1]
+      table_name <- parts[2]
+      message(sprintf("Using schema '%s' from table name", schema))
+    }
+  }
 
   # Initialize loading animation
   pb <- initializeLoadingAnimation(20)
@@ -138,9 +161,31 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
       }
     }
 
+    # Determine if the requested table is the configured superkey table
+    is_superkey_request <- FALSE
+    if (!is.null(superkey_table) && !is.null(table_name)) {
+      # Extract table name without schema for comparison
+      table_name_only <- table_name
+      
+      # Extract superkey table name without schema for comparison
+      superkey_name_only <- if (grepl("\\.", superkey_table)) {
+        strsplit(superkey_table, "\\.")[[1]][2]
+      } else {
+        superkey_table
+      }
+      
+      # Check if the requested table matches the superkey table
+      is_superkey_request <- identical(trimws(toupper(table_name_only)), trimws(toupper(superkey_name_only)))
+      
+      if (is_superkey_request) {
+        message("Requested table matches configured superkey; returning without joins.")
+        join_primary_keys <- FALSE
+      }
+    }
+
     # Determine fields to exclude based on PII settings with proper validation
     pii_fields <- character(0)
-    if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
+    if (!pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
       pii_fields <- config$sql$pii_fields
       if (length(pii_fields) > 0) {
         message(sprintf("Will exclude %d PII fields: %s",
@@ -196,7 +241,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
         superkey_table = if (join_primary_keys) superkey_table else NULL,
         primary_key_column = if (join_primary_keys) primary_key_column else NULL,
         max_rows = max_rows,
-        pii_fields = if (exclude_pii) pii_fields else NULL,
+        pii_fields = if (!pii) pii_fields else NULL,
         schema = schema,
         all = all,
         is_oracle = is_oracle
@@ -229,11 +274,15 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     # Process and clean the data
     if (is.data.frame(result_data) && nrow(result_data) > 0) {
       # Apply PII exclusion if needed
-      if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0) {
+      if (!pii && !is.null(pii_fields) && length(pii_fields) > 0) {
         pii_cols_in_result <- intersect(names(result_data), pii_fields)
+        pii_cols_missing <- setdiff(pii_fields, names(result_data))
         if (length(pii_cols_in_result) > 0) {
           message("Removing PII columns from result: ", paste(pii_cols_in_result, collapse = ", "))
           result_data <- result_data[, !(names(result_data) %in% pii_fields), drop = FALSE]
+        }
+        if (length(pii_cols_missing) > 0) {
+          message("Configured PII columns not present in result (skipped): ", paste(pii_cols_missing, collapse = ", "))
         }
       }
 
@@ -458,7 +507,7 @@ oracle.index <- function(schema = NULL) {
 #' @return A data frame with column information
 #' @importFrom odbc dbConnect dbListFields dbGetQuery dbDisconnect
 #' @export
-oracle.dict <- function(table_name, schema = NULL) {
+oracle.desc <- function(table_name, schema = NULL) {
 
   if (is.null(table_name)) {
     stop("Table name is required")
@@ -500,12 +549,12 @@ oracle.dict <- function(table_name, schema = NULL) {
     db_info <- tryCatch({
       odbc::dbGetInfo(channel)
     }, error = function(e) {
-      list(dbms.name = "Oracle")  # Default to Oracle for oracle.dict
+      list(dbms.name = "Oracle")  # Default to Oracle for oracle.desc
     })
 
     message(sprintf("Connected to %s database", db_info$dbms.name))
 
-    is_oracle <- TRUE  # Always TRUE for oracle.dict
+    is_oracle <- TRUE  # Always TRUE for oracle.desc
 
     # Try to get column information
     tryCatch({
@@ -610,12 +659,12 @@ oracle.dict <- function(table_name, schema = NULL) {
 #' Perform a direct Oracle query with minimal processing
 #'
 #' @param query The SQL query to execute
-#' @param exclude_pii Default TRUE to remove all fields marked as identifiable
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
 #' @param schema Optional schema name to qualify table names in the query
 #' @return A data frame with the query results
 #' @importFrom odbc dbConnect dbGetQuery dbDisconnect
 #' @export
-oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
+oracle.query <- function(query, pii = FALSE, schema = NULL) {
 
   if (is.null(query) || !is.character(query) || length(query) != 1) {
     stop("A valid SQL query string is required")
@@ -632,7 +681,7 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
 
   # Get PII fields configuration if needed with proper validation
   pii_fields <- NULL
-  if (exclude_pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
+  if (!pii && !is.null(config) && !is.null(config$sql) && !is.null(config$sql$pii_fields)) {
     pii_fields <- config$sql$pii_fields
     if (length(pii_fields) > 0) {
       message(sprintf("Will exclude %d PII fields if present in results: %s",
@@ -689,7 +738,7 @@ oracle.query <- function(query, exclude_pii = FALSE, schema = NULL) {
     }
 
     # Apply PII exclusion if enabled
-    if (exclude_pii && !is.null(pii_fields) && length(pii_fields) > 0 && nrow(result) > 0) {
+    if (!pii && !is.null(pii_fields) && length(pii_fields) > 0 && nrow(result) > 0) {
       pii_cols_present <- intersect(names(result), pii_fields)
       if (length(pii_cols_present) > 0) {
         message(sprintf("Removing %d PII fields from results: %s",
@@ -751,18 +800,18 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
       if (!is.null(pii_fields) && length(pii_fields) > 0) {
         # PII exclusion needed - this will be handled in the main function
         message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
-        select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
+        select_clause <- paste0("SELECT ", main_table_alias, ".*, ", pk_table_alias, ".*")
       } else {
         # No PII exclusion needed - include all fields from both tables
-        select_clause <- paste0("SELECT DISTINCT ", main_table_alias, ".*, ", pk_table_alias, ".*")
+        select_clause <- paste0("SELECT ", main_table_alias, ".*, ", pk_table_alias, ".*")
       }
     } else {
       # No join - just select from main table
       if (!is.null(pii_fields) && length(pii_fields) > 0) {
         message("Note: PII exclusion with * requires listing all non-PII columns explicitly")
-        select_clause <- "SELECT DISTINCT *"
+        select_clause <- "SELECT *"
       } else {
-        select_clause <- "SELECT DISTINCT *"
+        select_clause <- "SELECT *"
       }
     }
   } else {
@@ -787,14 +836,14 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
             qualified_fields <- c(qualified_fields, paste0(main_table_alias, ".", field))
           }
         }
-        select_clause <- paste0("SELECT DISTINCT ", paste(qualified_fields, collapse = ", "))
+        select_clause <- paste0("SELECT ", paste(qualified_fields, collapse = ", "))
       } else {
         # No join, use fields as-is
-        select_clause <- paste0("SELECT DISTINCT ", paste(fields, collapse = ", "))
+        select_clause <- paste0("SELECT ", paste(fields, collapse = ", "))
       }
     } else {
       # All requested fields were PII, so select a dummy field
-      select_clause <- "SELECT DISTINCT 1 AS dummy_column"
+      select_clause <- "SELECT 1 AS dummy_column"
     }
   }
 
@@ -803,14 +852,21 @@ build_oracle_query <- function(table_name, fields = NULL, where_clause = NULL,
     # Determine join type based on 'all' parameter
     join_type <- ifelse(all, "LEFT OUTER JOIN", "INNER JOIN")
 
-    # Join with superkey table
+    # Join with superkey table - using Oracle syntax format
+    # Ensure primary_key_column doesn't have schema prefix
+    clean_primary_key <- if (grepl("\\.", primary_key_column)) {
+      strsplit(primary_key_column, "\\.")[[1]][2]
+    } else {
+      primary_key_column
+    }
+    
     from_clause <- sprintf(
-      "FROM %s %s %s %s %s ON %s.%s = %s.%s",
+      "FROM %s %s\n%s %s %s\n    ON %s.%s = %s.%s",
       table_with_schema, main_table_alias,
       join_type,
       superkey_with_schema, pk_table_alias,
-      main_table_alias, primary_key_column,
-      pk_table_alias, primary_key_column
+      main_table_alias, clean_primary_key,
+      pk_table_alias, clean_primary_key
     )
   } else {
     from_clause <- sprintf("FROM %s %s", table_with_schema, main_table_alias)
