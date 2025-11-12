@@ -51,12 +51,15 @@ The function performs the following steps:
 }
 \examples{
 \dontrun{
-# Parse a Qualtrics export containing multiple surveys
+# Parse a a Qualtrics survey into its component dataframes
 qualtrics.rune("combined_surveys", label = FALSE)
 
 # After running, access individual survey dataframes directly:
 head(pss)  # Access the PSS survey dataframe
 head(cesd) # Access the CESD survey dataframe
+
+# Parse a single Qualtrics survey from composite survey
+rgpts <- qualtrics.rune("combined_surveys", prefix = "rgpts")
 }
 
 }

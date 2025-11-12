@@ -4,15 +4,18 @@
 \alias{rune}
 \title{Parse composite data frame into component data frames by variable prefix}
 \usage{
-rune(df, lower = TRUE)
+rune(df, prefix = NULL, lower = TRUE)
 }
 \arguments{
 \item{df}{a dataframe containing multiple, prefixed measures}
 
+\item{prefix}{Character string; default NULL, if specified returns only the dataframe with this prefix}
+
 \item{lower}{default TRUE convert prefixes to lower case}
 }
 \value{
-Creates multiple dataframes in the global environment, one for each survey
+If prefix is specified, returns a single dataframe with that prefix. Otherwise,
+creates multiple dataframes in the global environment, one for each survey
 detected in the data. Each dataframe is named after its survey prefix.
 }
 \description{
@@ -53,5 +56,8 @@ rune(combined_df)
 # After running, access individual survey dataframes directly:
 head(foo)  # Access the foo dataframe
 head(bar)  # Access the bar dataframe
+
+# Parse a single survey from composite dataframe
+foo_df <- rune(combined_df, prefix = "foo")
 
 }
