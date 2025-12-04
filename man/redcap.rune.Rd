@@ -6,6 +6,7 @@
 \usage{
 redcap.rune(
   instrument_name,
+  prefix = NULL,
   raw_or_label = "raw",
   redcap_event_name = NULL,
   batch_size = 1000,
@@ -19,6 +20,8 @@ redcap.rune(
 }
 \arguments{
 \item{instrument_name}{Name of the REDCap instrument}
+
+\item{prefix}{Character string; default NULL, if specified returns only the dataframe with this prefix}
 
 \item{raw_or_label}{Whether to return raw or labeled values}
 
@@ -39,11 +42,26 @@ redcap.rune(
 \item{lower}{default TRUE convert prefixes to lower case}
 }
 \value{
-Creates multiple dataframes in the parent environment, one for each survey
+If prefix is specified, returns a single dataframe with that prefix. Otherwise,
+creates multiple dataframes in the parent environment, one for each survey
 detected in the data. Each dataframe is named after its survey prefix.
 }
 \description{
 This function fetches a REDCap instrument and separates it into individual data frames
 for each survey/collection detected in the data based on column name prefixes.
 It identifies the appropriate identifier column and splits the data accordingly.
+}
+\examples{
+\dontrun{
+# Parse a REDCap instrument into its component dataframes
+redcap.rune("baseline_assessment")
+
+# After running, access individual survey dataframes directly:
+head(pss)  # Access the PSS survey dataframe
+head(cesd) # Access the CESD survey dataframe
+
+# Parse a single survey from composite instrument
+rgpts <- redcap.rune("baseline_assessment", prefix = "rgpts")
+}
+
 }

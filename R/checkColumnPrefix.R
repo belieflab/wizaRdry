@@ -16,8 +16,7 @@
 #' @note This function assumes that the dataset follows a specific naming convention where non-NDA columns should be prefixed with the measure alias followed by an underscore.
 #'       The actual dataset name is expected to be the measure alias suffixed with '_clean'.
 #' @noRd
-checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variables) {
-
+checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variables, identifier) {
 
   # Construct dataframe name based on measure_alias
   df_name <- paste0(measure_alias, "_clean")
@@ -25,33 +24,46 @@ checkColumnPrefix <- function(measure_alias, measure_type, nda_required_variable
   # Fetch the dataframe
   df <- base::get(df_name)
 
-  # Determine columns to check based on measure_type
-  if (measure_type == "qualtrics") {
-    non_nda_cols <- dplyr::setdiff(colnames(df), c(nda_required_variables, "ResponseId"))
-  } else if (measure_type=="redcap") {
-    non_nda_cols <- dplyr::setdiff(colnames(df), c(nda_required_variables, "int_start",
-                                            "int_end"))
-  } else {
-    non_nda_cols <- dplyr::setdiff(colnames(df), nda_required_variables)
+  # Determine columns to exclude based on measure_type and identifier
+  # NDA required variables are only excluded when identifier is "src_subject_id"
+  cols_to_exclude <- character(0)
+  
+  if (identifier == "src_subject_id") {
+    # Include NDA required variables when using src_subject_id
+    cols_to_exclude <- c(cols_to_exclude, nda_required_variables)
   }
+  
+  # Always add identifier to excluded columns
+  cols_to_exclude <- c(cols_to_exclude, identifier, "interview_date")
+  
+  # Add measure-specific columns to exclude
+  if (measure_type == "qualtrics") {
+    cols_to_exclude <- c(cols_to_exclude, "ResponseId")
+  } else if (measure_type == "redcap") {
+    cols_to_exclude <- c(cols_to_exclude, "int_start", "int_end")
+  }
+  
+  # Get non-NDA columns (all columns minus excluded ones)
+  non_nda_cols <- dplyr::setdiff(colnames(df), cols_to_exclude)
 
+  # Check naming convention for non-NDA columns
   actual_non_conform <- non_nda_cols[!grepl(paste0("^", measure_alias, "_"), non_nda_cols)]
+  
   if (length(actual_non_conform) == 0) {
     base::cat("Columns have correct naming convention ")
+    return(invisible(TRUE))
   }
+  
+  # If there are non-conforming columns, show error
+  error_msg <- paste0("SCRIPT ERROR: The following non-NDA columns in '", df_name,
+                      "' do not follow the correct naming convention starting with '", measure_alias, "_':\n",
+                      paste(actual_non_conform, collapse = ", "))
+  
   tryCatch({
-    # Check naming convention for non-NDA columns
     test_that("Check column naming convention", {
-      actual_non_conform <- non_nda_cols[!grepl(paste0("^", measure_alias, "_"), non_nda_cols)]
-      is_conforming <- length(actual_non_conform) == 0
-      expect_true(
-        is_conforming,
-        info = paste0("SCRIPT ERROR: The following non-NDA columns in '", df_name,
-                     "' do not follow the correct naming convention starting with '", measure_alias, "_':\n",
-                     paste(actual_non_conform, collapse = ", "))
-      )
+      expect_true(FALSE, info = error_msg)
     })
   }, error = function(e) {
-    message(e$message)
+    message(error_msg)
   })
 }

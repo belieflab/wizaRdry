@@ -411,8 +411,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
 
   # Check for required fields from ndar_subject01 that exist in the structure
   # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
-  super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
   
+  # DCC required fields (always included if they exist in structure)
+  dcc_required_fields <- c("site", "subsiteid", "phenotype", "phenotype_description")
+
   # Get structure field names once for reuse
   structure_field_names <- character(0)
   if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
@@ -435,6 +438,33 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
       }
     }
     
+    # Automatically include DCC required fields if they exist in structure
+    missing_dcc_required <- setdiff(
+      intersect(dcc_required_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_dcc_required) > 0) {
+      selected_columns <- c(selected_columns, missing_dcc_required)
+      if (interactive_mode) {
+        message(sprintf("Automatically including DCC required fields: %s", 
+                       paste(missing_dcc_required, collapse = ", ")))
+      }
+    }
+    
+    # Automatically include timepoint fields (visit or week) if they exist in structure
+    timepoint_fields <- c("visit", "week")
+    missing_timepoint_fields <- setdiff(
+      intersect(timepoint_fields, structure_field_names),
+      selected_columns
+    )
+    if (length(missing_timepoint_fields) > 0) {
+      selected_columns <- c(selected_columns, missing_timepoint_fields)
+      if (interactive_mode) {
+        message(sprintf("Automatically including timepoint fields: %s", 
+                       paste(missing_timepoint_fields, collapse = ", ")))
+      }
+    }
+    
     # Get required fields from ndar_subject01 that exist in the current structure
     ndar_required_in_structure <- character(0)
     tryCatch({
@@ -451,10 +481,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
             ]
             if (nrow(ndar_required) > 0) {
               ndar_required_names <- ndar_required$name
-              # Get required fields that exist in structure but are not super-required
+              # Get required fields that exist in structure but are not super-required or DCC required
               ndar_required_in_structure <- setdiff(
                 intersect(ndar_required_names, structure_field_names),
-                super_required_fields
+                c(super_required_fields, dcc_required_fields)
               )
             }
           }
@@ -553,11 +583,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure, measure_
     super_required_in_selected <- intersect(selected_columns, super_required_fields)
     fields_to_keep <- unique(c(fields_to_keep, super_required_in_selected))
     
-    # For fields added by prompt: only keep them if they exist in structure (or are super-required)
+    # Add DCC required fields (even if not in structure)
+    dcc_required_in_selected <- intersect(selected_columns, dcc_required_fields)
+    fields_to_keep <- unique(c(fields_to_keep, dcc_required_in_selected))
+    
+    # For fields added by prompt: only keep them if they exist in structure (or are super-required or DCC required)
     if (length(fields_added_by_prompt) > 0) {
       prompt_fields_in_structure <- intersect(fields_added_by_prompt, structure_field_names)
       prompt_fields_super_required <- intersect(fields_added_by_prompt, super_required_fields)
-      fields_to_keep <- unique(c(fields_to_keep, prompt_fields_in_structure, prompt_fields_super_required))
+      prompt_fields_dcc_required <- intersect(fields_added_by_prompt, dcc_required_fields)
+      fields_to_keep <- unique(c(fields_to_keep, prompt_fields_in_structure, prompt_fields_super_required, prompt_fields_dcc_required))
     }
     
     fields_to_remove <- setdiff(selected_columns, fields_to_keep)

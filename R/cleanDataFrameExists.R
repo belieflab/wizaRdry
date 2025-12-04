@@ -24,18 +24,17 @@ cleanDataFrameExists <- function(measure_alias, measure_type) {
 
   if (exists(output_df_name)){
     base::cat("Clean data frame exists: ")
+    return(invisible(TRUE))
   }
+  
+  error_msg <- paste("SCRIPT ERROR: The script did not create '", output_df_name, "' dataframe.")
+  
   tryCatch({
-
     test_that("Clean df exists", {
-
-      # Check if the expected output_df_name is created
-      testthat::expect_true(exists(output_df_name),
-                                               info = paste("SCRIPT ERROR: The script did not create '", output_df_name, "' dataframe."))
+      testthat::expect_true(FALSE, info = error_msg)
     })
-
   }, error = function(e) {
-    message("The script did not create a'", output_df_name, "' dataframe.", e$message)
+    message(error_msg)
   })
 
 }

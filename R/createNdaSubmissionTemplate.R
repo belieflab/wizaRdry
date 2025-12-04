@@ -142,7 +142,11 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
   excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
   
   # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
-  super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+  
+  # DCC required fields (always included if they exist in structure)
+  dcc_required_fields <- c("site", "subsiteid", "phenotype", "phenotype_description")
+
   
   # Get structure field names to check which required fields exist in this structure
   structure_field_names <- character(0)
@@ -181,10 +185,10 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
             ndar_required <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
             if (nrow(ndar_required) > 0) {
               ndar_required_names <- ndar_required$name
-              # Get required fields that exist in structure but are not super-required
+              # Get required fields that exist in structure but are not super-required or DCC required
               ndar_required_in_structure <- setdiff(
                 intersect(ndar_required_names, structure_field_names),
-                super_required_fields
+                c(super_required_fields, dcc_required_fields)
               )
             }
           }
@@ -208,6 +212,39 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
     }
     message(sprintf("\nAutomatically including super-required fields: %s", 
                    paste(missing_super_required, collapse = ", ")))
+    template_cols <- names(template)  # Update after adding fields
+  }
+  
+  # Automatically include DCC required fields if they exist in structure but not in template
+  missing_dcc_required <- setdiff(
+    intersect(dcc_required_fields, structure_field_names),
+    template_cols
+  )
+  
+  if (length(missing_dcc_required) > 0) {
+    # Add missing DCC required fields with NA values
+    for (field in missing_dcc_required) {
+      template[[field]] <- NA
+    }
+    message(sprintf("Automatically including DCC required fields: %s", 
+                   paste(missing_dcc_required, collapse = ", ")))
+    template_cols <- names(template)  # Update after adding fields
+  }
+  
+  # Automatically include timepoint fields (visit or week) if they exist in structure
+  timepoint_fields <- c("visit", "week")
+  missing_timepoint_fields <- setdiff(
+    intersect(timepoint_fields, structure_field_names),
+    template_cols
+  )
+  
+  if (length(missing_timepoint_fields) > 0) {
+    # Add missing timepoint fields with NA values
+    for (field in missing_timepoint_fields) {
+      template[[field]] <- NA
+    }
+    message(sprintf("Automatically including timepoint fields: %s", 
+                   paste(missing_timepoint_fields, collapse = ", ")))
     template_cols <- names(template)  # Update after adding fields
   }
   

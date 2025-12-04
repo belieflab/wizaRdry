@@ -41,7 +41,7 @@ testSuite <- function(measure_alias, measure_type, script_path, super_key) {
   # Perform generic tests
   checkQualtricsDuplicates(measure_alias, measure_type) # and give allow to View them in a table
   cleanDataFrameExists(measure_alias, measure_type) #checkin_clean x
-  checkColumnPrefix(measure_alias, measure_type, nda_required_variables) # checkin_distress
+  checkColumnPrefix(measure_alias, measure_type, nda_required_variables, identifier) # checkin_distress
 
   # perform nda-specific tests
   if (identifier == "src_subject_id") {
