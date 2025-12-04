@@ -269,7 +269,8 @@ mongo.rune <- function(collection, db_name = NULL, lower = TRUE ){
 #'
 #' @param instrument_name Name of the REDCap instrument
 #' @param raw_or_label Whether to return raw or labeled values
-#' @param redcap_event_name Optional event name filter
+#' @param redcap_event_name Optional event name filter. Can be a single string
+#'        or a vector of event names (e.g., \code{c("event1", "event2")})
 #' @param batch_size Number of records to retrieve per batch
 #' @param records Optional vector of specific record IDs
 #' @param fields Optional vector of specific fields

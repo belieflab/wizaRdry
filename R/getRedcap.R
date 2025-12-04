@@ -76,7 +76,8 @@ formatDuration <- function(duration) {
 #'        in ALL specified columns will be returned. This is useful for filtering
 #'        data to only include complete cases for specific variables of interest.
 #' @param raw_or_label Whether to return raw or labeled values
-#' @param redcap_event_name Optional event name filter
+#' @param redcap_event_name Optional event name filter. Can be a single string
+#'        or a vector of event names (e.g., \code{c("event1", "event2")})
 #' @param batch_size Number of records to retrieve per batch
 #' @param records Optional vector of specific record IDs
 #' @param fields Optional vector of specific fields
@@ -289,11 +290,18 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
 
   # Progress bar
   pb <- initializeLoadingAnimation(20)
+  event_name_display <- if (!is.null(redcap_event_name)) {
+    if (length(redcap_event_name) == 1) {
+      sprintf(" %s", redcap_event_name)
+    } else {
+      sprintf(" [%s]", paste(redcap_event_name, collapse = ", "))
+    }
+  } else {
+    ""
+  }
   message(sprintf("\nImporting records from REDCap form: %s%s%s",
                   instrument_name,
-                  ifelse(!is.null(redcap_event_name),
-                         sprintf(" %s", redcap_event_name),
-                         ""),
+                  event_name_display,
                  ifelse(!pii && length(pii_fields) > 0, " (excluding PII)", "")))
   for (i in 1:20) {
     updateLoadingAnimation(pb, i)
@@ -582,7 +590,8 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     if (!"redcap_event_name" %in% names(df)) {
       stop("Cannot filter by redcap_event_name: column not found in data")
     }
-    df <- df[df$redcap_event_name == redcap_event_name, ]
+    # Use %in% to support both single strings and vectors
+    df <- df[df$redcap_event_name %in% redcap_event_name, ]
   }
 
   # Study-specific processing (legacy - errors should be fixed in redcap...)
