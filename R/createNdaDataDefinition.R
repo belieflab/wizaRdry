@@ -1905,6 +1905,15 @@ exportDataDefinition <- function(data_definition, format = "csv") {
 
            element_names <- field_names
 
+           # Ensure field_names is a proper character vector for sapply
+           if (is.null(field_names) || length(field_names) == 0) {
+             warning("No field names available for export")
+             return(invisible(NULL))
+           }
+           if (!is.character(field_names)) {
+             field_names <- as.character(field_names)
+           }
+
            data_types <- sapply(field_names, function(fname) {
              tryCatch({
                x <- data_definition$fields[[fname]]

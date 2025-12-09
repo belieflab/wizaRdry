@@ -1195,7 +1195,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           # This check works for both new and existing structures
           # Check even if new fields were found, so we can report both reasons
           if (has_validation_results && 
+              is.list(validation_results) &&
               "value_range_violations" %in% names(validation_results) &&
+              !is.null(validation_results$value_range_violations) &&
               length(validation_results$value_range_violations) > 0) {
             is_modified_structure <- TRUE
             if (DEBUG) message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
@@ -1215,7 +1217,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
               modification_reason <- c(modification_reason, "new fields")
             }
             if (has_validation_results &&
+                is.list(validation_results) &&
                 "value_range_violations" %in% names(validation_results) &&
+                !is.null(validation_results$value_range_violations) &&
                 length(validation_results$value_range_violations) > 0) {
               modification_reason <- c(modification_reason, "value range differences")
             }
