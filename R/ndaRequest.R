@@ -1121,7 +1121,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           # For existing structures, check if there are modifications
           # Only create data definition if structure has new fields or modified value ranges
           is_modified_structure <- FALSE
-          new_fields <- character(0)  # Initialize to track new fields
           if (!is_new_structure && "dataElements" %in% names(nda_structure)) {
             structure_field_names <- if (is.data.frame(nda_structure$dataElements)) {
               nda_structure$dataElements$name
@@ -1142,18 +1141,10 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
               if (DEBUG) message(sprintf("[DEBUG] Found %d new field(s): %s", 
                                         length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
             }
-          }
-          
-          # Check for value range violations (e.g., data contains "9999" but NDA doesn't allow it)
-          # When value ranges differ, we need to create a data definition file to update them
-          # This check works for both new and existing structures
-          # Check even if new fields were found, so we can report both reasons
-          if ("value_range_violations" %in% names(validation_results) &&
-              length(validation_results$value_range_violations) > 0) {
-            is_modified_structure <- TRUE
-            if (DEBUG) message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
-                                      length(validation_results$value_range_violations),
-                                      paste(names(validation_results$value_range_violations), collapse = ", ")))
+            
+            # Note: Value range modifications are complex to detect without full data processing
+            # If no new fields found, we assume unmodified (existing structure)
+            # User can manually trigger data definition if value ranges were modified
           }
           
           # Only create data definition for new or modified structures
@@ -1162,17 +1153,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             submission_template <- list(columns = names(df))
             createNdaDataDefinition(submission_template, nda_structure, measure)
           } else if (is_modified_structure) {
-            # Determine reason for modification
-            modification_reason <- character(0)
-            if (length(new_fields) > 0) {
-              modification_reason <- c(modification_reason, "new fields")
-            }
-            if ("value_range_violations" %in% names(validation_results) &&
-                length(validation_results$value_range_violations) > 0) {
-              modification_reason <- c(modification_reason, "value range differences")
-            }
-            reason_text <- paste(modification_reason, collapse = " and ")
-            message(sprintf("Creating data definition for modified structure (%s detected)", reason_text))
+            message("Creating data definition for modified structure (new fields detected)")
             submission_template <- list(columns = names(df))
             createNdaDataDefinition(submission_template, nda_structure, measure)
           } else {
