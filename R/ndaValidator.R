@@ -3549,40 +3549,6 @@ ndaValidator <- function(measure_name,
     # Apply missing value code standardization - THIS IS THE KEY ENHANCEMENT
     df <- fix_na_values(df, elements, verbose = verbose)
 
-    # Re-evaluate missing_required_fields after transformations
-    # Fields that now have valid missing data codes (like -9) should not be flagged as missing
-    if (length(missing_required_fields) > 0) {
-      still_missing <- character(0)
-      for (field in missing_required_fields) {
-        if (field %in% names(df)) {
-          field_values <- df[[field]]
-          # Check if field still has actual NAs or empty values
-          has_na <- any(is.na(field_values))
-          has_empty <- if (is.character(field_values)) any(field_values == "", na.rm = TRUE) else FALSE
-          
-          # If no NAs or empty values, the field was successfully filled with valid codes
-          if (!has_na && !has_empty) {
-            if (verbose) {
-              message(sprintf("Field '%s' no longer has missing values after transformation, removing from missing_required_fields", field))
-            }
-            next  # Skip adding to still_missing
-          }
-          
-          # Field still has NAs or empty values - keep it in missing list
-          still_missing <- c(still_missing, field)
-        } else {
-          # Field still doesn't exist in dataframe
-          still_missing <- c(still_missing, field)
-        }
-      }
-      missing_required_fields <- still_missing
-      if (verbose && length(missing_required_fields) < length(attr(df, "missing_required_fields") %||% character(0))) {
-        message(sprintf("Updated missing_required_fields: %d fields resolved, %d still missing",
-                       length(attr(df, "missing_required_fields") %||% character(0)) - length(missing_required_fields),
-                       length(missing_required_fields)))
-      }
-    }
-
     # PHASE 4: Validation and De-Identification
     if(verbose) message("\n\n--- PHASE 4: Validation and De-Identification ---")
 
