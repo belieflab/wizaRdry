@@ -1013,32 +1013,12 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # EXISTING NDA STRUCTURE - Run full validation
       validation_results <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
 
-      # Handle case where validation returns NULL (error occurred)
-      if (is.null(validation_results)) {
-        message("Warning: Validation returned NULL - this may indicate an error during processing")
-        message("Attempting to continue with file creation using original dataframe")
-        # Create minimal validation results structure for compatibility
-        validation_results <- list(
-          valid = FALSE,
-          df = base::get0(measure),
-          warnings = c("Validation failed - ndaValidator returned NULL"),
-          bypassed_validation = FALSE
-        )
-        # Store NDA structure as attribute for file creation
-        attr(validation_results, "nda_structure") <- list(
-          shortName = measure,
-          dataElements = if ("dataElements" %in% names(nda_structure)) nda_structure$dataElements else NULL
-        )
+      # ADD BOTH METADATA ATTRIBUTES
+      if (!is.null(required_field_metadata)) {
+        attr(validation_results, "required_metadata") <- required_field_metadata
       }
-
-      # ADD BOTH METADATA ATTRIBUTES (only if validation_results is not NULL)
-      if (is.list(validation_results)) {
-        if (!is.null(required_field_metadata)) {
-          attr(validation_results, "required_metadata") <- required_field_metadata
-        }
-        if (!is.null(recommended_field_metadata)) {
-          attr(validation_results, "recommended_metadata") <- recommended_field_metadata
-        }
+      if (!is.null(recommended_field_metadata)) {
+        attr(validation_results, "recommended_metadata") <- recommended_field_metadata
       }
 
       # CRITICAL: Update all environments with validated dataframe
@@ -1058,25 +1038,13 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         # Update our local df variable
         df <- validation_results$df
         if (DEBUG) message("[DEBUG] Updated local df variable")
-      } else {
-        # If validation failed but we have the original dataframe, use it
-        df <- base::get0(measure)
-        if (is.null(df)) {
-          message("Error: Cannot find dataframe for ", measure, " - file creation may fail")
-        }
       }
 
       # Defer any sounds until the end of processing
 
       # Create data upload template ONLY for existing structures
-      # Try to create template even if validation had issues
       if (DEBUG) message("[DEBUG] Creating NDA template")
-      tryCatch({
-        createNdaSubmissionTemplate(measure)
-      }, error = function(e) {
-        message("Warning: Error creating submission template: ", e$message)
-        message("This may be due to validation issues, but attempting to continue...")
-      })
+      createNdaSubmissionTemplate(measure)
 
     } else {
       # NEW STRUCTURE - Bypass validation, create minimal results
@@ -1140,29 +1108,15 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     if (DEBUG) message("[DEBUG] Checking if data definition is needed")
     tryCatch({
       df <- base::get0(measure)
-      if (!is.null(df) && is.data.frame(df)) {
-        # Check if validation_results exists and is a list, but don't require it
-        has_validation_results <- exists("validation_results") && is.list(validation_results)
-        
-        if (!has_validation_results) {
-          if (DEBUG) message("[DEBUG] validation_results not available, will attempt to create files with available data")
-        }
+      if (!is.null(df) && is.data.frame(df) &&
+          exists("validation_results") && is.list(validation_results)) {
 
-        # Get NDA structure from validation results attribute or use the one we have
-        nda_structure <- NULL
-        if (has_validation_results) {
-          nda_structure <- attr(validation_results, "nda_structure")
-        }
-        
-        # If we don't have structure from validation, try to get it from the stored variable
-        if (is.null(nda_structure) && exists("nda_structure") && !is.null(get("nda_structure"))) {
-          nda_structure <- get("nda_structure")
-          if (DEBUG) message("[DEBUG] Using nda_structure from environment")
-        }
+        # Get NDA structure from validation results attribute
+        nda_structure <- attr(validation_results, "nda_structure")
 
         if (!is.null(nda_structure)) {
           # Check if this is a new structure (bypassed validation)
-          is_new_structure <- has_validation_results && isTRUE(validation_results$bypassed_validation)
+          is_new_structure <- isTRUE(validation_results$bypassed_validation)
           
           # For existing structures, check if there are modifications
           # Only create data definition if structure has new fields or modified value ranges
@@ -1194,8 +1148,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           # When value ranges differ, we need to create a data definition file to update them
           # This check works for both new and existing structures
           # Check even if new fields were found, so we can report both reasons
-          if (has_validation_results && 
-              "value_range_violations" %in% names(validation_results) &&
+          if ("value_range_violations" %in% names(validation_results) &&
               length(validation_results$value_range_violations) > 0) {
             is_modified_structure <- TRUE
             if (DEBUG) message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
@@ -1214,8 +1167,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             if (length(new_fields) > 0) {
               modification_reason <- c(modification_reason, "new fields")
             }
-            if (has_validation_results &&
-                "value_range_violations" %in% names(validation_results) &&
+            if ("value_range_violations" %in% names(validation_results) &&
                 length(validation_results$value_range_violations) > 0) {
               modification_reason <- c(modification_reason, "value range differences")
             }
@@ -1227,11 +1179,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             message("Skipping data definition creation - existing unmodified structure (only submission template created)")
           }
         } else {
-          message("NDA structure not available - cannot create data definition file")
-          if (DEBUG) message("[DEBUG] nda_structure is NULL, validation_results available: ", has_validation_results)
+          message("NDA structure not available from validation results")
         }
-      } else {
-        message("Dataframe not available - cannot create data definition file")
       }
     }, error = function(e) {
       message("Error creating data definition: ", e$message)
