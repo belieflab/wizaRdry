@@ -642,8 +642,8 @@ fix_na_values <- function(df, elements, verbose = FALSE, config_file = "./config
           category_values <- custom_missing_codes[[category_name]]
 
           for (custom_code in category_values) {
-            # Convert to numeric for comparison - suppress expected coercion warnings
-            custom_code_num <- suppressWarnings(as.numeric(custom_code))
+            # Convert to numeric for comparison
+            custom_code_num <- as.numeric(custom_code)
 
             # Skip if conversion failed (non-numeric values)
             if (is.na(custom_code_num)) {
@@ -1284,6 +1284,26 @@ standardize_binary <- function(value) {
   }
 
   return(mapped_values)
+}
+
+# Parse array-like strings to vectors
+parse_array_string <- function(value) {
+  if (is.null(value) || is.na(value)) return(NULL)
+
+  # Handle string arrays
+  if (is.character(value)) {
+    # Remove unicode prefix, brackets, and quotes
+    clean_str <- gsub("\\[|\\]|u'|'", "", value)
+    values <- strsplit(clean_str, ",\\s*")[[1]]
+    return(tolower(trimws(values)))
+  }
+
+  # Handle numeric arrays
+  if (is.numeric(value) && length(value) > 1) {
+    return(sprintf("%.1f", value))
+  }
+
+  return(tolower(trimws(value)))
 }
 
 # Helper function to fetch structure elements from API
@@ -2614,48 +2634,6 @@ debug_print <- function(msg, df = NULL, sample_size = 5, debug = FALSE) {
 
 
 # Modified ndaValidator with enhanced error handling
-
-# Helper function to convert problematic column types to character
-convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) {
-  # Force all complex/problematic data types to character immediately
-  for (col in names(df)) {
-    tryCatch({
-      # Convert POSIXct and other complex classes to character
-      if (inherits(df[[col]], "POSIXt") ||
-          inherits(df[[col]], "Date") ||
-          length(class(df[[col]])) > 1) {
-
-        if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
-        df[[col]] <- as.character(df[[col]])
-      }
-
-      # Test if column is accessible
-      dummy <- df[[col]][1]
-    }, error = function(e) {
-      # If any error, convert to character
-      if(verbose) message(sprintf("Column '%s' has an unusable type. Converting to character.", col))
-
-      # Try three different approaches to fix problematic columns
-      tryCatch({
-        df[[col]] <- as.character(df[[col]])
-      }, error = function(e2) {
-        tryCatch({
-          df[[col]] <- as.character(unlist(df[[col]]))
-        }, error = function(e3) {
-          # Last resort - replace with NAs
-          if(verbose) message(sprintf("Could not convert column '%s'. Replacing with NAs.", col))
-          df[[col]] <- rep(NA, nrow(df))
-        })
-      })
-    })
-  }
-  
-  # Save the cleaned dataframe
-  assign(measure_name, df, envir = .wizaRdry_env)
-  
-  return(df)
-}
-
 # Helper function to standardize column names
 standardize_column_names <- function(df, structure_name, verbose = FALSE) {
   if(verbose) cat("\nStandardizing column names...")
@@ -2748,48 +2726,6 @@ compare_numeric_patterns <- function(name1, name2) {
 # Modify transform_value_ranges to be more robust
 # improve the transform_value_ranges function to handle date and logical values better
 
-# Helper function to re-evaluate missing_required_fields after transformations
-# Fields that now have valid missing data codes (like -9) should not be flagged as missing
-re_evaluate_missing_required_fields <- function(df, missing_required_fields, verbose = FALSE) {
-  if (length(missing_required_fields) == 0) {
-    return(missing_required_fields)
-  }
-  
-  still_missing <- character(0)
-  original_count <- length(missing_required_fields)
-  
-  for (field in missing_required_fields) {
-    if (field %in% names(df)) {
-      field_values <- df[[field]]
-      # Check if field still has actual NAs or empty values
-      has_na <- any(is.na(field_values))
-      has_empty <- if (is.character(field_values)) any(field_values == "", na.rm = TRUE) else FALSE
-      
-      # If no NAs or empty values, the field was successfully filled with valid codes
-      if (!has_na && !has_empty) {
-        if (verbose) {
-          message(sprintf("Field '%s' no longer has missing values after transformation, removing from missing_required_fields", field))
-        }
-        next  # Skip adding to still_missing
-      }
-      
-      # Field still has NAs or empty values - keep it in missing list
-      still_missing <- c(still_missing, field)
-    } else {
-      # Field still doesn't exist in dataframe
-      still_missing <- c(still_missing, field)
-    }
-  }
-  
-  if (verbose && length(still_missing) < original_count) {
-    message(sprintf("Updated missing_required_fields: %d fields resolved, %d still missing",
-                   original_count - length(still_missing),
-                   length(still_missing)))
-  }
-  
-  return(still_missing)
-}
-
 # Modified transform_value_ranges function to return info about required field issues
 # Modified transform_value_ranges function
 transform_value_ranges <- function(df, elements, verbose = FALSE) {
@@ -2827,9 +2763,11 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
   }
 
   if(missing_required) {
-    # Store missing fields for later use - but don't warn yet
-    # The warning will be issued later if fields are still missing after transformations
-    # This prevents false warnings when missing codes will be applied
+    if(verbose) {
+      warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
+                      paste(missing_fields, collapse=", ")))
+    }
+    # Store missing fields for later use
     missing_required_fields <- missing_fields
   }
 
@@ -3473,8 +3411,41 @@ ndaValidator <- function(measure_name,
       }, silent = TRUE)
     }
 
-    # Convert problematic column types to character
-    df <- convert_problematic_column_types(df, measure_name, verbose = verbose)
+    # Force all complex/problematic data types to character immediately
+    for (col in names(df)) {
+      tryCatch({
+        # Convert POSIXct and other complex classes to character
+        if (inherits(df[[col]], "POSIXt") ||
+            inherits(df[[col]], "Date") ||
+            length(class(df[[col]])) > 1) {
+
+          if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
+          df[[col]] <- as.character(df[[col]])
+        }
+
+        # Test if column is accessible
+        dummy <- df[[col]][1]
+      }, error = function(e) {
+        # If any error, convert to character
+        if(verbose) message(sprintf("Column '%s' has an unusable type. Converting to character.", col))
+
+        # Try three different approaches to fix problematic columns
+        tryCatch({
+          df[[col]] <- as.character(df[[col]])
+        }, error = function(e2) {
+          tryCatch({
+            df[[col]] <- as.character(unlist(df[[col]]))
+          }, error = function(e3) {
+            # Last resort - replace with NAs
+            if(verbose) message(sprintf("Could not convert column '%s'. Replacing with NAs.", col))
+            df[[col]] <- rep(NA, nrow(df))
+          })
+        })
+      })
+    }
+
+    # Save the cleaned dataframe
+    assign(measure_name, df, envir = .wizaRdry_env)
 
     # Get structure name and fetch/use elements
     structure_name <- measure_name
@@ -3576,12 +3547,41 @@ ndaValidator <- function(measure_name,
     df <- apply_type_conversions(df, elements, verbose = verbose)
 
     # Apply missing value code standardization - THIS IS THE KEY ENHANCEMENT
-    # Suppress expected "NAs introduced by coercion" warnings during conversion
-    df <- suppressWarnings(fix_na_values(df, elements, verbose = verbose))
+    df <- fix_na_values(df, elements, verbose = verbose)
 
     # Re-evaluate missing_required_fields after transformations
     # Fields that now have valid missing data codes (like -9) should not be flagged as missing
-    missing_required_fields <- re_evaluate_missing_required_fields(df, missing_required_fields, verbose = verbose)
+    if (length(missing_required_fields) > 0) {
+      still_missing <- character(0)
+      for (field in missing_required_fields) {
+        if (field %in% names(df)) {
+          field_values <- df[[field]]
+          # Check if field still has actual NAs or empty values
+          has_na <- any(is.na(field_values))
+          has_empty <- if (is.character(field_values)) any(field_values == "", na.rm = TRUE) else FALSE
+          
+          # If no NAs or empty values, the field was successfully filled with valid codes
+          if (!has_na && !has_empty) {
+            if (verbose) {
+              message(sprintf("Field '%s' no longer has missing values after transformation, removing from missing_required_fields", field))
+            }
+            next  # Skip adding to still_missing
+          }
+          
+          # Field still has NAs or empty values - keep it in missing list
+          still_missing <- c(still_missing, field)
+        } else {
+          # Field still doesn't exist in dataframe
+          still_missing <- c(still_missing, field)
+        }
+      }
+      missing_required_fields <- still_missing
+      if (verbose && length(missing_required_fields) < length(attr(df, "missing_required_fields") %||% character(0))) {
+        message(sprintf("Updated missing_required_fields: %d fields resolved, %d still missing",
+                       length(attr(df, "missing_required_fields") %||% character(0)) - length(missing_required_fields),
+                       length(missing_required_fields)))
+      }
+    }
 
     # PHASE 4: Validation and De-Identification
     if(verbose) message("\n\n--- PHASE 4: Validation and De-Identification ---")
@@ -3618,13 +3618,9 @@ ndaValidator <- function(measure_name,
       dataElements = elements
     )
 
-    # Final check for missing required values - issue warning if still missing after all transformations
+    # Final check for missing required values
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
-      if(verbose) {
-        warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
-                        paste(validation_results$missing_required, collapse=", ")))
-      }
-      message("\nValidation FAILED: Required fields are missing or contain NA values")
+      if(verbose) message("\nValidation FAILED: Required fields are missing or contain NA values")
     }
     return(validation_results)
   }, error = function(e) {
