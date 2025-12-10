@@ -268,15 +268,6 @@ convert_array_fields <- function(df, elements, verbose = TRUE) {
           converted_count = conversion_count,
           mapping = mapping
         )
-      }
-    }, error = function(e) {
-      if (verbose) {
-        cat(sprintf("\n  ERROR processing array field %s: %s", field_name, e$message))
-        cat("\n  Preserving original values - this may be due to NA values from branching logic")
-      }
-      # Preserve original field values if conversion fails
-      # This is especially important for branching logic where many NAs are expected
-    })
 
         if (verbose) {
           cat(sprintf("\n  SUCCESS: Converted %d array values to numeric codes", conversion_count))
@@ -291,6 +282,14 @@ convert_array_fields <- function(df, elements, verbose = TRUE) {
         cat("\n  FAILED: No mapping strategy worked")
       }
     }
+    }, error = function(e) {
+      if (verbose) {
+        cat(sprintf("\n  ERROR processing array field %s: %s", field_name, e$message))
+        cat("\n  Preserving original values - this may be due to NA values from branching logic")
+      }
+      # Preserve original field values if conversion fails
+      # This is especially important for branching logic where many NAs are expected
+    })
   }
 
   # Summary
@@ -3096,19 +3095,13 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
   # Wrap in tryCatch to handle NA-heavy data gracefully (branching logic)
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
-    
-    # Skip if field doesn't exist
-    if (!field_name %in% names(df)) next
-    
-    # Robust error handling for fields with many NAs
-    tryCatch({
     type <- elements$type[i]
     value_range <- elements$valueRange[i]
     notes <- elements$notes[i]
-
+    
     # Skip if field doesn't exist
     if (!field_name %in% names(df)) next
-
+    
     # Robust error handling for fields with many NAs (branching logic)
     tryCatch({
       # Get current field values
