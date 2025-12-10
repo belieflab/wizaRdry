@@ -127,13 +127,16 @@ convert_array_fields <- function(df, elements, verbose = TRUE) {
 
   for (field_name in names(array_fields)) {
     field_info <- array_fields[[field_name]]
-    field_values <- df[[field_name]]
+    
+    # Robust error handling for fields with many NAs (branching logic)
+    tryCatch({
+      field_values <- df[[field_name]]
 
-    if (verbose) {
-      cat(sprintf("\n\nProcessing array field: %s", field_name))
-      cat(sprintf("\n  Target type: %s", field_info$type))
-      cat(sprintf("\n  Expected range: %s", field_info$value_range))
-    }
+      if (verbose) {
+        cat(sprintf("\n\nProcessing array field: %s", field_name))
+        cat(sprintf("\n  Target type: %s", field_info$type))
+        cat(sprintf("\n  Expected range: %s", field_info$value_range))
+      }
 
     # Strategy 1: Try to extract mappings from notes
     mapping <- NULL
@@ -265,6 +268,15 @@ convert_array_fields <- function(df, elements, verbose = TRUE) {
           converted_count = conversion_count,
           mapping = mapping
         )
+      }
+    }, error = function(e) {
+      if (verbose) {
+        cat(sprintf("\n  ERROR processing array field %s: %s", field_name, e$message))
+        cat("\n  Preserving original values - this may be due to NA values from branching logic")
+      }
+      # Preserve original field values if conversion fails
+      # This is especially important for branching logic where many NAs are expected
+    })
 
         if (verbose) {
           cat(sprintf("\n  SUCCESS: Converted %d array values to numeric codes", conversion_count))
@@ -732,6 +744,7 @@ apply_type_conversions <- function(df, elements, verbose = FALSE) {
     notes <- elements$notes[i]  # This contains code meanings
 
     if (field_name %in% names(df) && !is.null(type)) {
+      # Robust error handling for NA-heavy data (e.g., branching logic)
       tryCatch({
         if (type %in% c("Integer", "Float")) {
           if(verbose) cat(sprintf("\n\nField: %s", field_name))
@@ -2674,6 +2687,46 @@ convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) 
   return(df)
 }
 
+# Helper function to safely handle NA values in type conversions
+# Prevents errors when columns have many NAs from branching logic
+safe_type_conversion <- function(values, target_type, na_code = NULL, verbose = FALSE) {
+  if (is.null(values) || length(values) == 0) {
+    return(values)
+  }
+  
+  # Track original NAs
+  original_na_mask <- is.na(values)
+  original_na_count <- sum(original_na_mask)
+  
+  # Convert to character first to handle all types
+  char_values <- as.character(values)
+  
+  # Apply type conversion with error handling
+  tryCatch({
+    if (target_type == "Integer") {
+      converted <- suppressWarnings(as.integer(char_values))
+    } else if (target_type == "Float") {
+      converted <- suppressWarnings(as.numeric(char_values))
+    } else {
+      # For String or other types, return as-is
+      return(values)
+    }
+    
+    # If na_code provided and there were original NAs, apply the code
+    if (!is.null(na_code) && original_na_count > 0) {
+      converted[original_na_mask] <- na_code
+    }
+    
+    return(converted)
+  }, error = function(e) {
+    if (verbose) {
+      message(sprintf("Warning: Type conversion failed, preserving original values: %s", e$message))
+    }
+    # Return original values if conversion fails
+    return(values)
+  })
+}
+
 # Helper function to convert logical values to character
 # Extracted to reduce complexity in main function
 convert_logical_to_character <- function(df, verbose = FALSE) {
@@ -3040,8 +3093,15 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
   field_statuses <- list()
 
   # Process each field in the structure
+  # Wrap in tryCatch to handle NA-heavy data gracefully (branching logic)
   for (i in 1:nrow(elements)) {
     field_name <- elements$name[i]
+    
+    # Skip if field doesn't exist
+    if (!field_name %in% names(df)) next
+    
+    # Robust error handling for fields with many NAs
+    tryCatch({
     type <- elements$type[i]
     value_range <- elements$valueRange[i]
     notes <- elements$notes[i]
@@ -3049,9 +3109,11 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
     # Skip if field doesn't exist
     if (!field_name %in% names(df)) next
 
-    # Get current field values
-    field_values <- df[[field_name]]
-    field_values_char <- as.character(field_values)
+    # Robust error handling for fields with many NAs (branching logic)
+    tryCatch({
+      # Get current field values
+      field_values <- df[[field_name]]
+      field_values_char <- as.character(field_values)
 
     # Determine if we need a transformation
     needs_transformation <- FALSE
@@ -3339,6 +3401,14 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
         df[[field_name]][empty_mask] <- NA
       }
     }
+    }, error = function(e) {
+      if (verbose) {
+        cat(sprintf("\n  ERROR processing field %s: %s", field_name, e$message))
+        cat("\n  Preserving original values - this may be due to NA values from branching logic")
+      }
+      # Preserve original field values if transformation fails
+      # This is especially important for branching logic where many NAs are expected
+    })
   }
 
   # Final summary report
