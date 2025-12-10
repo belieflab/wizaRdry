@@ -1013,15 +1013,35 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # EXISTING NDA STRUCTURE - Run full validation
       validation_results <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
 
-      # ADD BOTH METADATA ATTRIBUTES
-      if (!is.null(required_field_metadata)) {
-        attr(validation_results, "required_metadata") <- required_field_metadata
+      # Handle validation errors gracefully
+      if (is.null(validation_results)) {
+        message("Warning: Validation returned NULL - attempting to continue with available data")
+        validation_results <- list(
+          valid = FALSE,
+          error = "Validation returned NULL",
+          df = base::get0(measure),
+          warnings = c("Validation failed - ndaValidator returned NULL"),
+          bypassed_validation = FALSE
+        )
+        # Store NDA structure as attribute for file creation
+        attr(validation_results, "nda_structure") <- list(
+          shortName = measure,
+          dataElements = if ("dataElements" %in% names(nda_structure)) nda_structure$dataElements else NULL
+        )
       }
-      if (!is.null(recommended_field_metadata)) {
-        attr(validation_results, "recommended_metadata") <- recommended_field_metadata
+
+      # ADD BOTH METADATA ATTRIBUTES (only if validation_results is valid structure)
+      if (is.list(validation_results)) {
+        if (!is.null(required_field_metadata)) {
+          attr(validation_results, "required_metadata") <- required_field_metadata
+        }
+        if (!is.null(recommended_field_metadata)) {
+          attr(validation_results, "recommended_metadata") <- recommended_field_metadata
+        }
       }
 
       # CRITICAL: Update all environments with validated dataframe
+      # Handle both success and error cases
       if (is.list(validation_results) && !is.null(validation_results$df)) {
         if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
         # Update globalenv
@@ -1141,10 +1161,19 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
               if (DEBUG) message(sprintf("[DEBUG] Found %d new field(s): %s", 
                                         length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
             }
-            
-            # Note: Value range modifications are complex to detect without full data processing
-            # If no new fields found, we assume unmodified (existing structure)
-            # User can manually trigger data definition if value ranges were modified
+          }
+          
+          # Check for value range violations (e.g., data contains "9999" but NDA doesn't allow it)
+          # When value ranges differ, we need to create a data definition file to update them
+          if (!is_modified_structure && 
+              is.list(validation_results) &&
+              "value_range_violations" %in% names(validation_results) &&
+              !is.null(validation_results$value_range_violations) &&
+              length(validation_results$value_range_violations) > 0) {
+            is_modified_structure <- TRUE
+            if (DEBUG) message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
+                                      length(validation_results$value_range_violations),
+                                      paste(names(validation_results$value_range_violations), collapse = ", ")))
           }
           
           # Only create data definition for new or modified structures
@@ -1153,7 +1182,23 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             submission_template <- list(columns = names(df))
             createNdaDataDefinition(submission_template, nda_structure, measure)
           } else if (is_modified_structure) {
-            message("Creating data definition for modified structure (new fields detected)")
+            # Determine reason for modification
+            modification_reason <- character(0)
+            if (exists("new_fields") && length(new_fields) > 0) {
+              modification_reason <- c(modification_reason, "new fields")
+            }
+            if (is.list(validation_results) &&
+                "value_range_violations" %in% names(validation_results) &&
+                !is.null(validation_results$value_range_violations) &&
+                length(validation_results$value_range_violations) > 0) {
+              modification_reason <- c(modification_reason, "value range differences")
+            }
+            reason_text <- if (length(modification_reason) > 0) {
+              paste(modification_reason, collapse = " and ")
+            } else {
+              "modifications detected"
+            }
+            message(sprintf("Creating data definition for modified structure (%s detected)", reason_text))
             submission_template <- list(columns = names(df))
             createNdaDataDefinition(submission_template, nda_structure, measure)
           } else {

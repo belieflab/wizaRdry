@@ -2634,6 +2634,58 @@ debug_print <- function(msg, df = NULL, sample_size = 5, debug = FALSE) {
 
 
 # Modified ndaValidator with enhanced error handling
+
+# Helper function to convert problematic column types to character
+# Extracted to reduce complexity in main function
+convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) {
+  # Force all complex/problematic data types to character immediately
+  for (col in names(df)) {
+    tryCatch({
+      # Convert POSIXct and other complex classes to character
+      if (inherits(df[[col]], "POSIXt") ||
+          inherits(df[[col]], "Date") ||
+          length(class(df[[col]])) > 1) {
+
+        if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
+        df[[col]] <- as.character(df[[col]])
+      }
+
+      # Test if column is accessible
+      dummy <- df[[col]][1]
+    }, error = function(e) {
+      # If any error, convert to character
+      if(verbose) message(sprintf("Column '%s' has an unusable type. Converting to character.", col))
+
+      # Try three different approaches to fix problematic columns
+      tryCatch({
+        df[[col]] <- as.character(df[[col]])
+      }, error = function(e2) {
+        tryCatch({
+          df[[col]] <- as.character(unlist(df[[col]]))
+        }, error = function(e3) {
+          # Last resort - replace with NAs
+          if(verbose) message(sprintf("Could not convert column '%s'. Replacing with NAs.", col))
+          df[[col]] <- rep(NA, nrow(df))
+        })
+      })
+    })
+  }
+  
+  return(df)
+}
+
+# Helper function to convert logical values to character
+# Extracted to reduce complexity in main function
+convert_logical_to_character <- function(df, verbose = FALSE) {
+  for(col in names(df)) {
+    if(is.logical(df[[col]])) {
+      if(verbose) cat(sprintf("\nConverting logical column %s to character", col))
+      df[[col]] <- as.character(df[[col]])
+    }
+  }
+  return(df)
+}
+
 # Helper function to standardize column names
 standardize_column_names <- function(df, structure_name, verbose = FALSE) {
   if(verbose) cat("\nStandardizing column names...")
@@ -2726,8 +2778,51 @@ compare_numeric_patterns <- function(name1, name2) {
 # Modify transform_value_ranges to be more robust
 # improve the transform_value_ranges function to handle date and logical values better
 
+# Helper function to re-evaluate missing_required_fields after transformations
+# Fields that now have valid missing data codes (like -9) should not be flagged as missing
+re_evaluate_missing_required_fields <- function(df, missing_required_fields, verbose = FALSE) {
+  if (length(missing_required_fields) == 0) {
+    return(missing_required_fields)
+  }
+  
+  still_missing <- character(0)
+  original_count <- length(missing_required_fields)
+  
+  for (field in missing_required_fields) {
+    if (field %in% names(df)) {
+      field_values <- df[[field]]
+      # Check if field still has actual NAs or empty values
+      has_na <- any(is.na(field_values))
+      has_empty <- if (is.character(field_values)) any(field_values == "", na.rm = TRUE) else FALSE
+      
+      # If no NAs or empty values, the field was successfully filled with valid codes
+      if (!has_na && !has_empty) {
+        if (verbose) {
+          message(sprintf("Field '%s' no longer has missing values after transformation, removing from missing_required_fields", field))
+        }
+        next  # Skip adding to still_missing
+      }
+      
+      # Field still has NAs or empty values - keep it in missing list
+      still_missing <- c(still_missing, field)
+    } else {
+      # Field still doesn't exist in dataframe
+      still_missing <- c(still_missing, field)
+    }
+  }
+  
+  if (verbose && length(still_missing) < original_count) {
+    message(sprintf("Updated missing_required_fields: %d fields resolved, %d still missing",
+                   original_count - length(still_missing),
+                   length(still_missing)))
+  }
+  
+  return(still_missing)
+}
+
 # Modified transform_value_ranges function to return info about required field issues
 # Modified transform_value_ranges function
+# Returns list with df and missing_required_fields to avoid attribute passing
 transform_value_ranges <- function(df, elements, verbose = FALSE) {
   if(verbose) cat("\nChecking and transforming value ranges...")
 
@@ -2763,11 +2858,9 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
   }
 
   if(missing_required) {
-    if(verbose) {
-      warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
-                      paste(missing_fields, collapse=", ")))
-    }
-    # Store missing fields for later use
+    # Store missing fields for later use - but don't warn yet
+    # The warning will be issued later if fields are still missing after transformations
+    # This prevents false warnings when missing codes will be applied
     missing_required_fields <- missing_fields
   }
 
@@ -2897,10 +2990,12 @@ transform_value_ranges <- function(df, elements, verbose = FALSE) {
     cat("\n")
   }
 
-  # Add the missing fields as an attribute to the dataframe
-  attr(df, "missing_required_fields") <- missing_required_fields
-
-  return(df)
+  # Return both dataframe and missing_required_fields explicitly
+  # This avoids fragile attribute passing
+  return(list(
+    df = df,
+    missing_required_fields = missing_required_fields
+  ))
 }
 
 # Robust bidirectional transformation function for field values
@@ -2951,19 +3046,39 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
         invalid_values <- unique(field_values[invalid_mask])
       }
     }
-    # Check string fields that contain numeric values but should be text
+    # Check string fields that need transformation
     else if (type == "String" && !is.null(value_range) && !is.na(value_range) && value_range != "") {
-      # If value range specifies text values but we have numbers
       if (grepl(";", value_range) && !grepl("::", value_range)) {
         valid_values <- trimws(strsplit(value_range, ";")[[1]])
+        # Remove empty strings from valid values
+        valid_values <- valid_values[nzchar(valid_values)]
+        
         # Check if valid values are non-numeric text
-        if (any(!suppressWarnings(all(!is.na(as.numeric(valid_values)))))) {
+        valid_are_text <- any(!suppressWarnings(all(!is.na(as.numeric(valid_values)))))
+        
+        if (valid_are_text) {
           # Check if our current values are numeric and need conversion to text
           is_numeric_mask <- !is.na(field_values) & !is.na(suppressWarnings(as.numeric(field_values_char)))
           if (any(is_numeric_mask)) {
             needs_transformation <- TRUE
             transformation_direction <- "numeric_to_string"
             invalid_values <- unique(field_values[is_numeric_mask])
+          } else {
+            # Check if current text values don't match valid text values (string-to-string transformation)
+            # Normalize for comparison (case-insensitive, trim whitespace)
+            valid_normalized <- tolower(trimws(valid_values))
+            current_normalized <- tolower(trimws(field_values_char[!is.na(field_values)]))
+            current_unique <- unique(current_normalized)
+            
+            # Find values that don't match any valid value
+            mismatched <- setdiff(current_unique, valid_normalized)
+            if (length(mismatched) > 0) {
+              needs_transformation <- TRUE
+              transformation_direction <- "string_to_string"
+              # Get original case versions of mismatched values
+              invalid_values <- unique(field_values[!is.na(field_values) & 
+                                                     tolower(trimws(field_values_char)) %in% mismatched])
+            }
           }
         }
       }
@@ -3037,6 +3152,7 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
         # Get valid string values from value range
         if (grepl(";", value_range)) {
           valid_text_values <- trimws(strsplit(value_range, ";")[[1]])
+          valid_text_values <- valid_text_values[nzchar(valid_text_values)]
 
           # Create position-based mapping if we have valid values
           if (length(invalid_values) <= length(valid_text_values)) {
@@ -3054,6 +3170,66 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
           }
         }
       }
+      else if (transformation_direction == "string_to_string") {
+        # Get valid string values from value range
+        if (grepl(";", value_range)) {
+          valid_text_values <- trimws(strsplit(value_range, ";")[[1]])
+          valid_text_values <- valid_text_values[nzchar(valid_text_values)]
+          
+          # Try to create intelligent mappings based on common patterns
+          # First, try to match based on common sex field patterns
+          if (tolower(field_name) == "sex") {
+            # Common sex field mappings
+            sex_mappings <- list(
+              "female" = "F",
+              "male" = "M",
+              "f" = "F",
+              "m" = "M",
+              "woman" = "F",
+              "man" = "M",
+              "women" = "F",
+              "men" = "M"
+            )
+            
+            # Check if any mappings match
+            for (invalid_val in invalid_values) {
+              invalid_lower <- tolower(trimws(as.character(invalid_val)))
+              if (invalid_lower %in% names(sex_mappings)) {
+                target <- sex_mappings[[invalid_lower]]
+                # Check if target is in valid values
+                if (any(tolower(trimws(valid_text_values)) == tolower(target))) {
+                  # Get the exact case from valid values
+                  exact_target <- valid_text_values[tolower(trimws(valid_text_values)) == tolower(target)][1]
+                  mapping[[as.character(invalid_val)]] <- exact_target
+                }
+              }
+            }
+          }
+          
+          # If no mappings found yet, try fuzzy matching or position-based
+          if (length(mapping) == 0 && length(invalid_values) <= length(valid_text_values)) {
+            # Try to match based on first letter or common patterns
+            for (invalid_val in invalid_values) {
+              invalid_lower <- tolower(trimws(as.character(invalid_val)))
+              # Try to find a valid value that starts with the same letter
+              for (valid_val in valid_text_values) {
+                valid_lower <- tolower(trimws(valid_val))
+                if (substr(invalid_lower, 1, 1) == substr(valid_lower, 1, 1)) {
+                  mapping[[as.character(invalid_val)]] <- valid_val
+                  break
+                }
+              }
+            }
+          }
+          
+          if(verbose && length(mapping) > 0) {
+            cat("\n  Created string-to-string mapping:")
+            for (key in names(mapping)) {
+              cat(sprintf("\n    '%s' -> '%s'", key, mapping[[key]]))
+            }
+          }
+        }
+      }
     }
 
     # Apply the mapping if we have one
@@ -3066,9 +3242,9 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
         to_value <- mapping[[from_value]]
 
         # Case-insensitive matching for text values
-        if (transformation_direction == "string_to_numeric") {
+        if (transformation_direction == "string_to_numeric" || transformation_direction == "string_to_string") {
           matches <- !is.na(field_values) &
-            tolower(field_values_char) == tolower(from_value)
+            tolower(trimws(field_values_char)) == tolower(trimws(from_value))
         } else {
           # Exact matching for numeric values
           matches <- !is.na(field_values) &
@@ -3095,7 +3271,7 @@ transform_field_values <- function(df, elements, verbose = TRUE) {
             df[[field_name]] <- suppressWarnings(as.numeric(field_values_char))
           }
         } else {
-          # Just use the character values for string conversion
+          # For string_to_string or numeric_to_string, use character values
           df[[field_name]] <- field_values_char
         }
 
@@ -3158,6 +3334,53 @@ extract_bidirectional_mappings <- function(notes, direction = "string_to_numeric
 
   mapping <- list()
   source <- "none"
+  
+  # Handle string_to_string direction (e.g., "Female" -> "F", "Male" -> "M")
+  if (direction == "string_to_string") {
+    # Look for explicit mappings with equals sign: "Female=F" or "F=Female"
+    if (grepl("=", notes)) {
+      parts <- strsplit(notes, "[;,]")[[1]]
+      for (part in parts) {
+        if (grepl("=", part)) {
+          key_value <- strsplit(part, "=")[[1]]
+          if (length(key_value) >= 2) {
+            key <- trimws(key_value[1])
+            value <- trimws(key_value[2])
+            # For string_to_string, both are text - use as-is
+            mapping[[key]] <- value
+          }
+        }
+      }
+      if (length(mapping) > 0) {
+        return(list(mapping = mapping, source = "equals_pattern"))
+      }
+    }
+    
+    # Look for "X means Y" or "X represents Y" patterns for text-to-text
+    patterns <- c(
+      "([a-zA-Z]+)\\s+means\\s+([a-zA-Z]+)",
+      "([a-zA-Z]+)\\s+represents\\s+([a-zA-Z]+)",
+      "([a-zA-Z]+)\\s+is\\s+([a-zA-Z]+)"
+    )
+    for (pattern in patterns) {
+      matches <- gregexpr(pattern, notes, perl = TRUE, ignore.case = TRUE)
+      if (matches[[1]][1] != -1) {
+        result <- regmatches(notes, matches)[[1]]
+        for (match in result) {
+          parts <- regexec(pattern, match, perl = TRUE, ignore.case = TRUE)
+          extracted <- regmatches(match, parts)[[1]]
+          if (length(extracted) >= 3) {
+            key <- trimws(extracted[2])
+            value <- trimws(extracted[3])
+            mapping[[key]] <- value
+          }
+        }
+        if (length(mapping) > 0) {
+          return(list(mapping = mapping, source = "means_pattern"))
+        }
+      }
+    }
+  }
 
   # Try multiple pattern matching approaches
 
@@ -3375,6 +3598,17 @@ enhance_elements_with_redcap_metadata <- function(elements, redcap_metadata) {
 
 # Updated ndaValidator to incorporate better missing value handling
 # Updated ndaValidator to incorporate better missing value handling
+#
+# Pipeline Overview:
+# PHASE 1: NA Value Mapping - Handle missing required fields
+# PHASE 2: Column Standardization - Standardize names, rename fields
+# PHASE 3: Value Transformation - Transform values, types, missing codes
+# PHASE 4: Validation and De-Identification - Final validation, date/age standardization
+#
+# Dependencies:
+# - Phase 2 depends on Phase 1 (field names must exist)
+# - Phase 3 depends on Phase 2 (fields must be renamed/standardized)
+# - Phase 4 depends on Phase 3 (values must be transformed)
 ndaValidator <- function(measure_name,
                          api,
                          limited_dataset = FALSE,
@@ -3394,6 +3628,11 @@ ndaValidator <- function(measure_name,
 
     # Get the dataframe from the environment
     df <- base::get(measure_name, envir = .wizaRdry_env)
+    
+    # Validate input
+    if (is.null(df) || !is.data.frame(df)) {
+      stop(sprintf("Dataframe '%s' not found or is not a data.frame", measure_name))
+    }
 
     # Enhance with RedCap metadata if available and api is "redcap"
     redcap_metadata <- NULL
@@ -3411,39 +3650,9 @@ ndaValidator <- function(measure_name,
       }, silent = TRUE)
     }
 
-    # Force all complex/problematic data types to character immediately
-    for (col in names(df)) {
-      tryCatch({
-        # Convert POSIXct and other complex classes to character
-        if (inherits(df[[col]], "POSIXt") ||
-            inherits(df[[col]], "Date") ||
-            length(class(df[[col]])) > 1) {
-
-          if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
-          df[[col]] <- as.character(df[[col]])
-        }
-
-        # Test if column is accessible
-        dummy <- df[[col]][1]
-      }, error = function(e) {
-        # If any error, convert to character
-        if(verbose) message(sprintf("Column '%s' has an unusable type. Converting to character.", col))
-
-        # Try three different approaches to fix problematic columns
-        tryCatch({
-          df[[col]] <- as.character(df[[col]])
-        }, error = function(e2) {
-          tryCatch({
-            df[[col]] <- as.character(unlist(df[[col]]))
-          }, error = function(e3) {
-            # Last resort - replace with NAs
-            if(verbose) message(sprintf("Could not convert column '%s'. Replacing with NAs.", col))
-            df[[col]] <- rep(NA, nrow(df))
-          })
-        })
-      })
-    }
-
+    # Convert problematic column types to character
+    df <- convert_problematic_column_types(df, measure_name, verbose = verbose)
+    
     # Save the cleaned dataframe
     assign(measure_name, df, envir = .wizaRdry_env)
 
@@ -3487,7 +3696,12 @@ ndaValidator <- function(measure_name,
       }
     }
 
+    # ============================================================================
     # PHASE 1: NA Value Mapping
+    # Purpose: Add missing required fields with appropriate missing data codes
+    # Dependencies: None (first phase)
+    # Output: df with missing required fields added
+    # ============================================================================
     if(verbose) message("\n\n--- PHASE 1: NA Value Mapping ---")
 
     # Handle missing required fields
@@ -3497,7 +3711,12 @@ ndaValidator <- function(measure_name,
       df <- handle_missing_fields(df, elements, missing_required, verbose = verbose)
     }
 
+    # ============================================================================
     # PHASE 2: Column Standardization
+    # Purpose: Standardize column names and rename fields to match NDA structure
+    # Dependencies: Phase 1 (fields must exist)
+    # Output: df with standardized/renamed columns, renamed_fields list
+    # ============================================================================
     if(verbose) message("\n\n--- PHASE 2: Column Standardization ---")
 
     # Standardize column names
@@ -3519,23 +3738,29 @@ ndaValidator <- function(measure_name,
     all_columns_to_drop <- c(all_columns_to_drop,
                              setdiff(renamed_results$columns_to_drop, renamed_fields))
 
+    # ============================================================================
     # PHASE 3: Value Transformation
+    # Purpose: Transform values to match NDA requirements (types, ranges, codes)
+    # Dependencies: Phase 2 (fields must be renamed/standardized)
+    # Order matters:
+    #   1. Convert logicals to character
+    #   2. Transform value ranges (categorical standardization)
+    #   3. Transform field values (string-to-numeric, string-to-string mappings)
+    #   4. Convert array fields
+    #   5. Apply type conversions
+    #   6. Fix NA values (missing code standardization)
+    #   7. Re-evaluate missing_required_fields (after all transformations)
+    # Output: df with transformed values, missing_required_fields list
+    # ============================================================================
     if(verbose) message("\n\n--- PHASE 3: Value Transformation ---")
 
     # Convert logical values to character
-    for(col in names(df)) {
-      if(is.logical(df[[col]])) {
-        if(verbose) cat(sprintf("\nConverting logical column %s to character", col))
-        df[[col]] <- as.character(df[[col]])
-      }
-    }
+    df <- convert_logical_to_character(df, verbose = verbose)
 
-    # Transform value ranges
-    df <- transform_value_ranges(df, elements, verbose = verbose)
-
-    # Extract missing required fields from attributes
-    missing_required_fields <- attr(df, "missing_required_fields")
-    if(is.null(missing_required_fields)) missing_required_fields <- character(0)
+    # Transform value ranges - now returns explicit list
+    transform_result <- transform_value_ranges(df, elements, verbose = verbose)
+    df <- transform_result$df
+    missing_required_fields <- transform_result$missing_required_fields
 
     # Transform field values using bidirectional approach
     df <- transform_field_values(df, elements, verbose = verbose)
@@ -3549,7 +3774,16 @@ ndaValidator <- function(measure_name,
     # Apply missing value code standardization - THIS IS THE KEY ENHANCEMENT
     df <- fix_na_values(df, elements, verbose = verbose)
 
+    # Re-evaluate missing_required_fields after transformations
+    # Fields that now have valid missing data codes (like -9) should not be flagged as missing
+    missing_required_fields <- re_evaluate_missing_required_fields(df, missing_required_fields, verbose = verbose)
+
+    # ============================================================================
     # PHASE 4: Validation and De-Identification
+    # Purpose: Final validation and de-identification (date shifting, age capping)
+    # Dependencies: Phase 3 (all transformations must be complete)
+    # Output: validation_results with df, validation status, violations
+    # ============================================================================
     if(verbose) message("\n\n--- PHASE 4: Validation and De-Identification ---")
 
     # De-identification steps
@@ -3584,18 +3818,34 @@ ndaValidator <- function(measure_name,
       dataElements = elements
     )
 
-    # Final check for missing required values
+    # Final check for missing required values - issue warning if still missing after all transformations
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
-      if(verbose) message("\nValidation FAILED: Required fields are missing or contain NA values")
+      if(verbose) {
+        warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
+                        paste(validation_results$missing_required, collapse=", ")))
+        message("\nValidation FAILED: Required fields are missing or contain NA values")
+      }
     }
     return(validation_results)
   }, error = function(e) {
-    message("Error in ndaValidator: ", e$message)
+    error_msg <- sprintf("Error in ndaValidator for '%s': %s", measure_name, e$message)
+    message(error_msg)
     if(debug) {
       message("Traceback:")
       message(paste(capture.output(traceback()), collapse="\n"))
     }
-    return(NULL)
+    # Return error structure instead of NULL to prevent cascading failures
+    # This allows calling code to handle errors gracefully
+    return(list(
+      valid = FALSE,
+      error = error_msg,
+      df = tryCatch(base::get(measure_name, envir = .wizaRdry_env), error = function(e2) NULL),
+      warnings = c(sprintf("Validation failed: %s", e$message)),
+      missing_required = character(0),
+      value_range_violations = list(),
+      unknown_fields = character(0),
+      unknown_fields_dropped = character(0)
+    ))
   })
 }
 
