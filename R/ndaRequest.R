@@ -1063,8 +1063,14 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # Defer any sounds until the end of processing
 
       # Create data upload template ONLY for existing structures
+      # Wrap in tryCatch to ensure file creation happens even if there are errors
       if (DEBUG) message("[DEBUG] Creating NDA template")
-      createNdaSubmissionTemplate(measure)
+      tryCatch({
+        createNdaSubmissionTemplate(measure)
+      }, error = function(e) {
+        message(sprintf("Warning: Error creating submission template: %s", e$message))
+        message("Attempting to continue with data definition creation...")
+      })
 
     } else {
       # NEW STRUCTURE - Bypass validation, create minimal results

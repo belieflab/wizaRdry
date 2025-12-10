@@ -2780,7 +2780,8 @@ compare_numeric_patterns <- function(name1, name2) {
 
 # Helper function to re-evaluate missing_required_fields after transformations
 # Fields that now have valid missing data codes (like -9) should not be flagged as missing
-re_evaluate_missing_required_fields <- function(df, missing_required_fields, verbose = FALSE) {
+# This function checks if fields have been successfully transformed to valid values
+re_evaluate_missing_required_fields <- function(df, missing_required_fields, elements = NULL, verbose = FALSE) {
   if (length(missing_required_fields) == 0) {
     return(missing_required_fields)
   }
@@ -2788,14 +2789,45 @@ re_evaluate_missing_required_fields <- function(df, missing_required_fields, ver
   still_missing <- character(0)
   original_count <- length(missing_required_fields)
   
+  # Standard NDA missing data codes that are considered valid "filled" values
+  # These are valid missing codes that indicate the field was answered but with a missing code
+  standard_nda_missing_codes <- c("-9", "-3", "-1", "-999", "-99", "-9999", "9999", "999", "99")
+  
   for (field in missing_required_fields) {
     if (field %in% names(df)) {
       field_values <- df[[field]]
+      
       # Check if field still has actual NAs or empty values
       has_na <- any(is.na(field_values))
       has_empty <- if (is.character(field_values)) any(field_values == "", na.rm = TRUE) else FALSE
       
-      # If no NAs or empty values, the field was successfully filled with valid codes
+      # If field has NAs or empty strings, it's still missing
+      if (has_na || has_empty) {
+        still_missing <- c(still_missing, field)
+        next
+      }
+      
+      # Check if all values are valid missing codes (which means field is "filled" with missing codes)
+      # Convert to character for comparison
+      field_values_char <- as.character(field_values)
+      # Check if all non-NA values are standard missing codes
+      non_na_values <- field_values_char[!is.na(field_values_char)]
+      
+      if (length(non_na_values) > 0) {
+        # If all values are standard missing codes, the field is considered "filled"
+        # (even though with missing codes, it's better than having NAs)
+        all_are_missing_codes <- all(non_na_values %in% standard_nda_missing_codes)
+        
+        if (all_are_missing_codes) {
+          if (verbose) {
+            message(sprintf("Field '%s' has valid missing codes (e.g., %s), removing from missing_required_fields", 
+                          field, paste(unique(non_na_values[1:min(3, length(non_na_values))]), collapse=", ")))
+          }
+          next  # Skip adding to still_missing - field is filled with valid missing codes
+        }
+      }
+      
+      # If no NAs and no empty values, and not all missing codes, field is filled with actual data
       if (!has_na && !has_empty) {
         if (verbose) {
           message(sprintf("Field '%s' no longer has missing values after transformation, removing from missing_required_fields", field))
@@ -2803,7 +2835,7 @@ re_evaluate_missing_required_fields <- function(df, missing_required_fields, ver
         next  # Skip adding to still_missing
       }
       
-      # Field still has NAs or empty values - keep it in missing list
+      # Field still has issues - keep it in missing list
       still_missing <- c(still_missing, field)
     } else {
       # Field still doesn't exist in dataframe
@@ -3776,7 +3808,7 @@ ndaValidator <- function(measure_name,
 
     # Re-evaluate missing_required_fields after transformations
     # Fields that now have valid missing data codes (like -9) should not be flagged as missing
-    missing_required_fields <- re_evaluate_missing_required_fields(df, missing_required_fields, verbose = verbose)
+    missing_required_fields <- re_evaluate_missing_required_fields(df, missing_required_fields, elements = elements, verbose = verbose)
 
     # ============================================================================
     # PHASE 4: Validation and De-Identification
@@ -3819,11 +3851,38 @@ ndaValidator <- function(measure_name,
     )
 
     # Final check for missing required values - issue warning if still missing after all transformations
+    # Only warn about fields that truly have missing data (NAs or empty), not fields with valid missing codes
     if(!validation_results$valid && length(validation_results$missing_required) > 0) {
-      if(verbose) {
-        warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
-                        paste(validation_results$missing_required, collapse=", ")))
-        message("\nValidation FAILED: Required fields are missing or contain NA values")
+      # Filter out fields that might have valid missing codes
+      # If a field is in missing_required but has no NAs/empty values, it might just have missing codes
+      truly_missing <- character(0)
+      for (field in validation_results$missing_required) {
+        if (field %in% names(df)) {
+          field_values <- df[[field]]
+          has_na <- any(is.na(field_values))
+          has_empty <- if (is.character(field_values)) any(field_values == "", na.rm = TRUE) else FALSE
+          # Only add to truly_missing if it has actual NAs or empty values
+          if (has_na || has_empty) {
+            truly_missing <- c(truly_missing, field)
+          }
+        } else {
+          # Field doesn't exist - definitely missing
+          truly_missing <- c(truly_missing, field)
+        }
+      }
+      
+      # Only issue warning if there are truly missing fields (not just missing codes)
+      if (length(truly_missing) > 0) {
+        if(verbose) {
+          warning(sprintf('NDA required values contain NA or no data in fields: %s\nThese will need to be fixed before submission.',
+                          paste(truly_missing, collapse=", ")))
+          message("\nValidation FAILED: Required fields are missing or contain NA values")
+        }
+      } else if (verbose) {
+        # Fields have valid missing codes but are still in missing_required list
+        # This shouldn't happen if re_evaluate_missing_required_fields is working correctly
+        message(sprintf("Note: Fields %s are in validation results but appear to have valid values or missing codes",
+                       paste(validation_results$missing_required, collapse=", ")))
       }
     }
     return(validation_results)
