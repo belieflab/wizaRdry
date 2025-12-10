@@ -1140,7 +1140,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           
           # For existing structures, check if there are modifications
           # Only create data definition if structure has new fields or modified value ranges
+          # OR if element names have been modified (renamed fields)
           is_modified_structure <- FALSE
+          has_value_range_violations <- FALSE
           if (!is_new_structure && "dataElements" %in% names(nda_structure)) {
             structure_field_names <- if (is.data.frame(nda_structure$dataElements)) {
               nda_structure$dataElements$name
@@ -1165,15 +1167,29 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           
           # Check for value range violations (e.g., data contains "9999" but NDA doesn't allow it)
           # When value ranges differ, we need to create a data definition file to update them
-          if (!is_modified_structure && 
-              is.list(validation_results) &&
-              "value_range_violations" %in% names(validation_results) &&
-              !is.null(validation_results$value_range_violations) &&
-              length(validation_results$value_range_violations) > 0) {
-            is_modified_structure <- TRUE
-            if (DEBUG) message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
-                                      length(validation_results$value_range_violations),
-                                      paste(names(validation_results$value_range_violations), collapse = ", ")))
+          # IMPORTANT: Check this INDEPENDENTLY of is_modified_structure to catch ALL violations
+          # This ensures value range modifications trigger definition creation even without new fields
+          has_value_range_violations <- FALSE
+          if (is.list(validation_results) &&
+              "value_range_violations" %in% names(validation_results)) {
+            violations <- validation_results$value_range_violations
+            # Check if violations exist and are non-empty
+            if (!is.null(violations) && length(violations) > 0) {
+              has_value_range_violations <- TRUE
+              is_modified_structure <- TRUE
+              if (DEBUG) {
+                message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
+                              length(violations),
+                              paste(names(violations), collapse = ", ")))
+              }
+            } else if (DEBUG) {
+              message("[DEBUG] value_range_violations exists but is empty or NULL")
+            }
+          } else if (DEBUG) {
+            message("[DEBUG] validation_results missing value_range_violations field")
+            if (is.list(validation_results)) {
+              message(sprintf("[DEBUG] Available fields: %s", paste(names(validation_results), collapse = ", ")))
+            }
           }
           
           # Only create data definition for new or modified structures
@@ -1187,10 +1203,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             if (exists("new_fields") && length(new_fields) > 0) {
               modification_reason <- c(modification_reason, "new fields")
             }
-            if (is.list(validation_results) &&
-                "value_range_violations" %in% names(validation_results) &&
-                !is.null(validation_results$value_range_violations) &&
-                length(validation_results$value_range_violations) > 0) {
+            if (has_value_range_violations) {
               modification_reason <- c(modification_reason, "value range differences")
             }
             reason_text <- if (length(modification_reason) > 0) {
