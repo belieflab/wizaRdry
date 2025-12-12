@@ -41,11 +41,25 @@
 #' }
 #'
 #' @noRd
-get_oracle_driver <- function() {
+get_oracle_driver <- function(validate = FALSE) {
   # Try to get driver from secrets first
   driver <- get_secret_optional("driver")
   
   if (!is.null(driver) && nchar(driver) > 0) {
+    # If validation requested, check if driver exists
+    if (validate && requireNamespace("odbc", quietly = TRUE)) {
+      tryCatch({
+        available_drivers <- odbc::odbcListDrivers()
+        if (!driver %in% available_drivers$name) {
+          warning(sprintf("Driver '%s' specified in secrets.R not found in available drivers.", driver))
+          message("Available drivers:")
+          print(available_drivers)
+          return(NULL)  # Return NULL to indicate invalid driver
+        }
+      }, error = function(e) {
+        # If we can't check, proceed anyway
+      })
+    }
     return(driver)
   }
   
@@ -1395,7 +1409,7 @@ oracle.test <- function() {
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
-  driver <- get_oracle_driver()
+  driver <- get_oracle_driver(validate = TRUE)  # Validate driver name if specified
   
   # Validate that we have the required connection parameters
   if (is.null(dsn) || is.null(user_id) || is.null(password)) {
@@ -1411,6 +1425,8 @@ oracle.test <- function() {
     message(sprintf("Testing connection to DSN: %s", dsn))
     if (!is.null(driver)) {
       message(sprintf("Using driver: %s", driver))
+    } else {
+      message("No driver specified - attempting connection without explicit driver")
     }
     
     # Check DSN length (IM010 can be caused by DSN name being too long)
@@ -1437,10 +1453,17 @@ oracle.test <- function() {
     tryCatch({
       available_drivers <- odbc::odbcListDrivers()
       if (nrow(available_drivers) > 0) {
+        message("All available ODBC drivers:")
+        print(available_drivers)
         oracle_drivers <- available_drivers[grepl("Oracle", available_drivers$name, ignore.case = TRUE), ]
         if (nrow(oracle_drivers) > 0) {
-          message("Available Oracle drivers:")
+          message("\nAvailable Oracle drivers:")
           print(oracle_drivers)
+          if (!is.null(driver) && !driver %in% available_drivers$name) {
+            message(sprintf("\nERROR: Driver '%s' specified in secrets.R does not match any installed driver!", driver))
+            message("Please update your secrets.R file with one of the driver names listed above.")
+            return(FALSE)
+          }
         } else {
           message("Warning: No Oracle drivers found. You may need to install an Oracle ODBC driver.")
         }
@@ -1451,12 +1474,14 @@ oracle.test <- function() {
     
     # Attempt to connect with Driver as first parameter if available
     if (!is.null(driver)) {
+      message(sprintf("\nAttempting connection with Driver='%s', DSN='%s'", driver, dsn))
       channel <- odbc::dbConnect(odbc::odbc(),
                                 Driver = driver,
                                 dsn = dsn,
                                 UID = user_id,
                                 PWD = password)
     } else {
+      message(sprintf("\nAttempting connection with DSN='%s' (no explicit driver)", dsn))
       channel <- odbc::dbConnect(odbc::odbc(),
                                 dsn = dsn,
                                 UID = user_id,
@@ -1492,6 +1517,23 @@ oracle.test <- function() {
       message("4. Try recreating the DSN in ODBC Data Source Administrator")
       message("5. If DSN name is longer than 32 characters, try using a shorter name")
       message("6. Consider using a driver name instead of DSN (may require config changes)")
+    }
+    
+    # Provide specific guidance for IM002 error (driver not found)
+    if (grepl("IM002", error_msg, ignore.case = TRUE)) {
+      message("\nTroubleshooting IM002 error (Driver not found):")
+      message("1. The driver name specified does not match any installed ODBC driver")
+      if (!is.null(driver)) {
+        message(sprintf("2. Driver specified: '%s'", driver))
+      }
+      message("3. Check the list of available drivers printed above")
+      message("4. Update your secrets.R file with the exact driver name from the list")
+      message("5. Driver names are case-sensitive and must match exactly")
+      message("6. Common Oracle driver names include:")
+      message("   - 'Oracle in instantclient_19_3'")
+      message("   - 'Oracle in instantclient_21_1'")
+      message("   - 'Oracle 19 ODBC driver'")
+      message("   - 'Oracle in instantclient_23_1'")
     }
     
     connection_successful <- FALSE
