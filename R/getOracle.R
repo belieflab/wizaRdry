@@ -72,18 +72,35 @@ get_oracle_driver <- function(validate = FALSE) {
   driver <- get_secret_optional("driver")
   
   if (!is.null(driver) && nchar(driver) > 0) {
-    # If validation requested, check if driver exists
+    # Trim whitespace from driver name
+    driver <- trimws(driver)
+    
+    # If validation requested, check if driver exists (with case-insensitive matching)
     if (validate && requireNamespace("odbc", quietly = TRUE)) {
       tryCatch({
         available_drivers <- odbc::odbcListDrivers()
+        # Check exact match first
         if (!driver %in% available_drivers$name) {
-          warning(sprintf("Driver '%s' specified in secrets.R not found in available drivers.", driver))
-          message("Available drivers:")
-          print(available_drivers)
-          return(NULL)  # Return NULL to indicate invalid driver
+          # Try case-insensitive match
+          driver_lower <- tolower(driver)
+          available_lower <- tolower(available_drivers$name)
+          matched_idx <- which(available_lower == driver_lower)
+          
+          if (length(matched_idx) > 0) {
+            # Found case-insensitive match, use the actual name from the list
+            driver <- available_drivers$name[matched_idx[1]]
+            message(sprintf("Note: Using driver name '%s' (case-adjusted from secrets.R)", driver))
+          } else {
+            # No match found, but don't fail - let the connection attempt handle it
+            warning(sprintf("Driver '%s' from secrets.R not found in available drivers list.", driver))
+            message("Available drivers:")
+            print(available_drivers)
+            message("Will attempt connection anyway - driver name may still work.")
+          }
         }
       }, error = function(e) {
         # If we can't check, proceed anyway
+        message("Could not validate driver name: ", e$message)
       })
     }
     return(driver)
@@ -1500,10 +1517,18 @@ oracle.test <- function() {
         if (nrow(oracle_drivers) > 0) {
           message("\nAvailable Oracle drivers:")
           print(oracle_drivers)
-          if (!is.null(driver) && !driver %in% available_drivers$name) {
-            message(sprintf("\nERROR: Driver '%s' specified in secrets.R does not match any installed driver!", driver))
-            message("Please update your secrets.R file with one of the driver names listed above.")
-            return(FALSE)
+          # Don't fail here - let the actual connection attempt determine if driver works
+          # The driver validation already happened in get_oracle_driver()
+          if (!is.null(driver)) {
+            # Check if driver matches (case-insensitive)
+            driver_lower <- tolower(trimws(driver))
+            available_lower <- tolower(available_drivers$name)
+            if (!driver_lower %in% available_lower) {
+              message(sprintf("\nWarning: Driver '%s' from secrets.R not found in available drivers list.", driver))
+              message("Will attempt connection anyway - the driver name may still work.")
+            } else {
+              message(sprintf("\nDriver '%s' found in available drivers.", driver))
+            }
           }
         } else {
           message("Warning: No Oracle drivers found. You may need to install an Oracle ODBC driver.")
