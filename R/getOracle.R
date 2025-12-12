@@ -67,6 +67,35 @@ set_oracle_env_vars <- function(verbose = FALSE) {
 
 #'
 #' @noRd
+get_oracle_connection_params <- function() {
+  # Get connection parameters, supporting both DSN and DBQ (TNS alias)
+  # DBQ is used for TNS aliases from tnsnames.ora
+  # dsn is used for ODBC Data Source Names
+  
+  dsn <- get_secret_optional("dsn")
+  dbq <- get_secret_optional("DBQ")
+  host <- get_secret_optional("host")  # Fallback for backward compatibility
+  
+  # If DBQ is specified, use it (TNS alias)
+  if (!is.null(dbq) && nchar(dbq) > 0) {
+    return(list(use_dbq = TRUE, value = trimws(dbq)))
+  }
+  
+  # If dsn is specified, use it
+  if (!is.null(dsn) && nchar(dsn) > 0) {
+    return(list(use_dbq = FALSE, value = trimws(dsn)))
+  }
+  
+  # Fallback to host (treat as dsn for backward compatibility)
+  if (!is.null(host) && nchar(host) > 0) {
+    return(list(use_dbq = FALSE, value = trimws(host)))
+  }
+  
+  stop("No connection target specified. Please set 'dsn', 'DBQ', or 'host' in secrets.R")
+}
+
+#'
+#' @noRd
 get_oracle_driver <- function(validate = FALSE) {
   # Try to get driver from secrets first
   driver <- get_secret_optional("driver")
@@ -179,8 +208,8 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   # Set Oracle environment variables from secrets.R if specified
   set_oracle_env_vars()
   
-  # Get connection parameters using get_secret
-  dsn <- get_secret("host")  # This should be the DSN name
+  # Get connection parameters (supports both DSN and DBQ for TNS aliases)
+  conn_params <- get_oracle_connection_params()
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
   driver <- get_oracle_driver()
@@ -207,18 +236,23 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
   tryCatch({
     # Build connection parameters with Driver as first parameter if available
+    # Use DBQ for TNS aliases, dsn for ODBC DSNs
+    conn_args <- list(
+      UID = user_id,
+      PWD = password
+    )
+    
     if (!is.null(driver)) {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                Driver = driver,
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
-    } else {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
+      conn_args$Driver <- driver
     }
+    
+    if (conn_params$use_dbq) {
+      conn_args$DBQ <- conn_params$value
+    } else {
+      conn_args$dsn <- conn_params$value
+    }
+    
+    channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
     if (is.null(channel)) {
       stop("Failed to connect to database. Please check your connection settings.")
     }
@@ -476,8 +510,8 @@ oracle.index <- function(schema = NULL) {
   # Set Oracle environment variables from secrets.R if specified
   set_oracle_env_vars()
 
-  # Get connection parameters using get_secret
-  dsn <- get_secret("host")  # This should be the DSN name
+  # Get connection parameters (supports both DSN and DBQ for TNS aliases)
+  conn_params <- get_oracle_connection_params()
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
   driver <- get_oracle_driver()
@@ -488,18 +522,23 @@ oracle.index <- function(schema = NULL) {
 
   tryCatch({
     # Build connection parameters with Driver as first parameter if available
+    # Use DBQ for TNS aliases, dsn for ODBC DSNs
+    conn_args <- list(
+      UID = user_id,
+      PWD = password
+    )
+    
     if (!is.null(driver)) {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                Driver = driver,
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
-    } else {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
+      conn_args$Driver <- driver
     }
+    
+    if (conn_params$use_dbq) {
+      conn_args$DBQ <- conn_params$value
+    } else {
+      conn_args$dsn <- conn_params$value
+    }
+    
+    channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }
@@ -641,8 +680,8 @@ oracle.desc <- function(table_name, schema = NULL) {
     }
   }
 
-  # Get connection parameters using get_secret
-  dsn <- get_secret("host")  # This should be the DSN name
+  # Get connection parameters (supports both DSN and DBQ for TNS aliases)
+  conn_params <- get_oracle_connection_params()
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
   driver <- get_oracle_driver()
@@ -653,18 +692,23 @@ oracle.desc <- function(table_name, schema = NULL) {
 
   tryCatch({
     # Build connection parameters with Driver as first parameter if available
+    # Use DBQ for TNS aliases, dsn for ODBC DSNs
+    conn_args <- list(
+      UID = user_id,
+      PWD = password
+    )
+    
     if (!is.null(driver)) {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                Driver = driver,
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
-    } else {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
+      conn_args$Driver <- driver
     }
+    
+    if (conn_params$use_dbq) {
+      conn_args$DBQ <- conn_params$value
+    } else {
+      conn_args$dsn <- conn_params$value
+    }
+    
+    channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }
@@ -801,8 +845,8 @@ oracle.query <- function(query, pii = FALSE, schema = NULL) {
   # Set Oracle environment variables from secrets.R if specified
   set_oracle_env_vars()
 
-  # Get connection parameters using get_secret
-  dsn <- get_secret("host")  # This should be the DSN name
+  # Get connection parameters (supports both DSN and DBQ for TNS aliases)
+  conn_params <- get_oracle_connection_params()
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
   driver <- get_oracle_driver()
@@ -836,18 +880,23 @@ oracle.query <- function(query, pii = FALSE, schema = NULL) {
 
   tryCatch({
     # Build connection parameters with Driver as first parameter if available
+    # Use DBQ for TNS aliases, dsn for ODBC DSNs
+    conn_args <- list(
+      UID = user_id,
+      PWD = password
+    )
+    
     if (!is.null(driver)) {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                Driver = driver,
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
-    } else {
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
+      conn_args$Driver <- driver
     }
+    
+    if (conn_params$use_dbq) {
+      conn_args$DBQ <- conn_params$value
+    } else {
+      conn_args$dsn <- conn_params$value
+    }
+    
+    channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }
@@ -1463,14 +1512,20 @@ oracle.test <- function() {
   # Set Oracle environment variables from secrets.R if specified
   set_oracle_env_vars(verbose = TRUE)  # Verbose in test mode
   
-  # Get connection parameters using get_secret
-  dsn <- get_secret("host")  # This should be the DSN name
+  # Get connection parameters (supports both DSN and DBQ for TNS aliases)
+  tryCatch({
+    conn_params <- get_oracle_connection_params()
+  }, error = function(e) {
+    message("Error getting connection parameters: ", e$message)
+    return(FALSE)
+  })
+  
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
   driver <- get_oracle_driver(validate = TRUE)  # Validate driver name if specified
   
   # Validate that we have the required connection parameters
-  if (is.null(dsn) || is.null(user_id) || is.null(password)) {
+  if (is.null(conn_params$value) || is.null(user_id) || is.null(password)) {
     message("Missing connection parameters. Please check your secrets configuration.")
     return(FALSE)
   }
@@ -1480,7 +1535,11 @@ oracle.test <- function() {
   connection_successful <- FALSE
   
   tryCatch({
-    message(sprintf("Testing connection to DSN: %s", dsn))
+    if (conn_params$use_dbq) {
+      message(sprintf("Testing connection to TNS alias (DBQ): %s", conn_params$value))
+    } else {
+      message(sprintf("Testing connection to DSN: %s", conn_params$value))
+    }
     if (!is.null(driver)) {
       message(sprintf("Using driver: %s", driver))
     } else {
@@ -1495,14 +1554,15 @@ oracle.test <- function() {
     # List available DSNs for diagnostics
     tryCatch({
       available_dsns <- odbc::odbcListDataSources()
-      if (nrow(available_dsns) > 0) {
-        message("Available DSNs:")
-        print(available_dsns)
-        if (!dsn %in% available_dsns$name) {
-          message(sprintf("Warning: DSN '%s' not found in list of available DSNs.", dsn))
-          message("This may indicate a configuration issue or 32-bit/64-bit driver mismatch.")
+        if (nrow(available_dsns) > 0) {
+          message("Available DSNs:")
+          print(available_dsns)
+          if (!conn_params$use_dbq && !conn_params$value %in% available_dsns$name) {
+            message(sprintf("Warning: DSN '%s' not found in list of available DSNs.", conn_params$value))
+            message("This may indicate a configuration issue or 32-bit/64-bit driver mismatch.")
+            message("If you're using a TNS alias, make sure to set 'DBQ' in secrets.R instead of 'dsn' or 'host'.")
+          }
         }
-      }
     }, error = function(e) {
       message("Could not list available DSNs: ", e$message)
     })
@@ -1539,20 +1599,33 @@ oracle.test <- function() {
     })
     
     # Attempt to connect with Driver as first parameter if available
+    # Use DBQ for TNS aliases, dsn for ODBC DSNs
+    conn_args <- list(
+      UID = user_id,
+      PWD = password
+    )
+    
     if (!is.null(driver)) {
-      message(sprintf("\nAttempting connection with Driver='%s', DSN='%s'", driver, dsn))
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                Driver = driver,
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
-    } else {
-      message(sprintf("\nAttempting connection with DSN='%s' (no explicit driver)", dsn))
-      channel <- odbc::dbConnect(odbc::odbc(),
-                                dsn = dsn,
-                                UID = user_id,
-                                PWD = password)
+      conn_args$Driver <- driver
     }
+    
+    if (conn_params$use_dbq) {
+      conn_args$DBQ <- conn_params$value
+      if (!is.null(driver)) {
+        message(sprintf("\nAttempting connection with Driver='%s', DBQ='%s' (TNS alias)", driver, conn_params$value))
+      } else {
+        message(sprintf("\nAttempting connection with DBQ='%s' (TNS alias, no explicit driver)", conn_params$value))
+      }
+    } else {
+      conn_args$dsn <- conn_params$value
+      if (!is.null(driver)) {
+        message(sprintf("\nAttempting connection with Driver='%s', DSN='%s'", driver, conn_params$value))
+      } else {
+        message(sprintf("\nAttempting connection with DSN='%s' (no explicit driver)", conn_params$value))
+      }
+    }
+    
+    channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
     
     if (is.null(channel)) {
       message("Connection failed: channel is null")
