@@ -779,13 +779,16 @@ oracle.desc <- function(table_name, schema = NULL) {
           # Error message
           message(paste("Oracle query error:", columns))
           columns <- NULL
-        } else if (!is.null(columns) && nrow(columns) > 0) {
+        } else if (!is.null(columns) && is.data.frame(columns) && nrow(columns) > 0) {
           # Rename columns to match expected format
           if ("schema_name" %in% names(columns)) {
             names(columns) <- c("Schema", "Column", "Type", "Size", "Nullable")
           } else {
             names(columns) <- c("Column", "Type", "Size", "Nullable")
           }
+        } else {
+          # No columns found or invalid result
+          columns <- NULL
         }
       }
     })
@@ -804,7 +807,7 @@ oracle.desc <- function(table_name, schema = NULL) {
   })
 
   # Format the result
-  if (!is.null(columns) && nrow(columns) > 0) {
+  if (!is.null(columns) && is.data.frame(columns) && nrow(columns) > 0 && !is.na(nrow(columns))) {
     # Keep only relevant columns
     if (all(c("COLUMN_NAME", "TYPE_NAME", "COLUMN_SIZE", "NULLABLE") %in% names(columns))) {
       columns <- columns[, c("COLUMN_NAME", "TYPE_NAME", "COLUMN_SIZE", "NULLABLE")]
@@ -896,7 +899,30 @@ oracle.query <- function(query, pii = FALSE, schema = NULL) {
       conn_args$dsn <- conn_params$value
     }
     
-    channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
+    # Attempt connection with better error handling for IM006
+    tryCatch({
+      channel <- do.call(odbc::dbConnect, c(list(odbc::odbc()), conn_args))
+    }, error = function(e) {
+      error_msg <- e$message
+      if (grepl("IM006", error_msg, ignore.case = TRUE)) {
+        message("\nTroubleshooting IM006 error (Driver's SQLSetConnectAttr failed):")
+        if (conn_params$use_dbq) {
+          message("1. Verify TNS_ADMIN is set correctly and points to directory containing tnsnames.ora")
+          message(sprintf("2. Verify DBQ '%s' exists in tnsnames.ora file", conn_params$value))
+          message("3. Check that ORACLE_HOME is set correctly")
+          message("4. Verify the TNS alias name matches exactly (case-sensitive)")
+        } else {
+          message("1. Verify DSN is correctly configured in ODBC Data Source Administrator")
+          message("2. Check for 32-bit vs 64-bit driver mismatch")
+          message("3. Try recreating the DSN")
+        }
+        message("5. Ensure Oracle client is properly installed and configured")
+        stop("Connection failed with IM006 error. See troubleshooting steps above.")
+      } else {
+        stop(error_msg)
+      }
+    })
+    
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }

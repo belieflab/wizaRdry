@@ -146,11 +146,13 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                              all_errors <- c()
                              # Get API specs
                              specs <- self$api_specs[[api_type]]
-                             # Check required fields
-                             for (field in specs$required) {
-                               field_path <- paste0(api_type, ".", field)
-                               if (!self$has_value(field_path)) {
-                                 all_errors <- c(all_errors, paste("Missing '", field, "' setting in the ", api_type, " section"))
+                             # Check required fields (only if any are specified)
+                             if (length(specs$required) > 0) {
+                               for (field in specs$required) {
+                                 field_path <- paste0(api_type, ".", field)
+                                 if (!self$has_value(field_path)) {
+                                   all_errors <- c(all_errors, paste("Missing '", field, "' setting in the ", api_type, " section"))
+                                 }
                                }
                              }
                              # API-specific additional validations
