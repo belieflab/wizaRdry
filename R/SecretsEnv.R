@@ -19,8 +19,9 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                 types = c(apiKeys = "vector", baseUrls = "vector")
                               ),
                               sql = list(
-                                required = c("host", "uid", "pwd"),
-                                types = c(host = "character", uid = "character", pwd = "character")
+                                required = c("uid", "pwd"),
+                                optional_connection = c("host", "DSN", "DBQ"),  # At least one required (DSN/DBQ follow Oracle naming convention)
+                                types = c(host = "character", DSN = "character", DBQ = "character", uid = "character", pwd = "character")
                               )
                             ),
 
@@ -104,6 +105,25 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                               specs <- self$config_specs[[api_type]]
                               all_errors <- c()
 
+                              # Special handling for sql API: check for connection target (host, DSN, or DBQ)
+                              if (api_type == "sql" && !is.null(specs$optional_connection)) {
+                                # Check if at least one connection target is provided
+                                connection_targets <- specs$optional_connection
+                                has_connection_target <- any(base::sapply(connection_targets, function(var) {
+                                  tryCatch({
+                                    get_secret(var)
+                                    return(TRUE)
+                                  }, error = function(e) {
+                                    return(FALSE)
+                                  })
+                                }))
+                                
+                                if (!has_connection_target) {
+                                  all_errors <- c(all_errors, paste("Missing connection target. Please provide one of:",
+                                                                    base::paste(connection_targets, collapse=", ")))
+                                }
+                              }
+
                               # Check that required variables exist in secrets environment
                               missing_vars <- specs$required[!base::sapply(specs$required, function(var) {
                                 tryCatch({
@@ -128,6 +148,19 @@ SecretsEnv <- R6::R6Class("SecretsEnv",
                                   return(FALSE)
                                 })
                               })]
+                              
+                              # Also include optional connection variables if they exist (for sql API)
+                              if (api_type == "sql" && !is.null(specs$optional_connection)) {
+                                optional_existing <- specs$optional_connection[base::sapply(specs$optional_connection, function(var) {
+                                  tryCatch({
+                                    get_secret(var)
+                                    return(TRUE)
+                                  }, error = function(e) {
+                                    return(FALSE)
+                                  })
+                                })]
+                                existing_vars <- c(existing_vars, optional_existing)
+                              }
 
                               # Check variable types and emptiness for variables that exist
                               for (type_name in unique(specs$types)) {

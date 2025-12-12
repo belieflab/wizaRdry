@@ -69,19 +69,19 @@ set_oracle_env_vars <- function(verbose = FALSE) {
 #' @noRd
 get_oracle_connection_params <- function() {
   # Get connection parameters, supporting both DSN and DBQ (TNS alias)
-  # DBQ is used for TNS aliases from tnsnames.ora
-  # dsn is used for ODBC Data Source Names
+  # DBQ is used for TNS aliases from tnsnames.ora (Oracle convention: uppercase)
+  # DSN is used for ODBC Data Source Names (Oracle convention: uppercase)
   
-  dsn <- get_secret_optional("dsn")
+  dsn <- get_secret_optional("DSN")
   dbq <- get_secret_optional("DBQ")
-  host <- get_secret_optional("host")  # Fallback for backward compatibility
+  host <- get_secret_optional("host")  # Fallback for backward compatibility (lowercase for legacy)
   
   # If DBQ is specified, use it (TNS alias)
   if (!is.null(dbq) && nchar(dbq) > 0) {
     return(list(use_dbq = TRUE, value = trimws(dbq)))
   }
   
-  # If dsn is specified, use it
+  # If DSN is specified, use it
   if (!is.null(dsn) && nchar(dsn) > 0) {
     return(list(use_dbq = FALSE, value = trimws(dsn)))
   }
@@ -91,7 +91,7 @@ get_oracle_connection_params <- function() {
     return(list(use_dbq = FALSE, value = trimws(host)))
   }
   
-  stop("No connection target specified. Please set 'dsn', 'DBQ', or 'host' in secrets.R")
+  stop("No connection target specified. Please set 'DSN', 'DBQ', or 'host' in secrets.R")
 }
 
 #'
@@ -1546,9 +1546,9 @@ oracle.test <- function() {
       message("No driver specified - attempting connection without explicit driver")
     }
     
-    # Check DSN length (IM010 can be caused by DSN name being too long)
-    if (nchar(dsn) > 32) {
-      message(sprintf("Warning: DSN name is %d characters long. Some ODBC drivers have a 32-character limit.", nchar(dsn)))
+    # Check connection target length (IM010 can be caused by name being too long)
+    if (!conn_params$use_dbq && nchar(conn_params$value) > 32) {
+      message(sprintf("Warning: DSN name is %d characters long. Some ODBC drivers have a 32-character limit.", nchar(conn_params$value)))
     }
     
     # List available DSNs for diagnostics
