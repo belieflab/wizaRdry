@@ -17,7 +17,7 @@ ConfigEnv <- R6::R6Class("ConfigEnv",
                                required = c("superkey", "primary_key")
                              ),
                              sql = list(
-                               required = c("database", "superkey", "primary_key", "pii_fields")
+                               required = c()  # All SQL config settings are optional - superkey/primary_key only needed for auto-joins
                              ),
                              missing_data_codes = list(
                                required = c(),  # No required fields - all are optional
