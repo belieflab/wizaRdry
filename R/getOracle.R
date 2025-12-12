@@ -41,6 +41,32 @@
 #' }
 #'
 #' @noRd
+set_oracle_env_vars <- function(verbose = FALSE) {
+  # Set Oracle environment variables from secrets.R if they exist
+  # These are important for Oracle connections, especially when using TNS names
+  
+  tns_admin <- get_secret_optional("TNS_ADMIN")
+  oracle_home <- get_secret_optional("ORACLE_HOME")
+  
+  if (!is.null(tns_admin) && nchar(tns_admin) > 0) {
+    Sys.setenv(TNS_ADMIN = tns_admin)
+    if (verbose) {
+      message(sprintf("Set TNS_ADMIN = %s", tns_admin))
+    }
+  }
+  
+  if (!is.null(oracle_home) && nchar(oracle_home) > 0) {
+    Sys.setenv(ORACLE_HOME = oracle_home)
+    if (verbose) {
+      message(sprintf("Set ORACLE_HOME = %s", oracle_home))
+    }
+  }
+  
+  return(invisible(TRUE))
+}
+
+#'
+#' @noRd
 get_oracle_driver <- function(validate = FALSE) {
   # Try to get driver from secrets first
   driver <- get_secret_optional("driver")
@@ -133,6 +159,9 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
     stop("No table name or custom query provided. Use oracle.index() to see available tables.")
   }
 
+  # Set Oracle environment variables from secrets.R if specified
+  set_oracle_env_vars()
+  
   # Get connection parameters using get_secret
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
@@ -427,6 +456,9 @@ oracle.index <- function(schema = NULL) {
   validate_secrets("sql")
   config <- validate_config("sql")
 
+  # Set Oracle environment variables from secrets.R if specified
+  set_oracle_env_vars()
+
   # Get connection parameters using get_secret
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
@@ -578,6 +610,9 @@ oracle.desc <- function(table_name, schema = NULL) {
   # Validate secrets
   validate_secrets("sql")
   config <- validate_config("sql")
+
+  # Set Oracle environment variables from secrets.R if specified
+  set_oracle_env_vars()
 
   # Parse table_name to extract schema if not provided separately
   if (is.null(schema) && grepl("\\.", table_name)) {
@@ -745,6 +780,9 @@ oracle.query <- function(query, pii = FALSE, schema = NULL) {
   # Validate secrets
   validate_secrets("sql")
   config <- validate_config("sql")
+
+  # Set Oracle environment variables from secrets.R if specified
+  set_oracle_env_vars()
 
   # Get connection parameters using get_secret
   dsn <- get_secret("host")  # This should be the DSN name
@@ -1404,6 +1442,9 @@ oracle.test <- function() {
     message("Error validating secrets: ", e$message)
     return(FALSE)
   })
+  
+  # Set Oracle environment variables from secrets.R if specified
+  set_oracle_env_vars(verbose = TRUE)  # Verbose in test mode
   
   # Get connection parameters using get_secret
   dsn <- get_secret("host")  # This should be the DSN name
