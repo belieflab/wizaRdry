@@ -42,6 +42,19 @@ get_secret <- function(name) {
   return(.secrets_env[[name]])
 }
 
+#' Get an Optional Secret Value
+#'
+#' @param name Name of the secret to retrieve
+#' @return The secret value, or NULL if not found
+#' @noRd
+get_secret_optional <- function(name) {
+  if (!exists(name, envir = .secrets_env)) {
+    return(NULL)
+  }
+
+  return(.secrets_env[[name]])
+}
+
 #' Assign a Secret Value
 #'
 #' @param name Name of the secret to set

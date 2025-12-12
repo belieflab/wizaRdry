@@ -39,6 +39,34 @@
 #' # Specify schema explicitly
 #' schema_data <- oracle("survey_results", schema = "STUDY_DATA")
 #' }
+#'
+#' @noRd
+get_oracle_driver <- function() {
+  # Try to get driver from secrets first
+  driver <- get_secret_optional("driver")
+  
+  if (!is.null(driver) && nchar(driver) > 0) {
+    return(driver)
+  }
+  
+  # If not in secrets, try to find an Oracle driver automatically
+  if (requireNamespace("odbc", quietly = TRUE)) {
+    tryCatch({
+      available_drivers <- odbc::odbcListDrivers()
+      oracle_drivers <- available_drivers[grepl("Oracle", available_drivers$name, ignore.case = TRUE), ]
+      if (nrow(oracle_drivers) > 0) {
+        # Return the first Oracle driver found
+        return(oracle_drivers$name[1])
+      }
+    }, error = function(e) {
+      # Silently fail and return NULL
+    })
+  }
+  
+  # If no driver found, return NULL (will try connection without explicit driver)
+  return(NULL)
+}
+
 oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                    join_primary_keys = TRUE, custom_query = NULL, max_rows = NULL,
                    date_format = NULL, batch_size = 1000, pii = FALSE,
@@ -95,6 +123,7 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
+  driver <- get_oracle_driver()
 
   # Display loading message
   if (!is.null(custom_query)) {
@@ -117,10 +146,19 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
   result_data <- NULL
 
   tryCatch({
-    channel <- odbc::dbConnect(odbc::odbc(),
-                              dsn = dsn,
-                              UID = user_id,
-                              PWD = password)
+    # Build connection parameters with Driver as first parameter if available
+    if (!is.null(driver)) {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                Driver = driver,
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    } else {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    }
     if (is.null(channel)) {
       stop("Failed to connect to database. Please check your connection settings.")
     }
@@ -379,16 +417,26 @@ oracle.index <- function(schema = NULL) {
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
+  driver <- get_oracle_driver()
 
   # Connect to database
   channel <- NULL
   tables <- NULL
 
   tryCatch({
-    channel <- odbc::dbConnect(odbc::odbc(),
-                              dsn = dsn,
-                              UID = user_id,
-                              PWD = password)
+    # Build connection parameters with Driver as first parameter if available
+    if (!is.null(driver)) {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                Driver = driver,
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    } else {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    }
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }
@@ -531,16 +579,26 @@ oracle.desc <- function(table_name, schema = NULL) {
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
+  driver <- get_oracle_driver()
 
   # Connect to database
   channel <- NULL
   columns <- NULL
 
   tryCatch({
-    channel <- odbc::dbConnect(odbc::odbc(),
-                              dsn = dsn,
-                              UID = user_id,
-                              PWD = password)
+    # Build connection parameters with Driver as first parameter if available
+    if (!is.null(driver)) {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                Driver = driver,
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    } else {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    }
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }
@@ -678,6 +736,7 @@ oracle.query <- function(query, pii = FALSE, schema = NULL) {
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
+  driver <- get_oracle_driver()
 
   # Get PII fields configuration if needed with proper validation
   pii_fields <- NULL
@@ -707,10 +766,19 @@ oracle.query <- function(query, pii = FALSE, schema = NULL) {
   result <- NULL
 
   tryCatch({
-    channel <- odbc::dbConnect(odbc::odbc(),
-                              dsn = dsn,
-                              UID = user_id,
-                              PWD = password)
+    # Build connection parameters with Driver as first parameter if available
+    if (!is.null(driver)) {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                Driver = driver,
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    } else {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    }
     if (is.null(channel)) {
       stop("Failed to connect to database")
     }
@@ -1327,6 +1395,7 @@ oracle.test <- function() {
   dsn <- get_secret("host")  # This should be the DSN name
   user_id <- get_secret("uid")
   password <- get_secret("pwd")
+  driver <- get_oracle_driver()
   
   # Validate that we have the required connection parameters
   if (is.null(dsn) || is.null(user_id) || is.null(password)) {
@@ -1340,12 +1409,59 @@ oracle.test <- function() {
   
   tryCatch({
     message(sprintf("Testing connection to DSN: %s", dsn))
+    if (!is.null(driver)) {
+      message(sprintf("Using driver: %s", driver))
+    }
     
-    # Attempt to connect
-    channel <- odbc::dbConnect(odbc::odbc(),
-                              dsn = dsn,
-                              UID = user_id,
-                              PWD = password)
+    # Check DSN length (IM010 can be caused by DSN name being too long)
+    if (nchar(dsn) > 32) {
+      message(sprintf("Warning: DSN name is %d characters long. Some ODBC drivers have a 32-character limit.", nchar(dsn)))
+    }
+    
+    # List available DSNs for diagnostics
+    tryCatch({
+      available_dsns <- odbc::odbcListDataSources()
+      if (nrow(available_dsns) > 0) {
+        message("Available DSNs:")
+        print(available_dsns)
+        if (!dsn %in% available_dsns$name) {
+          message(sprintf("Warning: DSN '%s' not found in list of available DSNs.", dsn))
+          message("This may indicate a configuration issue or 32-bit/64-bit driver mismatch.")
+        }
+      }
+    }, error = function(e) {
+      message("Could not list available DSNs: ", e$message)
+    })
+    
+    # List available drivers for diagnostics
+    tryCatch({
+      available_drivers <- odbc::odbcListDrivers()
+      if (nrow(available_drivers) > 0) {
+        oracle_drivers <- available_drivers[grepl("Oracle", available_drivers$name, ignore.case = TRUE), ]
+        if (nrow(oracle_drivers) > 0) {
+          message("Available Oracle drivers:")
+          print(oracle_drivers)
+        } else {
+          message("Warning: No Oracle drivers found. You may need to install an Oracle ODBC driver.")
+        }
+      }
+    }, error = function(e) {
+      message("Could not list available drivers: ", e$message)
+    })
+    
+    # Attempt to connect with Driver as first parameter if available
+    if (!is.null(driver)) {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                Driver = driver,
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    } else {
+      channel <- odbc::dbConnect(odbc::odbc(),
+                                dsn = dsn,
+                                UID = user_id,
+                                PWD = password)
+    }
     
     if (is.null(channel)) {
       message("Connection failed: channel is null")
@@ -1364,7 +1480,20 @@ oracle.test <- function() {
     connection_successful <- TRUE
     
   }, error = function(e) {
-    message("Connection failed: ", e$message)
+    error_msg <- e$message
+    message("Connection failed: ", error_msg)
+    
+    # Provide specific guidance for IM010 error
+    if (grepl("IM010", error_msg, ignore.case = TRUE)) {
+      message("\nTroubleshooting IM010 error:")
+      message("1. Verify the DSN name is correct and exists in ODBC Data Source Administrator")
+      message("2. Check for 32-bit vs 64-bit driver mismatch (R may be 64-bit but DSN uses 32-bit driver)")
+      message("3. Ensure Oracle ODBC driver is properly installed")
+      message("4. Try recreating the DSN in ODBC Data Source Administrator")
+      message("5. If DSN name is longer than 32 characters, try using a shorter name")
+      message("6. Consider using a driver name instead of DSN (may require config changes)")
+    }
+    
     connection_successful <- FALSE
   }, finally = {
     # Always try to close the connection
