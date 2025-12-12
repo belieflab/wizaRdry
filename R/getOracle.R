@@ -725,37 +725,42 @@ oracle.desc <- function(table_name, schema = NULL) {
     is_oracle <- TRUE  # Always TRUE for oracle.desc
 
     # Try to get column information
-    tryCatch({
-      if (!is.null(schema)) {
-        # With schema
-        columns <- odbc::dbListFields(channel, name = table_name, schema_name = schema)
-      } else {
-        # Without schema
-        columns <- odbc::dbListFields(channel, name = table_name)
-      }
-      
-      # Convert to data frame format
-      if (!is.null(columns) && length(columns) > 0) {
-        columns_df <- data.frame(
-          Column = columns,
-          Type = rep("Unknown", length(columns)),
-          Size = rep(NA, length(columns)),
-          Nullable = rep("Unknown", length(columns)),
-          stringsAsFactors = FALSE
-        )
-        columns <- columns_df
-      }
-    }, error = function(e) {
-      message(paste("Error using dbListFields:", e$message))
-      # For Oracle, fall back to direct query
-      if (is_oracle) {
-        message("Trying direct Oracle query for column information...")
-        # Try with uppercase table name for Oracle
-        upper_table <- toupper(table_name)
-        oracle_query <- if (!is.null(schema)) {
-          # With schema
+    # Oracle stores table names in uppercase, so try both original and uppercase
+    columns <- NULL
+    upper_table <- toupper(table_name)
+    
+    # First, try direct Oracle query (more reliable than dbListFields for Oracle)
+    if (is_oracle) {
+      tryCatch({
+        # Try user_tab_columns first (current user's schema) if no schema specified
+        if (is.null(schema)) {
+          # Try current user's schema first
+          oracle_query <- sprintf(
+            "SELECT column_name, data_type, data_length,
+             DECODE(nullable, 'Y', 'Yes', 'No') as nullable
+             FROM user_tab_columns
+             WHERE table_name = '%s'
+             ORDER BY column_id",
+            upper_table
+          )
+          columns <- odbc::dbGetQuery(channel, oracle_query)
+          
+          # If no results, try all_tab_columns (all accessible schemas)
+          if (is.null(columns) || !is.data.frame(columns) || nrow(columns) == 0) {
+            oracle_query <- sprintf(
+              "SELECT owner as schema_name, column_name, data_type, data_length,
+               DECODE(nullable, 'Y', 'Yes', 'No') as nullable
+               FROM all_tab_columns
+               WHERE table_name = '%s'
+               ORDER BY owner, column_id",
+              upper_table
+            )
+            columns <- odbc::dbGetQuery(channel, oracle_query)
+          }
+        } else {
+          # With schema specified
           upper_schema <- toupper(schema)
-          sprintf(
+          oracle_query <- sprintf(
             "SELECT column_name, data_type, data_length,
              DECODE(nullable, 'Y', 'Yes', 'No') as nullable
              FROM all_tab_columns
@@ -763,35 +768,64 @@ oracle.desc <- function(table_name, schema = NULL) {
              ORDER BY column_id",
             upper_schema, upper_table
           )
-        } else {
-          # Without schema, look in all accessible schemas
-          sprintf(
-            "SELECT owner as schema_name, column_name, data_type, data_length,
-             DECODE(nullable, 'Y', 'Yes', 'No') as nullable
-             FROM all_tab_columns
-             WHERE table_name = '%s'
-             ORDER BY owner, column_id",
-            upper_table
-          )
+          columns <- odbc::dbGetQuery(channel, oracle_query)
         }
-        columns <- odbc::dbGetQuery(channel, oracle_query)
-        if (is.character(columns) && length(columns) == 1) {
-          # Error message
-          message(paste("Oracle query error:", columns))
-          columns <- NULL
-        } else if (!is.null(columns) && is.data.frame(columns) && nrow(columns) > 0) {
+        
+        # Process the results
+        if (!is.null(columns) && is.data.frame(columns) && nrow(columns) > 0) {
           # Rename columns to match expected format
-          if ("schema_name" %in% names(columns)) {
+          if ("OWNER" %in% names(columns) || "schema_name" %in% names(columns)) {
+            # Has schema column
+            schema_col <- if ("OWNER" %in% names(columns)) "OWNER" else "schema_name"
+            col_order <- c(schema_col, "COLUMN_NAME", "DATA_TYPE", "DATA_LENGTH", "nullable")
+            col_order <- col_order[col_order %in% names(columns)]
+            columns <- columns[, col_order, drop = FALSE]
             names(columns) <- c("Schema", "Column", "Type", "Size", "Nullable")
           } else {
+            # No schema column
+            col_order <- c("COLUMN_NAME", "DATA_TYPE", "DATA_LENGTH", "nullable")
+            col_order <- col_order[col_order %in% names(columns)]
+            columns <- columns[, col_order, drop = FALSE]
             names(columns) <- c("Column", "Type", "Size", "Nullable")
           }
         } else {
-          # No columns found or invalid result
           columns <- NULL
         }
-      }
-    })
+      }, error = function(e) {
+        message(paste("Error querying Oracle data dictionary:", e$message))
+        columns <- NULL
+      })
+    }
+    
+    # Fallback to dbListFields if Oracle query didn't work
+    if (is.null(columns) || !is.data.frame(columns) || nrow(columns) == 0) {
+      tryCatch({
+        # Try with uppercase table name for Oracle
+        table_to_use <- if (is_oracle) upper_table else table_name
+        if (!is.null(schema)) {
+          columns <- odbc::dbListFields(channel, name = table_to_use, schema_name = schema)
+        } else {
+          columns <- odbc::dbListFields(channel, name = table_to_use)
+        }
+        
+        # Convert to data frame format
+        if (!is.null(columns) && length(columns) > 0) {
+          columns_df <- data.frame(
+            Column = columns,
+            Type = rep("Unknown", length(columns)),
+            Size = rep(NA, length(columns)),
+            Nullable = rep("Unknown", length(columns)),
+            stringsAsFactors = FALSE
+          )
+          columns <- columns_df
+        }
+      }, error = function(e) {
+        # dbListFields failed, but we already tried Oracle query, so just note it
+        if (is.null(columns)) {
+          message(paste("Error using dbListFields:", e$message))
+        }
+      })
+    }
 
   }, error = function(e) {
     message(paste("Error retrieving columns for table", table_name, ":", e$message))
