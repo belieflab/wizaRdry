@@ -1,46 +1,9 @@
-#' Fetch data from Oracle database to be stored in a data frame
+#' Get Oracle connection parameters from secrets
 #'
-#' Retrieves data from an Oracle table or view and optionally joins it with a primary keys table
-#' as specified in the configuration.
+#' Retrieves connection parameters (DSN, DBQ, or host) from secrets configuration.
+#' Returns a list indicating which type of connection to use.
 #'
-#' @param table_name Name of the SQL table or view to query
-#' @param ... Optional column names to filter for. Only rows with non-missing values
-#'        in ALL specified columns will be returned.
-#' @param fields Optional vector of specific fields to select
-#' @param where_clause Optional WHERE clause to filter results (without the "WHERE" keyword)
-#' @param join_primary_keys Boolean, whether to join with the primary keys table (default: TRUE)
-#' @param custom_query Optional custom SQL query to execute instead of building one
-#' @param max_rows Optional limit on the number of rows to return
-#' @param date_format Optional format for date fields (default uses ISO format)
-#' @param batch_size Number of records to retrieve per batch for large datasets
-#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
-#' @param interview_date Optional; can be either:
-#'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
-#'        - A boolean TRUE to return only rows with non-NA interview_date values
-#' @param all Logical; if TRUE, use LEFT OUTER JOIN instead of INNER JOIN (default: FALSE),
-#'        similar to the 'all' parameter in base R's merge() function
-#' @param schema Optional schema name to use for table qualification
-#'
-#' @return A data frame containing the requested SQL data
-#' @importFrom odbc dbConnect dbGetInfo dbListTables dbGetQuery dbDisconnect
-#' @export
-#' @examples
-#' \dontrun{
-#' # Get data from a specific table
-#' data <- oracle("participants")
-#'
-#' # Get data with a where clause
-#' survey_data <- oracle("vw_surveyquestionresults",
-#'                   where_clause = "resultidentifier = 'NRS'")
-#'
-#' # Get all records, including those without matching primary key
-#' all_data <- oracle("candidate", all = TRUE)
-#'
-#' # Specify schema explicitly
-#' schema_data <- oracle("survey_results", schema = "STUDY_DATA")
-#' }
-#'
-#'
+#' @return A list with `use_dbq` (logical) and `value` (character) elements
 #' @noRd
 get_oracle_connection_params <- function() {
   # Get connection parameters, supporting both DSN and DBQ (TNS alias)
@@ -128,6 +91,47 @@ get_oracle_driver <- function(validate = FALSE) {
   return(NULL)
 }
 
+#' Fetch data from Oracle database to be stored in a data frame
+#'
+#' Retrieves data from an Oracle table or view and optionally joins it with a primary keys table
+#' as specified in the configuration.
+#'
+#' @param table_name Name of the SQL table or view to query
+#' @param ... Optional column names to filter for. Only rows with non-missing values
+#'        in ALL specified columns will be returned.
+#' @param fields Optional vector of specific fields to select
+#' @param where_clause Optional WHERE clause to filter results (without the "WHERE" keyword)
+#' @param join_primary_keys Boolean, whether to join with the primary keys table (default: TRUE)
+#' @param custom_query Optional custom SQL query to execute instead of building one
+#' @param max_rows Optional limit on the number of rows to return
+#' @param date_format Optional format for date fields (default uses ISO format)
+#' @param batch_size Number of records to retrieve per batch for large datasets
+#' @param pii Logical; if FALSE (default), remove fields marked as PII. TRUE keeps PII.
+#' @param interview_date Optional; can be either:
+#'        - A date string in various formats (ISO, US, etc.) to filter data up to that date
+#'        - A boolean TRUE to return only rows with non-NA interview_date values
+#' @param all Logical; if TRUE, use LEFT OUTER JOIN instead of INNER JOIN (default: FALSE),
+#'        similar to the 'all' parameter in base R's merge() function
+#' @param schema Optional schema name to use for table qualification
+#'
+#' @return A data frame containing the requested SQL data
+#' @importFrom odbc dbConnect dbGetInfo dbListTables dbGetQuery dbDisconnect
+#' @export
+#' @examples
+#' \dontrun{
+#' # Get data from a specific table
+#' data <- oracle("participants")
+#'
+#' # Get data with a where clause
+#' survey_data <- oracle("vw_surveyquestionresults",
+#'                   where_clause = "resultidentifier = 'NRS'")
+#'
+#' # Get all records, including those without matching primary key
+#' all_data <- oracle("candidate", all = TRUE)
+#'
+#' # Specify schema explicitly
+#' schema_data <- oracle("survey_results", schema = "STUDY_DATA")
+#' }
 oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
                    join_primary_keys = TRUE, custom_query = NULL, max_rows = NULL,
                    date_format = NULL, batch_size = 1000, pii = FALSE,
