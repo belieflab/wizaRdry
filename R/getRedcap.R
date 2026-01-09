@@ -143,6 +143,20 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     "int_end"
   )
 
+  # Validate and normalize redcap_event_name parameter
+  if (!is.null(redcap_event_name)) {
+    # Convert to character vector if it's not already
+    if (!is.character(redcap_event_name)) {
+      stop("redcap_event_name must be a character vector or NULL")
+    }
+    # Remove any NA values and trim whitespace
+    redcap_event_name <- trimws(redcap_event_name[!is.na(redcap_event_name)])
+    # If after filtering we have an empty vector, set to NULL
+    if (length(redcap_event_name) == 0) {
+      redcap_event_name <- NULL
+    }
+  }
+
   # Validate date_format parameter
   if (!date_format %in% c("mdy", "dmy", "ymd")) {
     stop("date_format must be one of 'mdy', 'dmy', or 'ymd'")
@@ -317,6 +331,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     forms = config$redcap$superkey,
     batch_size = batch_size,
     records = records,
+    events = redcap_event_name,  # Filter by event names if specified
     raw_or_label = "label",  # Always use label for superkey
     raw_or_label_headers = "raw",
     verbose = FALSE
@@ -329,6 +344,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     forms = instrument_name,
     batch_size = batch_size,
     records = records,
+    events = redcap_event_name,  # Filter by event names if specified
     fields = selected_fields,
     raw_or_label = raw_or_label,  # Use user's preference
     raw_or_label_headers = "raw",
