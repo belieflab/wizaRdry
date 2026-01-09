@@ -40,6 +40,10 @@
 #' schema_data <- oracle("survey_results", schema = "STUDY_DATA")
 #' }
 #'
+#' Set Oracle environment variables from secrets configuration
+#'
+#' @param verbose Logical; if TRUE, prints messages when environment variables
+#'   are set. Default is FALSE.
 #' @noRd
 set_oracle_env_vars <- function(verbose = FALSE) {
   # Set Oracle environment variables from secrets.R if they exist

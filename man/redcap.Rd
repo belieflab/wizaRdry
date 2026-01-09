@@ -27,7 +27,8 @@ data to only include complete cases for specific variables of interest.}
 
 \item{raw_or_label}{Whether to return raw or labeled values}
 
-\item{redcap_event_name}{Optional event name filter}
+\item{redcap_event_name}{Optional event name filter. Can be a single string
+or a vector of event names (e.g., \code{c("event1", "event2")})}
 
 \item{batch_size}{Number of records to retrieve per batch}
 
