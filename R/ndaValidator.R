@@ -2544,6 +2544,28 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         } else if(verbose) {
           cat("\n  All values within expected range")
         }
+      } else {
+        # Field exists in NDA structure but has no valueRange defined
+        # If data exists, this should trigger data definition creation
+        if(nrow(element) > 0 && col %in% df_cols && !all(is.na(df[[col]]))) {
+          # Field has data but no valueRange - should be documented in data definition
+          unique_values <- unique(df[[col]][!is.na(df[[col]])])
+          if(length(unique_values) > 0) {
+            # Add to value_range_violations to trigger data definition creation
+            results$value_range_violations[[col]] <- list(
+              expected = NULL,  # No range defined in NDA structure
+              actual = as.character(sort(unique_values))
+            )
+            if(verbose) {
+              cat(sprintf("\n\nField: %s (no valueRange defined in NDA structure)", col))
+              cat(sprintf("\n  Data contains values that need to be documented"))
+              cat(sprintf("\n  Unique values: %s", paste(head(unique_values, 10), collapse=", ")))
+              if(length(unique_values) > 10) {
+                cat(sprintf(" (and %d more)", length(unique_values) - 10))
+              }
+            }
+          }
+        }
       }
     }
 
