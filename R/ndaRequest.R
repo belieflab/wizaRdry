@@ -1131,7 +1131,13 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     # Create data definition ONLY for new or modified structures
     # Existing unmodified structures should only have submission templates, not data definitions
-    if (DEBUG) message("[DEBUG] Checking if data definition is needed")
+    message("[DEBUG] Checking if data definition is needed")
+    message(sprintf("[DEBUG] validation_results type: %s, is list: %s", 
+                    class(validation_results)[1], is.list(validation_results)))
+    if(is.list(validation_results)) {
+      message(sprintf("[DEBUG] validation_results fields: %s", 
+                      paste(names(validation_results), collapse=", ")))
+    }
     tryCatch({
       df <- base::get0(measure)
       if (!is.null(df) && is.data.frame(df) &&
@@ -1139,6 +1145,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
         # Get NDA structure from validation results attribute
         nda_structure <- attr(validation_results, "nda_structure")
+        message(sprintf("[DEBUG] NDA structure retrieved: %s", 
+                        if(is.null(nda_structure)) "NULL" else "present"))
 
         if (!is.null(nda_structure)) {
           # Check if this is a new structure (bypassed validation)
@@ -1183,11 +1191,23 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             if (!is.null(violations) && length(violations) > 0) {
               has_value_range_violations <- TRUE
               is_modified_structure <- TRUE
-              if (DEBUG) {
-                message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
-                              length(violations),
-                              paste(names(violations), collapse = ", ")))
+              message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
+                            length(violations),
+                            paste(names(violations), collapse = ", ")))
+              message(sprintf("[DEBUG] Violation details:"))
+              for(viol_field in names(violations)) {
+                viol_info <- violations[[viol_field]]
+                expected_val <- if(is.null(viol_info$expected)) "NULL (no range defined)" else viol_info$expected
+                actual_sample <- if(length(viol_info$actual) > 0) {
+                  paste(head(viol_info$actual, 5), collapse=", ")
+                } else {
+                  "none"
+                }
+                message(sprintf("  - %s: expected=%s, actual_sample=[%s%s]", 
+                              viol_field, expected_val, actual_sample,
+                              if(length(viol_info$actual) > 5) sprintf(" (+%d more)", length(viol_info$actual)-5) else ""))
               }
+              message(sprintf("[DEBUG] Setting is_modified_structure=TRUE to trigger _definition.csv creation"))
             } else if (DEBUG) {
               message("[DEBUG] value_range_violations exists but is empty or NULL")
             }
@@ -1218,8 +1238,10 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
               "modifications detected"
             }
             message(sprintf("Creating data definition for modified structure (%s detected)", reason_text))
+            message(sprintf("[DEBUG] Calling createNdaDataDefinition() - this will create _definition.csv file"))
             submission_template <- list(columns = names(df))
             createNdaDataDefinition(submission_template, nda_structure, measure)
+            message(sprintf("[DEBUG] createNdaDataDefinition() completed - _definition.csv should now exist"))
           } else {
             message("Skipping data definition creation - existing unmodified structure (only submission template created)")
           }

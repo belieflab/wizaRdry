@@ -2541,6 +2541,15 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
             expected = element$valueRange,
             actual = violating_values
           )
+          
+          # Debug: Log violation detection for testing
+          message(sprintf("[DEBUG] Value range violation detected for field '%s':", col))
+          message(sprintf("  Expected range: %s", element$valueRange))
+          message(sprintf("  Violating values: %s", paste(head(violating_values, 10), collapse=", ")))
+          if(length(violating_values) > 10) {
+            message(sprintf("  (and %d more violating values)", length(violating_values) - 10))
+          }
+          message(sprintf("  Added to value_range_violations (will trigger _definition.csv creation)"))
         } else if(verbose) {
           cat("\n  All values within expected range")
         }
@@ -2564,6 +2573,14 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
                 cat(sprintf(" (and %d more)", length(unique_values) - 10))
               }
             }
+            
+            # Debug: Log missing valueRange detection for testing
+            message(sprintf("[DEBUG] Field '%s' has no valueRange defined but contains data:", col))
+            message(sprintf("  Unique values found: %s", paste(head(unique_values, 10), collapse=", ")))
+            if(length(unique_values) > 10) {
+              message(sprintf("  (and %d more unique values)", length(unique_values) - 10))
+            }
+            message(sprintf("  Added to value_range_violations (will trigger _definition.csv creation)"))
           }
         }
       }
@@ -2618,6 +2635,16 @@ validate_structure <- function(df, elements, measure_name, api, verbose = FALSE,
         message(sprintf("- Fields with range violations: %d (%s)",
                         length(results$value_range_violations),
                         paste(names(results$value_range_violations), collapse=", ")))
+        # Debug: Detailed violation summary for testing
+        message("[DEBUG] Value range violations summary:")
+        for(violation_field in names(results$value_range_violations)) {
+          violation_info <- results$value_range_violations[[violation_field]]
+          expected_val <- if(is.null(violation_info$expected)) "NULL (no range defined)" else violation_info$expected
+          actual_count <- length(violation_info$actual)
+          message(sprintf("  - %s: expected=%s, actual_values_count=%d", 
+                          violation_field, expected_val, actual_count))
+        }
+        message("[DEBUG] These violations will trigger _definition.csv file creation")
       }
 
       if(length(results$non_numeric_in_numeric) > 0) {
