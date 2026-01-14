@@ -1042,22 +1042,37 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
       # CRITICAL: Update all environments with validated dataframe
       # Handle both success and error cases
+      # Get the dataframe from validation_results if available, otherwise get from environment
+      df_to_assign <- NULL
       if (is.list(validation_results) && !is.null(validation_results$df)) {
-        if (DEBUG) message("[DEBUG] Updating environments with validated dataframe")
+        df_to_assign <- validation_results$df
+        if (DEBUG) message("[DEBUG] Using dataframe from validation_results")
+      } else {
+        # Fallback: get dataframe from environment if validation_results$df is NULL
+        df_to_assign <- base::get0(measure)
+        if (DEBUG) message("[DEBUG] validation_results$df is NULL, using dataframe from environment")
+      }
+      
+      # Only update environments if we have a valid dataframe
+      if (!is.null(df_to_assign) && is.data.frame(df_to_assign)) {
+        if (DEBUG) message(sprintf("[DEBUG] Updating environments with dataframe (nrow=%d, ncol=%d)", 
+                                   nrow(df_to_assign), ncol(df_to_assign)))
         # Update globalenv
-        base::assign(measure, validation_results$df, envir = globalenv())
+        base::assign(measure, df_to_assign, envir = globalenv())
         if (DEBUG) message("[DEBUG] Updated globalenv()")
         # Update origin_env
-        base::assign(measure, validation_results$df, envir = origin_env)
+        base::assign(measure, df_to_assign, envir = origin_env)
         if (DEBUG) message("[DEBUG] Updated origin_env")
         # Update wizaRdry_env
         if (exists(".wizaRdry_env")) {
-          base::assign(measure, validation_results$df, envir = .wizaRdry_env)
+          base::assign(measure, df_to_assign, envir = .wizaRdry_env)
           if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
         }
         # Update our local df variable
-        df <- validation_results$df
+        df <- df_to_assign
         if (DEBUG) message("[DEBUG] Updated local df variable")
+      } else {
+        warning(sprintf("Warning: No valid dataframe found for '%s' to update environments. Template creation may fail.", measure))
       }
 
       # Defer any sounds until the end of processing
@@ -1065,6 +1080,18 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # Create data upload template ONLY for existing structures
       # Wrap in tryCatch to ensure file creation happens even if there are errors
       if (DEBUG) message("[DEBUG] Creating NDA template")
+      # Verify dataframe exists in globalenv before creating template
+      df_check <- base::get0(measure, envir = globalenv())
+      if (is.null(df_check)) {
+        warning(sprintf("Warning: Dataframe '%s' not found in global environment. Cannot create submission template.", measure))
+      } else if (!is.data.frame(df_check)) {
+        warning(sprintf("Warning: '%s' in global environment is not a data.frame. Cannot create submission template.", measure))
+      } else if (nrow(df_check) == 0) {
+        warning(sprintf("Warning: Dataframe '%s' has 0 rows. Creating empty submission template.", measure))
+      } else {
+        if (DEBUG) message(sprintf("[DEBUG] Dataframe '%s' found in globalenv with %d rows, %d columns", 
+                                  measure, nrow(df_check), ncol(df_check)))
+      }
       tryCatch({
         createNdaSubmissionTemplate(measure)
       }, error = function(e) {
