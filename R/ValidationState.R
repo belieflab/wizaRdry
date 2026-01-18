@@ -17,7 +17,7 @@
 #' The key method `needs_data_definition()` determines whether a data definition
 #' file should be created based on whether the structure is new or modified.
 #'
-#' @export
+#' @keywords internal
 ValidationState <- R6::R6Class("ValidationState",
   public = list(
     #' @field measure_name Character - name of the measure/structure

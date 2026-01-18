@@ -22,6 +22,7 @@ It provides a structured way to track:
 The key method \code{needs_data_definition()} determines whether a data definition
 file should be created based on whether the structure is new or modified.
 }
+\keyword{internal}
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{

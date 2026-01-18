@@ -27,7 +27,7 @@ NULL
 #'     \item dcc_fields - DCC required fields that were added
 #'     \item timepoint_fields - Timepoint fields that were added
 #'   }
-#' @export
+#' @noRd
 select_nda_fields <- function(validation_state, 
                                nda_structure, 
                                verbose = TRUE,

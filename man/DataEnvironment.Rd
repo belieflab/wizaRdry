@@ -12,6 +12,7 @@ This class provides a clean interface for getting and setting dataframes across 
 environments used by wizaRdry: globalenv(), .wizaRdry_env, and origin_env (parent frame).
 This eliminates scattered base::assign() and base::get() calls throughout the codebase.
 }
+\keyword{internal}
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{

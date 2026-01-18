@@ -19,7 +19,7 @@ NULL
 #' @param verbose Logical - print detailed output
 #' @param limited_dataset Logical - if FALSE, performs date-shifting for de-identification
 #' @return Data frame with standardized dates
-#' @export
+#' @noRd
 standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRUE, limited_dataset = FALSE) {
   date_summary <- list()
   
@@ -136,7 +136,7 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
 #' @param verbose Logical - print detailed output
 #' @param limited_dataset Logical - if FALSE, performs age-capping
 #' @return Data frame with standardized age
-#' @export
+#' @noRd
 standardize_age <- function(df, verbose = TRUE, limited_dataset = FALSE) {
   if ("interview_age" %in% names(df) && limited_dataset == FALSE) {
     if(verbose && limited_dataset == FALSE) message("\nDe-identifying interview_age using age-capping...")
@@ -173,7 +173,7 @@ standardize_age <- function(df, verbose = TRUE, limited_dataset = FALSE) {
 #'
 #' @param value Character vector of handedness values
 #' @return Character vector with standardized values
-#' @export
+#' @noRd
 standardize_handedness <- function(value) {
   # Create mapping for handedness terms
   handedness_map <- c(
@@ -203,7 +203,7 @@ standardize_handedness <- function(value) {
 #'
 #' @param value Character or logical vector
 #' @return Character vector with "0" or "1" values
-#' @export
+#' @noRd
 standardize_binary <- function(value) {
   # Create mapping for boolean to numeric terms (including case variations)
   binary_map <- c(
@@ -260,7 +260,7 @@ standardize_binary <- function(value) {
 #' @param df Data frame
 #' @param verbose Logical - print detailed output
 #' @return Data frame with logical columns converted to character
-#' @export
+#' @noRd
 convert_logical_to_character <- function(df, verbose = FALSE) {
   for(col in names(df)) {
     if(is.logical(df[[col]])) {
@@ -281,7 +281,7 @@ convert_logical_to_character <- function(df, verbose = FALSE) {
 #' @param measure_name Name of measure (for error messages)
 #' @param verbose Logical - print detailed output
 #' @return Data frame with problematic columns converted
-#' @export
+#' @noRd
 convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) {
   # Force all complex/problematic data types to character immediately
   for (col in names(df)) {
@@ -329,7 +329,7 @@ convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) 
 #' @param structure_name NDA structure name
 #' @param verbose Logical - print changes
 #' @return Data frame with standardized column names
-#' @export
+#' @noRd
 standardize_column_names <- function(df, structure_name, verbose = FALSE) {
   if(verbose) cat("\nStandardizing column names...")
   
@@ -378,7 +378,7 @@ standardize_column_names <- function(df, structure_name, verbose = FALSE) {
 #' @param measure_name Name of measure
 #' @param verbose Logical - print transformations
 #' @return Data frame with standardized field names
-#' @export
+#' @noRd
 standardize_field_names <- function(df, measure_name, verbose = FALSE) {
   if(verbose) cat("\nStandardizing common field names...")
   

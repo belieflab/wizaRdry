@@ -22,7 +22,7 @@ NULL
 #' @param measure Measure name (used for legacy list format)
 #' @param verbose Logical - print detailed messages
 #' @return Invisible NULL
-#' @export
+#' @noRd
 create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
   
   # Handle both ValidationState and legacy list formats

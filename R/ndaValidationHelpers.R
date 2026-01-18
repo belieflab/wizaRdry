@@ -18,7 +18,7 @@ NULL
 #' @param elements NDA structure dataElements
 #' @param verbose Logical - print detailed output
 #' @return List of violations detected (for logging/debugging)
-#' @export
+#' @noRd
 check_value_range_violations <- function(state, elements, verbose = FALSE) {
   if (verbose) cat("\n\nChecking value ranges...")
   
@@ -151,7 +151,7 @@ get_unique_values <- function(field_values) {
 #' @param df Data frame
 #' @param elements NDA structure dataElements
 #' @return Character vector of new field names
-#' @export
+#' @noRd
 detect_new_fields <- function(df, elements) {
   df_cols <- names(df)
   structure_cols <- elements$name
@@ -183,7 +183,7 @@ detect_new_fields <- function(df, elements) {
 #' @param value Vector of values to check
 #' @param range_str Value range string from NDA structure (e.g., "1::10" or "A;B;C")
 #' @return Character vector of violating values
-#' @export
+#' @noRd
 get_violations <- function(value, range_str) {
   if (is.null(range_str) || is.na(range_str) || range_str == "") return(character(0))
   

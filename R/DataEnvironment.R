@@ -9,7 +9,7 @@
 #' environments used by wizaRdry: globalenv(), .wizaRdry_env, and origin_env (parent frame).
 #' This eliminates scattered base::assign() and base::get() calls throughout the codebase.
 #'
-#' @export
+#' @keywords internal
 DataEnvironment <- R6::R6Class("DataEnvironment",
   public = list(
     #' @field measure_name Character string - name of the measure/dataframe

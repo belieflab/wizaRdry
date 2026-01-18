@@ -16,7 +16,7 @@ NULL
 #' @param str1 First string
 #' @param str2 Second string
 #' @return Numeric similarity score (0-1)
-#' @export
+#' @noRd
 calculate_jaro_winkler <- function(str1, str2) {
   # Convert to lowercase for comparison
   str1 <- tolower(str1)
@@ -100,7 +100,7 @@ calculate_jaro_winkler <- function(str1, str2) {
 #' @param str1 First string
 #' @param str2 Second string
 #' @return Numeric similarity score (0-1)
-#' @export
+#' @noRd
 calculate_levenshtein <- function(str1, str2) {
   # Convert to lowercase
   str1 <- tolower(str1)
@@ -137,7 +137,7 @@ calculate_levenshtein <- function(str1, str2) {
 #'
 #' @param notes Notes string from NDA dataElement
 #' @return Named list of code -> meaning mappings, or NULL
-#' @export
+#' @noRd
 get_mapping_rules <- function(notes) {
   if (is.null(notes) || is.na(notes) || notes == "") return(NULL)
   
@@ -212,7 +212,7 @@ get_mapping_rules <- function(notes) {
 #' @param missing_required Character vector of missing required field names
 #' @param verbose Logical - print details
 #' @return Data frame with missing fields added
-#' @export
+#' @noRd
 handle_missing_fields <- function(df, elements, missing_required, verbose = FALSE) {
   if(verbose) {
     message("\nAuto-adding missing required fields with missing data codes:")
@@ -261,7 +261,7 @@ handle_missing_fields <- function(df, elements, missing_required, verbose = FALS
 #' @param field_name Name of the field
 #' @param elements NDA data elements
 #' @return Value range string or "No range specified"
-#' @export
+#' @noRd
 get_field_value_range <- function(field_name, elements) {
   if (is.null(elements) || nrow(elements) == 0) {
     return("No range specified")
@@ -286,7 +286,7 @@ get_field_value_range <- function(field_name, elements) {
 #'
 #' @param value_range Value range string (e.g., "0::6;999=missing")
 #' @return List with parsed components (numeric_range, missing_codes)
-#' @export
+#' @noRd
 parse_value_range <- function(value_range) {
   if (is.null(value_range) || is.na(value_range) || value_range == "") {
     return(list(numeric_range = NULL, missing_codes = NULL))
@@ -340,7 +340,7 @@ parse_value_range <- function(value_range) {
 #' @param target_field Name of target field
 #' @param verbose Whether to print verbose output
 #' @return List with compatibility check results
-#' @export
+#' @noRd
 check_value_range_compatibility <- function(source_range, target_range, source_field, target_field, verbose = FALSE) {
   
   # If either range is missing, they're compatible
@@ -417,7 +417,7 @@ check_value_range_compatibility <- function(source_range, target_range, source_f
 #' @param structure_name Structure short name
 #' @param nda_base_url NDA API base URL
 #' @return List with structure definition
-#' @export
+#' @noRd
 fetch_nda_structure <- function(structure_name, nda_base_url) {
   url <- sprintf("%s/datastructure/%s", nda_base_url, structure_name)
   response <- httr::GET(url, httr::timeout(10))
