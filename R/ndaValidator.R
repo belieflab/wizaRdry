@@ -3,6 +3,8 @@
 #' @description
 #' Main validation function for NDA data structure compliance.
 #' This is the refactored version using modular components.
+#' 
+#' This is an internal function called by nda(). Users should not call this directly.
 #'
 #' @param measure_name Name of measure/structure
 #' @param api API type (redcap, qualtrics, mongo, csv, oracle, sql)
@@ -14,7 +16,8 @@
 #' @param interactive_mode Logical - allow user prompts
 #' @param modified_structure Pre-enhanced NDA structure (from ndaRequest.R)
 #' @return ValidationState object with validation results
-#' @export
+#' @keywords internal
+#' @noRd
 ndaValidator <- function(measure_name,
                          api,
                          limited_dataset = FALSE,
