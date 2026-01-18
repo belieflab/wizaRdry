@@ -1,11 +1,40 @@
+#' Create NDA Data Definition File
+#'
+#' @description
+#' Creates Excel data definition file for NDA structure registration or updates.
+#' Supports both ValidationState objects (new) and legacy parameters (old).
+#'
+#' @param submission_template ValidationState object OR legacy list with columns
+#' @param nda_structure NDA structure (optional if using ValidationState)
+#' @param measure_name Measure name (optional if using ValidationState)
+#' @param data_frame Data frame (optional if using ValidationState)
+#' @param interactive_mode Interactive mode flag
+#' @return Invisible NULL
 #' @noRd
-createNdaDataDefinition <- function(submission_template, nda_structure, measure_name, data_frame = NULL, interactive_mode = interactive()) {
+createNdaDataDefinition <- function(submission_template, nda_structure = NULL, measure_name = NULL, data_frame = NULL, interactive_mode = interactive()) {
 
-  # Try to get the data frame from the global environment if not provided
-  if (is.null(data_frame)) {
-    data_frame <- tryCatch({
-      base::get0(measure_name)
-    }, error = function(e) NULL)
+  # NEW PATH: Handle ValidationState objects
+  if (inherits(submission_template, "ValidationState")) {
+    validation_state <- submission_template
+    measure_name <- validation_state$measure_name
+    data_frame <- validation_state$get_df()
+    nda_structure <- validation_state$nda_structure
+    
+    message(sprintf("\n[DATA DEFINITION] Creating for '%s'", measure_name))
+    message(sprintf("[DATA DEFINITION] Reason: %s", validation_state$get_modification_reason()))
+    
+    # Convert to legacy format for rest of function
+    submission_template <- list(columns = names(data_frame))
+  } else {
+    # LEGACY PATH: submission_template is a list
+    message("\n[DATA DEFINITION] Using legacy input format")
+    
+    # Try to get the data frame from the global environment if not provided
+    if (is.null(data_frame)) {
+      data_frame <- tryCatch({
+        base::get0(measure_name)
+      }, error = function(e) NULL)
+    }
   }
 
   # Load missing data codes from config if available
