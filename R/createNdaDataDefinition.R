@@ -2436,7 +2436,11 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                   is.character(edit$tokens) &&
                   is.logical(edit$token_is_added) &&
                   length(edit$tokens) == length(edit$token_is_added) &&
-                  length(edit$tokens) > 0
+                  length(edit$tokens) > 0 &&
+                  # Ensure row, vr_col, notes_col are scalar values (length 1 or NA)
+                  (is.numeric(edit$row) && length(edit$row) == 1) &&
+                  (is.na(edit$vr_col) || (is.numeric(edit$vr_col) && length(edit$vr_col) == 1)) &&
+                  (is.na(edit$notes_col) || (is.numeric(edit$notes_col) && length(edit$notes_col) == 1))
                 }, rich_text_edits)
                 
                 if (length(valid_edits) == 0) {
@@ -2459,30 +2463,54 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                   wb_add_rich_text_fn <- get("wb_add_rich_text", asNamespace("openxlsx2"))
                   
                   for (edit in valid_edits) {
-                    # ValueRange rich text
-                    if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
-                      runs <- list()
-                      for (ti in seq_along(edit$tokens)) {
-                        tok <- edit$tokens[ti]
-                        col <- if (edit$token_is_added[ti]) "FF0000" else "000000"
-                        runs[[length(runs) + 1]] <- create_rich_text_fn(text = tok, color = col)
-                        if (ti < length(edit$tokens)) {
-                          runs[[length(runs) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                    # Additional safety check: ensure edit$vr_col and edit$notes_col are scalar integers
+                    tryCatch({
+                      # ValueRange rich text
+                      if (!is.na(edit$vr_col) && length(edit$vr_col) == 1 && length(edit$tokens) > 0) {
+                        runs <- list()
+                        for (ti in seq_along(edit$tokens)) {
+                          # Ensure token is scalar character
+                          tok <- as.character(edit$tokens[ti])
+                          if (length(tok) != 1) next
+                          
+                          # Ensure token_is_added[ti] is scalar logical
+                          is_added <- edit$token_is_added[ti]
+                          if (length(is_added) != 1 || is.na(is_added)) is_added <- FALSE
+                          
+                          col <- if (is_added) "FF0000" else "000000"
+                          runs[[length(runs) + 1]] <- create_rich_text_fn(text = tok, color = col)
+                          if (ti < length(edit$tokens)) {
+                            runs[[length(runs) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                          }
+                        }
+                        if (length(runs) > 0) {
+                          dims <- paste0(num_to_col(edit$vr_col), edit$row)
+                          wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
                         }
                       }
-                      dims <- paste0(num_to_col(edit$vr_col), edit$row)
-                      wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
-                    }
-                    # Notes rich text
-                    if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
-                      runs2 <- list()
-                      for (j in seq_along(edit$added_tokens)) {
-                        runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
-                        if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                      # Notes rich text
+                      if (!is.na(edit$notes_col) && length(edit$notes_col) == 1 && 
+                          !is.null(edit$added_tokens) && length(edit$added_tokens) > 0) {
+                        runs2 <- list()
+                        for (j in seq_along(edit$added_tokens)) {
+                          # Ensure token is scalar character
+                          tok2 <- as.character(edit$added_tokens[j])
+                          if (length(tok2) != 1) next
+                          
+                          runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = tok2, color = "FF0000")
+                          if (j < length(edit$added_tokens)) {
+                            runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                          }
+                        }
+                        if (length(runs2) > 0) {
+                          dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
+                          wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
+                        }
                       }
-                      dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
-                      wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
-                    }
+                    }, error = function(e) {
+                      # Skip this edit if it fails, continue with others
+                      # Silently skip - file already has yellow highlighting
+                    })
                   }
                   openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
                 }
