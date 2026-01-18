@@ -23,73 +23,22 @@ ndaValidator(
 
 \item{limited_dataset}{Logical - if TRUE, skip de-identification (date-shifting, age-capping)}
 
-\item{nda_base_url}{NDA API base URL (default: "https://nda.nih.gov/api/datadictionary/v2")}
+\item{nda_base_url}{NDA API base URL}
 
-\item{verbose}{Logical - print detailed output (default: TRUE)}
+\item{verbose}{Logical - print detailed output}
 
-\item{debug}{Logical - print debug information (default: FALSE)}
+\item{debug}{Logical - print debug information}
 
-\item{auto_drop_unknown}{Logical - automatically drop unknown fields (default: FALSE)}
+\item{auto_drop_unknown}{Logical - automatically drop unknown fields}
 
-\item{interactive_mode}{Logical - allow user prompts (default: TRUE)}
+\item{interactive_mode}{Logical - allow user prompts}
 
 \item{modified_structure}{Pre-enhanced NDA structure (from ndaRequest.R)}
 }
 \value{
-ValidationState object with validation results including:
-\itemize{
-\item measure_name - Name of the measure
-\item api - API type
-\item is_new_structure - Whether structure is new (not in NDA)
-\item is_modified_structure - Whether structure has modifications
-\item value_range_violations - List of fields with value range issues
-\item new_fields - Fields not in original NDA structure
-\item nda_structure - Full NDA structure definition
-\item needs_data_definition() - Method to check if data definition file needed
-\item get_modification_reason() - Method to get human-readable modification reason
-}
+ValidationState object with validation results
 }
 \description{
-Validates NDA data structure compliance using the modular validation system.
-This function now uses ndaValidator_new() for improved reliability and maintainability.
-
-The validator performs comprehensive checks including:
-\itemize{
-\item Value range validation (with proper handling of unbounded types)
-\item Required field verification
-\item Data type compliance
-\item Missing field handling
-\item De-identification (date-shifting, age-capping)
-}
-}
-\details{
-This validator uses a modular architecture with the following components:
-\itemize{
-\item ValidationState R6 class for state management
-\item Separate modules for transformations, field mapping, and validation logic
-\item Proper handling of unbounded data types (String, GUID, Date, Integer, Float)
-\item Centralized value range violation tracking
-}
-}
-\examples{
-\dontrun{
-# Basic validation
-result <- ndaValidator("my_task01", api = "csv")
-
-# Check if data definition needed
-if (result$needs_data_definition()) {
-  reason <- result$get_modification_reason()
-  print(reason)
-}
-
-# Access violations
-violations <- result$value_range_violations
-print(length(violations))
-}
-
-}
-\seealso{
-\code{\link{ndaValidator_new}} for the underlying implementation
-\code{\link{ValidationState}} for the state management class
-\code{\link{nda}} for the complete NDA workflow
+Main validation function for NDA data structure compliance.
+This is the refactored version using modular components.
 }

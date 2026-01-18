@@ -3753,15 +3753,15 @@ enhance_elements_with_redcap_metadata <- function(elements, redcap_metadata) {
 # - Phase 2 depends on Phase 1 (field names must exist)
 # - Phase 3 depends on Phase 2 (fields must be renamed/standardized)
 # - Phase 4 depends on Phase 3 (values must be transformed)
-ndaValidator <- function(measure_name,
-                         api,
-                         limited_dataset = FALSE,
-                         nda_base_url = "https://nda.nih.gov/api/datadictionary/v2",
-                         verbose = TRUE,
-                         debug = FALSE,
-                         auto_drop_unknown = FALSE,
-                         interactive_mode = TRUE,
-                         modified_structure = NULL) {
+ndaValidator_legacy <- function(measure_name,
+                                api,
+                                limited_dataset = FALSE,
+                                nda_base_url = "https://nda.nih.gov/api/datadictionary/v2",
+                                verbose = TRUE,
+                                debug = FALSE,
+                                auto_drop_unknown = FALSE,
+                                interactive_mode = TRUE,
+                                modified_structure = NULL) {
   tryCatch({
     # Initialize a list to track all columns to be removed
     all_columns_to_drop <- character(0)

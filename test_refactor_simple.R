@@ -26,8 +26,8 @@ assign("ndar_subject01", test_data, envir = globalenv())
 cat("Test data created and stored\n\n")
 
 # Run validator
-cat("Running ndaValidator_new()...\n\n")
-validation_result <- ndaValidator_new(
+cat("Running ndaValidator()...\n\n")
+validation_result <- ndaValidator(
   measure_name = "ndar_subject01",
   api = "csv",
   limited_dataset = FALSE,

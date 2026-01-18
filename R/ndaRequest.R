@@ -1008,8 +1008,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata)
       }
 
-      # EXISTING NDA STRUCTURE - Run full validation using NEW validator
-      validation_state <- ndaValidator_new(measure, api, limited_dataset, modified_structure = nda_structure)
+      # EXISTING NDA STRUCTURE - Run full validation
+      validation_state <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
 
       # Handle validation errors gracefully
       if (is.null(validation_state)) {
