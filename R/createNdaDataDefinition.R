@@ -13,7 +13,7 @@
 #' @param skip_prompts Logical - if TRUE, skip all interactive prompts (default: FALSE)
 #' @return Invisible NULL
 #' @noRd
-createNdaDataDefinition <- function(submission_template, nda_structure = NULL, measure_name = NULL, data_frame = NULL, interactive_mode = interactive(), selected_fields = NULL, skip_prompts = FALSE) {
+createNdaDataDefinition <- function(submission_template, nda_structure = NULL, measure_name = NULL, data_frame = NULL, interactive_mode = interactive(), selected_fields = NULL, skip_prompts = FALSE, verbose = FALSE) {
 
   # NEW PATH: Handle ValidationState objects
   if (inherits(submission_template, "ValidationState")) {
@@ -1034,21 +1034,23 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   ordered_columns <- unique(ordered_columns)
 
   # Report what's being included in the data definition
-  if (length(new_fields) > 0) {
-    message(sprintf("Including %d new fields in data definition: %s",
-                    length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
-  }
-  if (length(modified_fields) > 0) {
-    message(sprintf("Including %d modified fields in data definition: %s",
-                    length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
-  }
-  if (length(unchanged_selected) > 0) {
-    message(sprintf("Including %d unchanged NDA fields in data definition: %s",
-                    length(unchanged_selected), paste(head(unchanged_selected, 5), collapse = ", ")))
-  }
-  if (length(unchanged_fields) > 0) {
-    message(sprintf("Excluding %d unchanged NDA fields from data definition: %s",
-                    length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
+  if (verbose) {
+    if (length(new_fields) > 0) {
+      message(sprintf("Including %d new fields in data definition: %s",
+                      length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+    }
+    if (length(modified_fields) > 0) {
+      message(sprintf("Including %d modified fields in data definition: %s",
+                      length(modified_fields), paste(head(modified_fields, 5), collapse = ", ")))
+    }
+    if (length(unchanged_selected) > 0) {
+      message(sprintf("Including %d unchanged NDA fields in data definition: %s",
+                      length(unchanged_selected), paste(head(unchanged_selected, 5), collapse = ", ")))
+    }
+    if (length(unchanged_fields) > 0) {
+      message(sprintf("Excluding %d unchanged NDA fields from data definition: %s",
+                      length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
+    }
   }
 
   # Initialize data definition structure
@@ -1515,7 +1517,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     cat("Fields with missing data:", missing_summary$fields_with_missing, "/", missing_summary$total_fields, "\n")
   }
 
-  if (length(data_definition$metadata$validation_summary$warnings) > 0) {
+  if (verbose && length(data_definition$metadata$validation_summary$warnings) > 0) {
     cat("\nInfo:\n")
     for (warning in data_definition$metadata$validation_summary$warnings) {
       cat("  -", warning, "\n")

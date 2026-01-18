@@ -57,7 +57,8 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
         createNdaDataDefinition(
           validation_state,
           selected_fields = field_selection$selected_fields,
-          skip_prompts = TRUE
+          skip_prompts = TRUE,
+          verbose = verbose
         )
         if (verbose) message("  [OK] Data definition created successfully")
       }, error = function(e) {
@@ -93,7 +94,8 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
           createNdaDataDefinition(
             validation_state,
             selected_fields = field_selection$selected_fields,
-            skip_prompts = TRUE
+            skip_prompts = TRUE,
+            verbose = verbose
           )
           if (verbose) message("  [OK] Data definition created successfully")
         }, error = function(e) {
@@ -147,7 +149,7 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       if (verbose) message("Creating data definition for new structure (legacy mode)")
       tryCatch({
         submission_template <- list(columns = names(validation_state$df))
-        createNdaDataDefinition(submission_template, nda_structure, measure)
+        createNdaDataDefinition(submission_template, nda_structure, measure, verbose = verbose)
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
       })
@@ -163,7 +165,7 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
         if (verbose) message("Creating data definition for modified structure (legacy mode)")
         tryCatch({
           submission_template <- list(columns = names(validation_state$df))
-          createNdaDataDefinition(submission_template, nda_structure, measure)
+          createNdaDataDefinition(submission_template, nda_structure, measure, verbose = verbose)
         }, error = function(e) {
           warning(sprintf("Error creating data definition: %s", e$message))
         })

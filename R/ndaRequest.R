@@ -12,6 +12,7 @@
 #' @param limited_dataset Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age
 #' @param skip_prompt Logical. If TRUE (default), skips confirmation prompts unless preferences aren't set yet. If FALSE,
 #'   prompts for confirmation unless the user has previously chosen to remember their preference.
+#' @param verbose Logical. If TRUE, shows detailed processing information. If FALSE (default), shows only essential user-facing messages.
 #' @return Prints the time taken for the data request process.
 #' @export
 #' @examples
@@ -21,10 +22,13 @@
 #'
 #'   # Skip confirmation prompts
 #'   nda("prl", csv=TRUE, skip_prompt=TRUE)
+#'   
+#'   # Show detailed processing information
+#'   nda("prl", verbose=TRUE)
 #' }
 #'
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE) {
+nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE, verbose = FALSE) {
   start_time <- Sys.time()
 
   # Define base path
@@ -1009,7 +1013,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # EXISTING NDA STRUCTURE - Run full validation
-      validation_state <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
+      validation_state <- ndaValidator(measure, api, limited_dataset, 
+                                       modified_structure = nda_structure,
+                                       verbose = verbose)
 
       # Handle validation errors gracefully
       if (is.null(validation_state)) {
@@ -1036,7 +1042,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # Create NDA files using simplified helper function
-      create_nda_files(validation_state, verbose = TRUE)
+      create_nda_files(validation_state, verbose = verbose)
 
     } else {
       # NEW STRUCTURE - Create ValidationState without NDA validation
@@ -1078,7 +1084,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # Create NDA files using simplified helper function
-      create_nda_files(validation_state, verbose = TRUE)
+      create_nda_files(validation_state, verbose = verbose)
     }
 
     # Update local df variable
@@ -1183,12 +1189,12 @@ addNdarSubjectElements <- function(df, measure) {
           result$recommended_metadata <- recommended_elements  # Only common ones
 
           # Process ALL REQUIRED elements (add missing, ensure correct types)
-          message("\n--- Processing ALL REQUIRED fields ---")
+          if (verbose) message("\n--- Processing ALL REQUIRED fields ---")
           for (i in 1:nrow(required_elements)) {
             col_name <- required_elements$name[i]
             col_type <- required_elements$type[i]
 
-            message(sprintf("Processing required field: %s (%s)", col_name, col_type))
+            if (verbose) message(sprintf("Processing required field: %s (%s)", col_name, col_type))
 
             # Determine R data type
             if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
@@ -1214,33 +1220,33 @@ addNdarSubjectElements <- function(df, measure) {
               non_na_count <- sum(!is.na(existing_data))
 
               if (non_na_count > 0) {
-                message(sprintf("  - Field exists with %d values, ensuring %s type",
+                if (verbose) message(sprintf("  - Field exists with %d values, ensuring %s type",
                                 non_na_count, col_type))
                 df[[col_name]] <- tryCatch({
                   conversion_func(existing_data)
                 }, error = function(e) {
-                  message(sprintf("    Warning: Type conversion failed for %s", col_name))
+                  if (verbose) message(sprintf("    Warning: Type conversion failed for %s", col_name))
                   existing_data
                 })
               } else {
-                message(sprintf("  - Field exists but empty, setting to %s type", col_type))
+                if (verbose) message(sprintf("  - Field exists but empty, setting to %s type", col_type))
                 df[[col_name]] <- rep(default_value, nrow(df))
               }
             } else {
               # Column doesn't exist - add it (REQUIRED fields are always added)
-              message(sprintf("  - Adding new required field as %s type", col_type))
+              if (verbose) message(sprintf("  - Adding new required field as %s type", col_type))
               df[[col_name]] <- rep(default_value, nrow(df))
             }
           }
 
           # Process ONLY COMMON RECOMMENDED elements
           if (nrow(recommended_elements) > 0) {
-            message("\n--- Processing COMMON RECOMMENDED fields ---")
+            if (verbose) message("\n--- Processing COMMON RECOMMENDED fields ---")
             for (i in 1:nrow(recommended_elements)) {
               col_name <- recommended_elements$name[i]
               col_type <- recommended_elements$type[i]
 
-              message(sprintf("Processing common recommended field: %s (%s)", col_name, col_type))
+              if (verbose) message(sprintf("Processing common recommended field: %s (%s)", col_name, col_type))
 
               # Determine R data type (same logic as required)
               if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
