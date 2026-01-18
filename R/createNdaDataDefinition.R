@@ -1556,7 +1556,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   tryCatch({
     exportDataDefinition(data_definition, "xlsx")
   }, error = function(e) {
-    warning("Could not export data definition: ", e$message)
+    warning("Data definition export failed: ", e$message, call. = FALSE)
+    message("Note: This is unexpected. Please report this issue.")
   })
 
   return(data_definition)
@@ -2331,9 +2332,14 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                     } else {
                       tok_vals <- expand_numeric_value_range(tok)
                     }
-                    token_is_added[ti] <- length(setdiff(tok_vals %||% numeric(0), nda_allowed)) > 0
-                    if (token_is_added[ti]) added_tokens <- c(added_tokens, tok)
-                  }
+                  token_is_added[ti] <- length(setdiff(tok_vals %||% numeric(0), nda_allowed)) > 0
+                  if (token_is_added[ti]) added_tokens <- c(added_tokens, tok)
+                }
+                # Validate data before adding to rich_text_edits (prevent openxlsx2 errors)
+                if (length(tokens) > 0 && 
+                    length(token_is_added) == length(tokens) &&
+                    is.character(tokens) && 
+                    is.logical(token_is_added)) {
                   rich_text_edits[[length(rich_text_edits) + 1]] <- list(
                     row = i + 1,
                     vr_col = if (length(vr_col) == 1) vr_col else NA_integer_,
@@ -2342,6 +2348,7 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                     token_is_added = token_is_added,
                     added_tokens = added_tokens
                   )
+                }
                   applied_yellow[i] <- TRUE
                   nda_range_mismatch[i] <- TRUE
                   # Update curator notes to "Modified value range" for fields with mismatches
@@ -2411,49 +2418,85 @@ exportDataDefinition <- function(data_definition, format = "csv") {
 
           # Post-process with openxlsx2 to apply per-token rich text if needed
           if (length(rich_text_edits) > 0) {
-            # Helper to convert numeric column index to Excel column letters
-            num_to_col <- function(n) {
-              letters <- c()
-              while (n > 0) {
-                r <- (n - 1) %% 26
-                letters <- c(LETTERS[r + 1], letters)
-                n <- (n - 1) %/% 26
-              }
-              paste0(letters, collapse = "")
-            }
-            wb2 <- openxlsx2::wb_load(file_path)
-            # Resolve exported functions dynamically to avoid R CMD check NOTE/WARNING
-            create_rich_text_fn <- get("create_rich_text", asNamespace("openxlsx2"))
-            wb_add_rich_text_fn <- get("wb_add_rich_text", asNamespace("openxlsx2"))
-            for (edit in rich_text_edits) {
-              # ValueRange rich text
-              if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
-                runs <- list()
-                for (ti in seq_along(edit$tokens)) {
-                  tok <- edit$tokens[ti]
-                  col <- if (edit$token_is_added[ti]) "FF0000" else "000000"
-                  runs[[length(runs) + 1]] <- create_rich_text_fn(text = tok, color = col)
-                  if (ti < length(edit$tokens)) {
-                    runs[[length(runs) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+            # Check if openxlsx2 is available
+            has_openxlsx2 <- requireNamespace("openxlsx2", quietly = TRUE)
+            
+            if (!has_openxlsx2) {
+              message("Note: openxlsx2 package not installed - rich text formatting skipped")
+              message("      Install with: install.packages('openxlsx2')")
+              message("      File created successfully with yellow highlighting")
+            } else {
+              tryCatch({
+                # Validate rich_text_edits structure before processing
+                valid_edits <- Filter(function(edit) {
+                  is.list(edit) &&
+                  !is.null(edit$row) &&
+                  !is.null(edit$tokens) &&
+                  !is.null(edit$token_is_added) &&
+                  is.character(edit$tokens) &&
+                  is.logical(edit$token_is_added) &&
+                  length(edit$tokens) == length(edit$token_is_added) &&
+                  length(edit$tokens) > 0
+                }, rich_text_edits)
+                
+                if (length(valid_edits) == 0) {
+                  message("Note: No valid rich text edits to apply")
+                } else {
+                  # Helper to convert numeric column index to Excel column letters
+                  num_to_col <- function(n) {
+                    letters <- c()
+                    while (n > 0) {
+                      r <- (n - 1) %% 26
+                      letters <- c(LETTERS[r + 1], letters)
+                      n <- (n - 1) %/% 26
+                    }
+                    paste0(letters, collapse = "")
                   }
+                  
+                  wb2 <- openxlsx2::wb_load(file_path)
+                  # Resolve exported functions dynamically to avoid R CMD check NOTE/WARNING
+                  create_rich_text_fn <- get("create_rich_text", asNamespace("openxlsx2"))
+                  wb_add_rich_text_fn <- get("wb_add_rich_text", asNamespace("openxlsx2"))
+                  
+                  for (edit in valid_edits) {
+                    # ValueRange rich text
+                    if (!is.na(edit$vr_col) && length(edit$tokens) > 0) {
+                      runs <- list()
+                      for (ti in seq_along(edit$tokens)) {
+                        tok <- edit$tokens[ti]
+                        col <- if (edit$token_is_added[ti]) "FF0000" else "000000"
+                        runs[[length(runs) + 1]] <- create_rich_text_fn(text = tok, color = col)
+                        if (ti < length(edit$tokens)) {
+                          runs[[length(runs) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                        }
+                      }
+                      dims <- paste0(num_to_col(edit$vr_col), edit$row)
+                      wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
+                    }
+                    # Notes rich text
+                    if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
+                      runs2 <- list()
+                      for (j in seq_along(edit$added_tokens)) {
+                        runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
+                        if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                      }
+                      dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
+                      wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
+                    }
+                  }
+                  openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
                 }
-                dims <- paste0(num_to_col(edit$vr_col), edit$row)
-                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
-              }
-              # Notes rich text
-              if (!is.na(edit$notes_col) && length(edit$added_tokens) > 0) {
-                runs2 <- list()
-                for (j in seq_along(edit$added_tokens)) {
-                  runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = edit$added_tokens[j], color = "FF0000")
-                  if (j < length(edit$added_tokens)) runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
-                }
-                dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
-                wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
-              }
+              }, error = function(e) {
+                warning("Rich text formatting failed: ", e$message, call. = FALSE)
+                message("\nNote: Data definition file created successfully!")
+                message("      File location: ", file_path)
+                message("      Rich text formatting was skipped due to error")
+                message("      Yellow highlighting is still present")
+                message("\nTechnical details: ", e$message)
+              })
             }
-            openxlsx2::wb_save(wb2, file = file_path, overwrite = TRUE)
           }
-          cat("Data definition exported to:", file_path, "\n")
+          cat("  [OK] Data definition created successfully\n")
          },
 
          "yaml" = {
