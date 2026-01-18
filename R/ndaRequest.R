@@ -610,7 +610,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                                          ifelse(measure %in% sql_list, "sql", "csv")))))
     }
 
-    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset)
+    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset, verbose)
   }
 
   # Clean up and record processing time
@@ -618,7 +618,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   # message(Sys.time() - start_time)  # Print time taken for processing
 }
 
-processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE) {
+processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE, verbose = FALSE) {
   # Store the origin environment (the one that called this function)
   origin_env <- parent.frame()
 
@@ -707,7 +707,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # ADD REQUIRED AND RECOMMENDED ELEMENTS
-      enhancement_result <- addNdarSubjectElements(df, measure)
+      enhancement_result <- addNdarSubjectElements(df, measure, verbose)
       df <- enhancement_result$df
       required_field_metadata <- enhancement_result$required_metadata
       recommended_field_metadata <- enhancement_result$recommended_metadata  # NEW
@@ -1134,7 +1134,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   return(result)  # Return the result of the processing
 }
 
-addNdarSubjectElements <- function(df, measure) {
+addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
   # Initialize return structure
   result <- list(
     df = df,
