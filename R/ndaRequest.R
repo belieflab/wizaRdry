@@ -1002,290 +1002,99 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     if (nda_structure_exists && !is.null(nda_structure)) {
 
-      # *** ADD THIS NEW CODE HERE ***
       # Enhance existing structure with ndar_subject01 metadata BEFORE validation
       if (!is.null(required_field_metadata) || !is.null(recommended_field_metadata)) {
         message("Enhancing existing NDA structure with ndar_subject01 metadata...")
         nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata)
       }
-      # *** END NEW CODE ***
 
-      # EXISTING NDA STRUCTURE - Run full validation
-      validation_results <- ndaValidator(measure, api, limited_dataset, modified_structure = nda_structure)
+      # EXISTING NDA STRUCTURE - Run full validation using NEW validator
+      validation_state <- ndaValidator_new(measure, api, limited_dataset, modified_structure = nda_structure)
 
       # Handle validation errors gracefully
-      if (is.null(validation_results)) {
-        message("Warning: Validation returned NULL - attempting to continue with available data")
-        validation_results <- list(
-          valid = FALSE,
-          error = "Validation returned NULL",
-          df = base::get0(measure),
-          warnings = c("Validation failed - ndaValidator returned NULL"),
-          bypassed_validation = FALSE
-        )
-        # Store NDA structure as attribute for file creation
-        attr(validation_results, "nda_structure") <- list(
-          shortName = measure,
-          dataElements = if ("dataElements" %in% names(nda_structure)) nda_structure$dataElements else NULL
-        )
-      }
-
-      # ADD BOTH METADATA ATTRIBUTES (only if validation_results is valid structure)
-      if (is.list(validation_results)) {
-        if (!is.null(required_field_metadata)) {
-          attr(validation_results, "required_metadata") <- required_field_metadata
-        }
-        if (!is.null(recommended_field_metadata)) {
-          attr(validation_results, "recommended_metadata") <- recommended_field_metadata
-        }
-      }
-
-      # CRITICAL: Update all environments with validated dataframe
-      # Handle both success and error cases
-      # Get the dataframe from validation_results if available, otherwise get from environment
-      df_to_assign <- NULL
-      if (is.list(validation_results) && !is.null(validation_results$df)) {
-        df_to_assign <- validation_results$df
-        if (DEBUG) message("[DEBUG] Using dataframe from validation_results")
-      } else {
-        # Fallback: get dataframe from environment if validation_results$df is NULL
-        df_to_assign <- base::get0(measure)
-        if (DEBUG) message("[DEBUG] validation_results$df is NULL, using dataframe from environment")
+      if (is.null(validation_state)) {
+        message("Warning: Validation returned NULL - this should not happen with new validator")
+        # Create error state
+        validation_state <- ValidationState$new(measure, api, base::get0(measure), nda_structure)
+        validation_state$is_valid <- FALSE
+        validation_state$errors <- c("Validation returned NULL")
       }
       
-      # Only update environments if we have a valid dataframe
-      if (!is.null(df_to_assign) && is.data.frame(df_to_assign)) {
-        if (DEBUG) message(sprintf("[DEBUG] Updating environments with dataframe (nrow=%d, ncol=%d)", 
-                                   nrow(df_to_assign), ncol(df_to_assign)))
-        # Update globalenv
-        base::assign(measure, df_to_assign, envir = globalenv())
-        if (DEBUG) message("[DEBUG] Updated globalenv()")
-        # Update origin_env
-        base::assign(measure, df_to_assign, envir = origin_env)
-        if (DEBUG) message("[DEBUG] Updated origin_env")
-        # Update wizaRdry_env
-        if (exists(".wizaRdry_env")) {
-          base::assign(measure, df_to_assign, envir = .wizaRdry_env)
-          if (DEBUG) message("[DEBUG] Updated .wizaRdry_env")
-        }
-        # Update our local df variable
-        df <- df_to_assign
-        if (DEBUG) message("[DEBUG] Updated local df variable")
-      } else {
-        warning(sprintf("Warning: No valid dataframe found for '%s' to update environments. Template creation may fail.", measure))
+      # Store metadata in ValidationState
+      if (!is.null(required_field_metadata)) {
+        validation_state$required_metadata <- required_field_metadata
+      }
+      if (!is.null(recommended_field_metadata)) {
+        validation_state$recommended_metadata <- recommended_field_metadata
       }
 
-      # Defer any sounds until the end of processing
-
-      # Create data upload template ONLY for existing structures
-      # Wrap in tryCatch to ensure file creation happens even if there are errors
-      if (DEBUG) message("[DEBUG] Creating NDA template")
-      # Verify dataframe exists in globalenv before creating template
-      df_check <- base::get0(measure, envir = globalenv())
-      if (is.null(df_check)) {
-        warning(sprintf("Warning: Dataframe '%s' not found in global environment. Cannot create submission template.", measure))
-      } else if (!is.data.frame(df_check)) {
-        warning(sprintf("Warning: '%s' in global environment is not a data.frame. Cannot create submission template.", measure))
-      } else if (nrow(df_check) == 0) {
-        warning(sprintf("Warning: Dataframe '%s' has 0 rows. Creating empty submission template.", measure))
-      } else {
-        if (DEBUG) message(sprintf("[DEBUG] Dataframe '%s' found in globalenv with %d rows, %d columns", 
-                                  measure, nrow(df_check), ncol(df_check)))
+      # Update local df variable (DataEnvironment already handled the environments)
+      df <- validation_state$get_df()
+      if (DEBUG) {
+        message(sprintf("[DEBUG] Retrieved dataframe from ValidationState (nrow=%d, ncol=%d)", 
+                       nrow(df), ncol(df)))
       }
-      tryCatch({
-        createNdaSubmissionTemplate(measure)
-      }, error = function(e) {
-        message(sprintf("Warning: Error creating submission template: %s", e$message))
-        message("Attempting to continue with data definition creation...")
-      })
+
+      # Create NDA files using simplified helper function
+      create_nda_files(validation_state, verbose = TRUE)
 
     } else {
-      # NEW STRUCTURE - Bypass validation, create minimal results
-      message(sprintf("\nSkipping NDA validation for new structure '%s'", measure))
-      message("Proceeding with data definition creation using computed metadata only")
+      # NEW STRUCTURE - Create ValidationState without NDA validation
+      message(sprintf("\nNew structure '%s' (not found in NDA data dictionary)", measure))
+      message("Creating ValidationState for new structure with metadata only")
 
-      # Create minimal validation results for compatibility
-      validation_results <- list(
-        valid = TRUE,  # Always valid for new structures
-        df = base::get0(measure),
-        message = paste("New data structure:", measure, "- no NDA validation performed"),
-        bypassed_validation = TRUE
-      )
-
-      # Create a mock NDA structure for data definition creation
+      # Get dataframe
       df <- base::get0(measure)
-      if (!is.null(df) && is.data.frame(df)) {
-        # Create minimal structure that will force all fields to be computed
-        nda_structure <- list(
-          shortName = measure,
-          dataElements = data.frame(
-            name = character(0),
-            type = character(0),
-            description = character(0),
-            required = character(0),
-            stringsAsFactors = FALSE
-          )
+      
+      # Create mock NDA structure
+      mock_structure <- list(
+        shortName = measure,
+        dataElements = data.frame(
+          name = character(0),
+          type = character(0),
+          description = character(0),
+          required = character(0),
+          stringsAsFactors = FALSE
         )
-        # Store as attribute for data definition creation
-        attr(validation_results, "nda_structure") <- nda_structure
-      }
-
+      )
+      
+      # Enhance with metadata if available
       if (!is.null(required_field_metadata)) {
-        # Enhance with both required and recommended metadata
-        enhanced_structure <- mergeRequiredMetadata(nda_structure, required_field_metadata, recommended_field_metadata)
-        attr(validation_results, "nda_structure") <- enhanced_structure
-        message("Enhanced new structure with complete ndar_subject01 required and recommended field metadata")
+        mock_structure <- mergeRequiredMetadata(mock_structure, required_field_metadata, recommended_field_metadata)
+        message("Enhanced new structure with ndar_subject01 required and recommended field metadata")
+      }
+      
+      # Create ValidationState for new structure
+      validation_state <- ValidationState$new(measure, api, df, mock_structure)
+      validation_state$is_new_structure <- TRUE
+      validation_state$bypassed_validation <- TRUE
+      
+      # Store metadata
+      if (!is.null(required_field_metadata)) {
+        validation_state$required_metadata <- required_field_metadata
+      }
+      if (!is.null(recommended_field_metadata)) {
+        validation_state$recommended_metadata <- recommended_field_metadata
       }
 
-      # Defer any sounds until the end of processing
-
-      # DO NOT CREATE SUBMISSION TEMPLATE FOR NEW STRUCTURES
-      message("Skipping submission template creation for new structure")
+      # Create NDA files using simplified helper function
+      create_nda_files(validation_state, verbose = TRUE)
     }
 
-    # Now apply date format preservation AFTER validation
-    if (DEBUG) message("[DEBUG] Get latest dataframe version")
-    df <- base::get0(measure)
-
-    # Add limited de-identification summary
+    # Update local df variable
+    df <- validation_state$get_df()
+    
+    # Add de-identification summary
     if (limited_dataset == FALSE) {
       message("\nDataset has been de-identified using date-shifting and age-capping.")
     }
 
-    # Create data upload template regardless of if test passes
-    # if (DEBUG) message("[DEBUG] Creating NDA template")
-    # createNdaSubmissionTemplate(measure)
-
-    # Create data definition ONLY for new or modified structures
-    # Existing unmodified structures should only have submission templates, not data definitions
-    message("[DEBUG] Checking if data definition is needed")
-    message(sprintf("[DEBUG] validation_results type: %s, is list: %s", 
-                    class(validation_results)[1], is.list(validation_results)))
-    if(is.list(validation_results)) {
-      message(sprintf("[DEBUG] validation_results fields: %s", 
-                      paste(names(validation_results), collapse=", ")))
-    }
-    tryCatch({
-      df <- base::get0(measure)
-      if (!is.null(df) && is.data.frame(df) &&
-          exists("validation_results") && is.list(validation_results)) {
-
-        # Get NDA structure from validation results attribute
-        nda_structure <- attr(validation_results, "nda_structure")
-        message(sprintf("[DEBUG] NDA structure retrieved: %s", 
-                        if(is.null(nda_structure)) "NULL" else "present"))
-
-        if (!is.null(nda_structure)) {
-          # Check if this is a new structure (bypassed validation)
-          is_new_structure <- isTRUE(validation_results$bypassed_validation)
-          
-          # For existing structures, check if there are modifications
-          # Only create data definition if structure has new fields or modified value ranges
-          # OR if element names have been modified (renamed fields)
-          is_modified_structure <- FALSE
-          has_value_range_violations <- FALSE
-          if (!is_new_structure && "dataElements" %in% names(nda_structure)) {
-            structure_field_names <- if (is.data.frame(nda_structure$dataElements)) {
-              nda_structure$dataElements$name
-            } else {
-              character(0)
-            }
-            df_field_names <- names(df)
-            
-            # Check for new fields (not in structure)
-            new_fields <- setdiff(df_field_names, structure_field_names)
-            # Exclude REDCap completion fields and super-required fields from new field check
-            new_fields <- new_fields[!grepl("_complete$", new_fields)]
-            super_required_fields <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
-            new_fields <- setdiff(new_fields, super_required_fields)
-            
-            if (length(new_fields) > 0) {
-              is_modified_structure <- TRUE
-              if (DEBUG) message(sprintf("[DEBUG] Found %d new field(s): %s", 
-                                        length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
-            }
-          }
-          
-          # Check for value range violations (e.g., data contains "9999" but NDA doesn't allow it)
-          # When value ranges differ, we need to create a data definition file to update them
-          # IMPORTANT: Check this INDEPENDENTLY of is_modified_structure to catch ALL violations
-          # This ensures value range modifications trigger definition creation even without new fields
-          has_value_range_violations <- FALSE
-          if (is.list(validation_results) &&
-              "value_range_violations" %in% names(validation_results)) {
-            violations <- validation_results$value_range_violations
-            # Check if violations exist and are non-empty
-            if (!is.null(violations) && length(violations) > 0) {
-              has_value_range_violations <- TRUE
-              is_modified_structure <- TRUE
-              message(sprintf("[DEBUG] Found value range violations in %d field(s): %s", 
-                            length(violations),
-                            paste(names(violations), collapse = ", ")))
-              message(sprintf("[DEBUG] Violation details:"))
-              for(viol_field in names(violations)) {
-                viol_info <- violations[[viol_field]]
-                expected_val <- if(is.null(viol_info$expected)) "NULL (no range defined)" else viol_info$expected
-                actual_sample <- if(length(viol_info$actual) > 0) {
-                  paste(head(viol_info$actual, 5), collapse=", ")
-                } else {
-                  "none"
-                }
-                message(sprintf("  - %s: expected=%s, actual_sample=[%s%s]", 
-                              viol_field, expected_val, actual_sample,
-                              if(length(viol_info$actual) > 5) sprintf(" (+%d more)", length(viol_info$actual)-5) else ""))
-              }
-              message(sprintf("[DEBUG] Setting is_modified_structure=TRUE to trigger _definition.csv creation"))
-            } else if (DEBUG) {
-              message("[DEBUG] value_range_violations exists but is empty or NULL")
-            }
-          } else if (DEBUG) {
-            message("[DEBUG] validation_results missing value_range_violations field")
-            if (is.list(validation_results)) {
-              message(sprintf("[DEBUG] Available fields: %s", paste(names(validation_results), collapse = ", ")))
-            }
-          }
-          
-          # Only create data definition for new or modified structures
-          if (is_new_structure) {
-            message("Creating data definition for new structure")
-            submission_template <- list(columns = names(df))
-            createNdaDataDefinition(submission_template, nda_structure, measure)
-          } else if (is_modified_structure) {
-            # Determine reason for modification
-            modification_reason <- character(0)
-            if (exists("new_fields") && length(new_fields) > 0) {
-              modification_reason <- c(modification_reason, "new fields")
-            }
-            if (has_value_range_violations) {
-              modification_reason <- c(modification_reason, "value range differences")
-            }
-            reason_text <- if (length(modification_reason) > 0) {
-              paste(modification_reason, collapse = " and ")
-            } else {
-              "modifications detected"
-            }
-            message(sprintf("Creating data definition for modified structure (%s detected)", reason_text))
-            message(sprintf("[DEBUG] Calling createNdaDataDefinition() - this will create _definition.csv file"))
-            submission_template <- list(columns = names(df))
-            createNdaDataDefinition(submission_template, nda_structure, measure)
-            message(sprintf("[DEBUG] createNdaDataDefinition() completed - _definition.csv should now exist"))
-          } else {
-            message("Skipping data definition creation - existing unmodified structure (only submission template created)")
-          }
-        } else {
-          message("NDA structure not available from validation results")
-        }
-      }
-    }, error = function(e) {
-      message("Error creating data definition: ", e$message)
-    })
-
     formatElapsedTime(start_time)
 
     # Play completion sound AFTER all processing, including data definition export
-    if (exists("validation_results") && is.list(validation_results)) {
+    if (exists("validation_state") && inherits(validation_state, "ValidationState")) {
       # Use success/fail tone for existing structures; treasure for new (bypassed) ones
-      tone <- if (isTRUE(validation_results$bypassed_validation)) "treasure" else if (isTRUE(validation_results$valid)) "mario" else "wilhelm"
+      tone <- if (validation_state$is_new_structure) "treasure" else if (validation_state$is_valid) "mario" else "wilhelm"
       if (DEBUG) message("[DEBUG] Playing completion sound: ", tone)
       try(beepr::beep(tone), silent = TRUE)
     } else {
