@@ -44,13 +44,13 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       # NEW structure: Only create data definition
       if (verbose) {
         message("\n[NEW STRUCTURE]")
-        message("  ✓ Creating data definition (for structure registration)")
-        message("  ✗ Skipping submission template (structure doesn't exist in NDA yet)")
+        message("  [OK] Creating data definition (for structure registration)")
+        message("  [SKIP] Skipping submission template (structure doesn't exist in NDA yet)")
       }
       
       tryCatch({
         createNdaDataDefinition(validation_state)
-        if (verbose) message("  ✓ Data definition created successfully")
+        if (verbose) message("  [OK] Data definition created successfully")
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
       })
@@ -59,12 +59,12 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       # EXISTING structure: Always create submission template
       if (verbose) {
         message("\n[EXISTING STRUCTURE]")
-        message("  ✓ Creating submission template (for data upload)")
+        message("  [OK] Creating submission template (for data upload)")
       }
       
       tryCatch({
         createNdaSubmissionTemplate(measure_name)
-        if (verbose) message("  ✓ Submission template created successfully")
+        if (verbose) message("  [OK] Submission template created successfully")
       }, error = function(e) {
         warning(sprintf("Error creating submission template: %s", e$message))
       })
@@ -72,18 +72,18 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       # Create data definition ONLY if modified
       if (needs_definition) {
         if (verbose) {
-          message(sprintf("  ✓ Creating data definition (reason: %s)", reason))
+          message(sprintf("  [OK] Creating data definition (reason: %s)", reason))
         }
         
         tryCatch({
           createNdaDataDefinition(validation_state)
-          if (verbose) message("  ✓ Data definition created successfully")
+          if (verbose) message("  [OK] Data definition created successfully")
         }, error = function(e) {
           warning(sprintf("Error creating data definition: %s", e$message))
         })
       } else {
         if (verbose) {
-          message("  ✗ Skipping data definition (structure unmodified)")
+          message("  [SKIP] Skipping data definition (structure unmodified)")
         }
       }
     }

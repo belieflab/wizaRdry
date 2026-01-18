@@ -63,6 +63,8 @@ DataEnvironment <- R6::R6Class("DataEnvironment",
       }
       
       # Ensure .wizaRdry_env exists in globalenv
+      # NOTE: This assignment to globalenv is intentional for cross-function data sharing
+      # in the NDA validation workflow and maintains backward compatibility with legacy code
       if (!exists(".wizaRdry_env", envir = globalenv())) {
         .wizaRdry_env <- new.env(parent = globalenv())
         assign(".wizaRdry_env", .wizaRdry_env, envir = globalenv())

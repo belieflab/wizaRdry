@@ -27,7 +27,9 @@ ndaValidator_new <- function(measure_name,
   
   tryCatch({
     # Initialize environment
-    if (!exists(".wizaRdry_env")) {
+    # NOTE: This assignment to globalenv is intentional for cross-function data sharing
+    # in the NDA validation workflow and maintains backward compatibility with legacy code
+    if (!exists(".wizaRdry_env", envir = globalenv())) {
       .wizaRdry_env <- new.env(parent = parent.frame())
       assign(".wizaRdry_env", .wizaRdry_env, envir = globalenv())
     }
