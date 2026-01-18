@@ -4,8 +4,6 @@
 #' Core validation logic for NDA data structure compliance.
 #' Includes value range checking, GUID validation, and violation tracking.
 #'
-#' @name ndaValidationHelpers
-NULL
 
 #' Check for value range violations and update ValidationState
 #'

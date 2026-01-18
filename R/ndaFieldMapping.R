@@ -4,8 +4,6 @@
 #' Functions for detecting, mapping, and renaming fields to match NDA structure requirements.
 #' Includes similarity calculation, field matching, and interactive renaming.
 #'
-#' @name ndaFieldMapping
-NULL
 
 #' Calculate Jaro-Winkler similarity between two strings
 #'

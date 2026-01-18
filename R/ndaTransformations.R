@@ -5,8 +5,6 @@
 #' Includes date/age standardization, type conversions, array handling,
 #' and missing data code translation.
 #'
-#' @name ndaTransformations
-NULL
 
 #' Standardize interview_date for NDA submission
 #'

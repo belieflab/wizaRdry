@@ -4,8 +4,6 @@
 #' Centralized field selection logic to eliminate redundant prompts when creating
 #' both submission templates and data definition files.
 #'
-#' @name ndaFieldSelection
-NULL
 
 #' Select NDA Fields Interactively
 #'

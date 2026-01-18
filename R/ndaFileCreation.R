@@ -4,8 +4,6 @@
 #' Functions for creating NDA submission templates and data definition files
 #' based on ValidationState results.
 #'
-#' @name ndaFileCreation
-NULL
 
 #' Create NDA files based on ValidationState
 #'
