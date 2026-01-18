@@ -12,6 +12,10 @@
 #'        and template file should be created. Defaults to the current working directory.
 #' @param skip_prompt Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 #'        will prompt for confirmation unless the user has previously chosen to remember their preference.
+#' @param selected_fields Character vector of field names to include in template. If NULL (default),
+#'        uses all fields from data frame. Used by create_nda_files() for centralized field selection.
+#' @param skip_prompts Logical. If TRUE, skip ALL interactive prompts (used when called from
+#'        create_nda_files() with pre-selected fields). Default: FALSE.
 #'
 #' @return Invisible TRUE if successful. Creates a CSV file at the specified path
 #'         and prints a message with the file location.
@@ -45,7 +49,7 @@
 #' }
 #'
 #' @export
-to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRUE so users need to specify to see prompt after prefs are set
+to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, skip_prompts = FALSE) { #set skip_prompt to TRUE so users need to specify to see prompt after prefs are set
   # Check for user preferences file
   user_prefs_file <- file.path(path, ".wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_nda_template = FALSE)
@@ -248,9 +252,22 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
     template_cols <- names(template)  # Update after adding fields
   }
   
-  # In interactive mode, prompt user to include other required fields that exist in structure
-  if (interactive() && length(ndar_required_in_structure) > 0) {
-    # Check which ones are not already in template
+  # Use selected_fields if provided (from centralized field selection)
+  # Otherwise, prompt user in interactive mode
+  if (!is.null(selected_fields) && skip_prompts) {
+    # Use pre-selected fields from create_nda_files()
+    fields_to_add <- setdiff(selected_fields, template_cols)
+    if (length(fields_to_add) > 0) {
+      for (field in fields_to_add) {
+        # Only add if field exists in structure
+        if (field %in% structure_field_names) {
+          template[[field]] <- NA
+        }
+      }
+      template_cols <- names(template)
+    }
+  } else if (interactive() && length(ndar_required_in_structure) > 0 && !skip_prompts) {
+    # Original interactive prompt logic (only when NOT using pre-selected fields)
     missing_required_in_structure <- setdiff(ndar_required_in_structure, template_cols)
     
     if (length(missing_required_in_structure) > 0) {

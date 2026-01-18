@@ -32,10 +32,25 @@ check_value_range_violations <- function(state, elements, verbose = FALSE) {
     if (nrow(element) == 0) next
     
     value_range <- element$valueRange
+    data_type <- element$type
     
-    # Case 1: Field has no valueRange but contains data
-    # This should trigger data definition creation
+    # Case 1: Field has no valueRange - check if this is an unbounded type
     if (is.null(value_range) || is.na(value_range) || value_range == "") {
+      # String, GUID, Date, Integer, Float without valueRange are VALID (unbounded)
+      # These types don't require a defined range to be compliant
+      unbounded_types <- c("String", "GUID", "Date", "Integer", "Float")
+      
+      if (data_type %in% unbounded_types) {
+        if (verbose) {
+          cat(sprintf("\n\nField: %s", col))
+          cat(sprintf("\n  Type: %s (no valueRange defined)", data_type))
+          cat(sprintf("\n  Status: VALID - Unbounded %s field", data_type))
+        }
+        next  # NOT a violation - skip to next field
+      }
+      
+      # For unknown/other types without valueRange, flag for investigation
+      # This is a rare edge case
       if (has_data_values(df[[col]])) {
         unique_vals <- get_unique_values(df[[col]])
         
@@ -46,17 +61,18 @@ check_value_range_violations <- function(state, elements, verbose = FALSE) {
         )
         
         violations_detected[[col]] <- list(
-          type = "missing_range",
+          type = "unknown_type_no_range",
           field = col,
+          data_type = data_type,
           expected = NULL,
           actual = unique_vals,
           count = length(unique_vals)
         )
         
         if (verbose) {
-          cat(sprintf("\n\nField: %s (no valueRange defined in NDA structure)", col))
-          cat(sprintf("\n  Data contains %d unique values needing documentation", 
-                     length(unique_vals)))
+          cat(sprintf("\n\nField: %s (no valueRange defined)", col))
+          cat(sprintf("\n  Type: %s (unknown/unhandled type)", data_type))
+          cat(sprintf("\n  Data contains %d unique values", length(unique_vals)))
           cat(sprintf("\n  Sample values: %s", 
                      paste(head(unique_vals, 5), collapse = ", ")))
           if (length(unique_vals) > 5) {

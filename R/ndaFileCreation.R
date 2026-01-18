@@ -40,6 +40,13 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       message(sprintf("Modification status: %s", reason))
     }
     
+    # Use centralized field selection (user prompted ONCE)
+    field_selection <- select_nda_fields(
+      validation_state = validation_state,
+      nda_structure = nda_structure,
+      verbose = verbose
+    )
+    
     if (is_new) {
       # NEW structure: Only create data definition
       if (verbose) {
@@ -49,7 +56,11 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       }
       
       tryCatch({
-        createNdaDataDefinition(validation_state)
+        createNdaDataDefinition(
+          validation_state,
+          selected_fields = field_selection$selected_fields,
+          skip_prompts = TRUE
+        )
         if (verbose) message("  [OK] Data definition created successfully")
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
@@ -63,7 +74,12 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       }
       
       tryCatch({
-        createNdaSubmissionTemplate(measure_name)
+        createNdaSubmissionTemplate(
+          measure_name,
+          skip_prompt = TRUE,  # Skip initial confirmation prompt
+          selected_fields = field_selection$selected_fields,
+          skip_prompts = TRUE   # Skip field selection prompts
+        )
         if (verbose) message("  [OK] Submission template created successfully")
       }, error = function(e) {
         warning(sprintf("Error creating submission template: %s", e$message))
@@ -76,7 +92,11 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
         }
         
         tryCatch({
-          createNdaDataDefinition(validation_state)
+          createNdaDataDefinition(
+            validation_state,
+            selected_fields = field_selection$selected_fields,
+            skip_prompts = TRUE
+          )
           if (verbose) message("  [OK] Data definition created successfully")
         }, error = function(e) {
           warning(sprintf("Error creating data definition: %s", e$message))

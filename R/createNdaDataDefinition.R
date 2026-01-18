@@ -9,9 +9,11 @@
 #' @param measure_name Measure name (optional if using ValidationState)
 #' @param data_frame Data frame (optional if using ValidationState)
 #' @param interactive_mode Interactive mode flag
+#' @param selected_fields Character vector of field names to include (optional, from centralized selection)
+#' @param skip_prompts Logical - if TRUE, skip all interactive prompts (default: FALSE)
 #' @return Invisible NULL
 #' @noRd
-createNdaDataDefinition <- function(submission_template, nda_structure = NULL, measure_name = NULL, data_frame = NULL, interactive_mode = interactive()) {
+createNdaDataDefinition <- function(submission_template, nda_structure = NULL, measure_name = NULL, data_frame = NULL, interactive_mode = interactive(), selected_fields = NULL, skip_prompts = FALSE) {
 
   # NEW PATH: Handle ValidationState objects
   if (inherits(submission_template, "ValidationState")) {
@@ -354,10 +356,14 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     stop("measure_name must be provided as a character string")
   }
 
-  # Extract selected columns from submission template
+  # Extract selected columns from submission template OR use provided selected_fields
   # Handle different possible structures
   selected_columns <- NULL
-  if ("columns" %in% names(submission_template)) {
+  
+  # Priority 1: Use provided selected_fields parameter (from centralized selection)
+  if (!is.null(selected_fields)) {
+    selected_columns <- selected_fields
+  } else if ("columns" %in% names(submission_template)) {
     selected_columns <- submission_template$columns
   } else if ("selected_fields" %in% names(submission_template)) {
     selected_columns <- submission_template$selected_fields
@@ -527,7 +533,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   }
   
   # In interactive mode, prompt user to include other required fields that exist in structure
-  if (interactive_mode && length(ndar_required_in_structure) > 0) {
+  # SKIP if skip_prompts=TRUE (when called from create_nda_files with pre-selected fields)
+  if (!skip_prompts && interactive_mode && length(ndar_required_in_structure) > 0) {
     # Check which ones are not already in selected_columns
     missing_required_in_structure <- setdiff(ndar_required_in_structure, selected_columns)
     

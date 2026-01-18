@@ -4,9 +4,21 @@
 \alias{to.nda}
 \title{Create NDA Submission Template}
 \usage{
-to.nda(df, path = ".", skip_prompt = TRUE)
+to.nda(
+  df,
+  path = ".",
+  skip_prompt = TRUE,
+  selected_fields = NULL,
+  skip_prompts = FALSE
+)
 
-to.nda(df, path = ".", skip_prompt = TRUE)
+to.nda(
+  df,
+  path = ".",
+  skip_prompt = TRUE,
+  selected_fields = NULL,
+  skip_prompts = FALSE
+)
 }
 \arguments{
 \item{df}{Data frame to be used as template or character string naming a data frame
@@ -17,6 +29,12 @@ and template file should be created. Defaults to the current working directory.}
 
 \item{skip_prompt}{Logical. If TRUE (default), skips the confirmation prompt. If FALSE,
 will prompt for confirmation unless the user has previously chosen to remember their preference.}
+
+\item{selected_fields}{Character vector of field names to include in template. If NULL (default),
+uses all fields from data frame. Used by create_nda_files() for centralized field selection.}
+
+\item{skip_prompts}{Logical. If TRUE, skip ALL interactive prompts (used when called from
+create_nda_files() with pre-selected fields). Default: FALSE.}
 }
 \value{
 Invisible TRUE if successful. Creates a CSV file at the specified path
