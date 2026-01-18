@@ -448,9 +448,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
   super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
   
-  # DCC required fields (always included if they exist in structure)
-  dcc_required_fields <- c("site", "subsiteid", "phenotype", "phenotype_description")
-
   # Get structure field names once for reuse
   structure_field_names <- character(0)
   if (!is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
@@ -470,33 +467,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       if (interactive_mode) {
         message(sprintf("\nAutomatically including super-required fields: %s", 
                        paste(missing_super_required, collapse = ", ")))
-      }
-    }
-    
-    # Automatically include DCC required fields if they exist in structure
-    missing_dcc_required <- setdiff(
-      intersect(dcc_required_fields, structure_field_names),
-      selected_columns
-    )
-    if (length(missing_dcc_required) > 0) {
-      selected_columns <- c(selected_columns, missing_dcc_required)
-      if (interactive_mode) {
-        message(sprintf("Automatically including DCC required fields: %s", 
-                       paste(missing_dcc_required, collapse = ", ")))
-      }
-    }
-    
-    # Automatically include timepoint fields (visit or week) if they exist in structure
-    timepoint_fields <- c("visit", "week")
-    missing_timepoint_fields <- setdiff(
-      intersect(timepoint_fields, structure_field_names),
-      selected_columns
-    )
-    if (length(missing_timepoint_fields) > 0) {
-      selected_columns <- c(selected_columns, missing_timepoint_fields)
-      if (interactive_mode) {
-        message(sprintf("Automatically including timepoint fields: %s", 
-                       paste(missing_timepoint_fields, collapse = ", ")))
       }
     }
     

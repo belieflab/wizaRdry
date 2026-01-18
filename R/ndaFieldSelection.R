@@ -22,7 +22,7 @@
 #'     \item selected_fields - Character vector of field names to include
 #'     \item user_choices - List of user decisions for reproducibility
 #'     \item missing_required - Required fields not in data
-#'     \item dcc_fields - DCC required fields that were added
+
 #'     \item timepoint_fields - Timepoint fields that were added
 #'   }
 #' @noRd
@@ -41,12 +41,6 @@ select_nda_fields <- function(validation_state,
   ndar_required <- c("subjectkey", "src_subject_id", "interview_date", 
                      "interview_age", "sex")
   
-  # DCC required fields (commonly needed)
-  dcc_required <- c("site", "subsiteid", "phenotype_description")
-  
-  # Timepoint fields (commonly needed)
-  timepoint_fields <- c("visit", "week")
-  
   # Get all fields defined in the NDA structure
   structure_fields <- elements$name
   
@@ -61,32 +55,8 @@ select_nda_fields <- function(validation_state,
   
   # Initialize user choices tracking
   user_choices <- list(
-    include_required = FALSE,
-    include_dcc = FALSE,
-    include_timepoint = FALSE
+    include_required = FALSE
   )
-  
-  # Automatically add DCC required fields if they exist in structure
-  dcc_in_structure <- intersect(dcc_required, structure_fields)
-  if (length(dcc_in_structure) > 0) {
-    selected_fields <- unique(c(selected_fields, dcc_in_structure))
-    user_choices$include_dcc <- TRUE
-    if (verbose) {
-      message(sprintf("Automatically including DCC required fields: %s", 
-                     paste(dcc_in_structure, collapse = ", ")))
-    }
-  }
-  
-  # Automatically add timepoint fields if they exist in structure
-  timepoint_in_structure <- intersect(timepoint_fields, structure_fields)
-  if (length(timepoint_in_structure) > 0) {
-    selected_fields <- unique(c(selected_fields, timepoint_in_structure))
-    user_choices$include_timepoint <- TRUE
-    if (verbose) {
-      message(sprintf("Automatically including timepoint fields: %s", 
-                     paste(timepoint_in_structure, collapse = ", ")))
-    }
-  }
   
   # Interactive prompt for other required fields (only if in interactive mode)
   if (interactive_mode && length(missing_required) > 0) {
@@ -145,8 +115,6 @@ select_nda_fields <- function(validation_state,
   return(list(
     selected_fields = selected_fields,
     user_choices = user_choices,
-    missing_required = missing_required,
-    dcc_fields = dcc_in_structure,
-    timepoint_fields = timepoint_in_structure
+    missing_required = missing_required
   ))
 }
