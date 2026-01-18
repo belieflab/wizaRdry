@@ -1008,8 +1008,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
       # Enhance existing structure with ndar_subject01 metadata BEFORE validation
       if (!is.null(required_field_metadata) || !is.null(recommended_field_metadata)) {
-        message("Enhancing existing NDA structure with ndar_subject01 metadata...")
-        nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata)
+        if (verbose) message("Enhancing existing NDA structure with ndar_subject01 metadata...")
+        nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata, verbose)
       }
 
       # EXISTING NDA STRUCTURE - Run full validation
@@ -1066,7 +1066,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       
       # Enhance with metadata if available
       if (!is.null(required_field_metadata)) {
-        mock_structure <- mergeRequiredMetadata(mock_structure, required_field_metadata, recommended_field_metadata)
+        mock_structure <- mergeRequiredMetadata(mock_structure, required_field_metadata, recommended_field_metadata, verbose)
         message("Enhanced new structure with ndar_subject01 required and recommended field metadata")
       }
       
@@ -1272,21 +1272,23 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
               non_na_count <- sum(!is.na(existing_data))
 
               if (non_na_count > 0) {
-                message(sprintf("  - Field exists with %d values, ensuring %s type",
-                                non_na_count, col_type))
+                if (verbose) {
+                  message(sprintf("  - Field exists with %d values, ensuring %s type",
+                                  non_na_count, col_type))
+                }
                 df[[col_name]] <- tryCatch({
                   conversion_func(existing_data)
                 }, error = function(e) {
-                  message(sprintf("    Warning: Type conversion failed for %s", col_name))
+                  if (verbose) message(sprintf("    Warning: Type conversion failed for %s", col_name))
                   existing_data
                 })
               } else {
-                message(sprintf("  - Field exists but empty, setting to %s type", col_type))
+                if (verbose) message(sprintf("  - Field exists but empty, setting to %s type", col_type))
                 df[[col_name]] <- rep(default_value, nrow(df))
               }
             }
           } else {
-            message("\n--- No common recommended fields to process ---")
+            if (verbose) message("\n--- No common recommended fields to process ---")
           }
 
           # Reorder columns: REQUIRED first, then COMMON RECOMMENDED, then others
@@ -1301,13 +1303,15 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
           result$df <- df
 
           message("\nSuccessfully processed ndar_subject01 elements")
-          message(sprintf("Required fields (%d): %s",
-                          length(present_required), paste(present_required, collapse = ", ")))
-          if (length(present_recommended) > 0) {
-            message(sprintf("Common recommended fields (%d): %s",
-                            length(present_recommended), paste(present_recommended, collapse = ", ")))
-          } else {
-            message("Common recommended fields (0): none")
+          if (verbose) {
+            message(sprintf("Required fields (%d): %s",
+                            length(present_required), paste(present_required, collapse = ", ")))
+            if (length(present_recommended) > 0) {
+              message(sprintf("Common recommended fields (%d): %s",
+                              length(present_recommended), paste(present_recommended, collapse = ", ")))
+            } else {
+              message("Common recommended fields (0): none")
+            }
           }
 
         } else {
@@ -1329,27 +1333,29 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
 }
 
 # Function to merge required metadata into new structure definitions
-mergeRequiredMetadata <- function(new_structure, required_metadata, recommended_metadata = NULL) {
+mergeRequiredMetadata <- function(new_structure, required_metadata, recommended_metadata = NULL, verbose = FALSE) {
   if (is.null(required_metadata) || nrow(required_metadata) == 0) {
     return(new_structure)
   }
 
   tryCatch({
-    message("Merging required and recommended ndar_subject01 metadata into new structure...")
+    if (verbose) message("Merging required and recommended ndar_subject01 metadata into new structure...")
 
     # Combine required and recommended metadata
     all_metadata <- required_metadata
     if (!is.null(recommended_metadata) && nrow(recommended_metadata) > 0) {
       all_metadata <- rbind(required_metadata, recommended_metadata)
-      message(sprintf("Combined %d required + %d recommended = %d total elements",
-                      nrow(required_metadata), nrow(recommended_metadata), nrow(all_metadata)))
+      if (verbose) {
+        message(sprintf("Combined %d required + %d recommended = %d total elements",
+                        nrow(required_metadata), nrow(recommended_metadata), nrow(all_metadata)))
+      }
     }
 
     # For new structures, prepend the combined metadata with their full definitions
     if (is.null(new_structure$dataElements) || nrow(new_structure$dataElements) == 0) {
       # No existing elements, use combined metadata as base
       new_structure$dataElements <- all_metadata
-      message(sprintf("Added %d elements as base structure", nrow(all_metadata)))
+      if (verbose) message(sprintf("Added %d elements as base structure", nrow(all_metadata)))
     } else {
       # Existing elements - merge without overwriting
       existing_names <- new_structure$dataElements$name
@@ -1361,10 +1367,10 @@ mergeRequiredMetadata <- function(new_structure, required_metadata, recommended_
       if (nrow(missing_elements) > 0) {
         # Prepend missing elements
         new_structure$dataElements <- rbind(missing_elements, new_structure$dataElements)
-        message(sprintf("Added %d missing elements", nrow(missing_elements)))
+        if (verbose) message(sprintf("Added %d missing elements", nrow(missing_elements)))
       }
 
-      message("Required and recommended elements preserved with complete metadata")
+      if (verbose) message("Required and recommended elements preserved with complete metadata")
     }
 
   }, error = function(e) {
@@ -1376,13 +1382,13 @@ mergeRequiredMetadata <- function(new_structure, required_metadata, recommended_
 
 # Enhanced mergeNdarSubjectIntoExisting function to properly override field definitions
 
-mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, recommended_metadata) {
+mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, recommended_metadata, verbose = FALSE) {
   if (is.null(existing_structure) || is.null(existing_structure$dataElements)) {
     return(existing_structure)
   }
 
   tryCatch({
-    message("Overriding existing structure fields with authoritative ndar_subject01 definitions...")
+    if (verbose) message("Overriding existing structure fields with authoritative ndar_subject01 definitions...")
 
     # Combine required and recommended metadata from ndar_subject01
     ndar_metadata <- data.frame()
@@ -1410,16 +1416,18 @@ mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, 
     # Find fields that remain unchanged from original structure
     unchanged_fields <- setdiff(existing_names, ndar_names)
 
-    message(sprintf("Replacing %d fields with ndar_subject01 definitions: %s",
-                    length(fields_to_replace), paste(head(fields_to_replace, 8), collapse = ", ")))
+    if (verbose) {
+      message(sprintf("Replacing %d fields with ndar_subject01 definitions: %s",
+                      length(fields_to_replace), paste(head(fields_to_replace, 8), collapse = ", ")))
 
-    if (length(new_fields) > 0) {
-      message(sprintf("Adding %d new ndar_subject01 fields: %s",
-                      length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+      if (length(new_fields) > 0) {
+        message(sprintf("Adding %d new ndar_subject01 fields: %s",
+                        length(new_fields), paste(head(new_fields, 5), collapse = ", ")))
+      }
+
+      message(sprintf("Keeping %d original structure fields unchanged: %s",
+                      length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
     }
-
-    message(sprintf("Keeping %d original structure fields unchanged: %s",
-                    length(unchanged_fields), paste(head(unchanged_fields, 5), collapse = ", ")))
 
     # Build the new dataElements in priority order:
     # 1. REQUIRED fields from ndar_subject01 (first priority)
@@ -1433,7 +1441,7 @@ mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, 
       required_in_structure <- required_metadata[required_metadata$name %in% c(fields_to_replace, new_fields), ]
       if (nrow(required_in_structure) > 0) {
         new_data_elements <- rbind(new_data_elements, required_in_structure)
-        message(sprintf("Added %d required fields from ndar_subject01", nrow(required_in_structure)))
+        if (verbose) message(sprintf("Added %d required fields from ndar_subject01", nrow(required_in_structure)))
       }
     }
 
@@ -1442,7 +1450,7 @@ mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, 
       recommended_in_structure <- recommended_metadata[recommended_metadata$name %in% c(fields_to_replace, new_fields), ]
       if (nrow(recommended_in_structure) > 0) {
         new_data_elements <- rbind(new_data_elements, recommended_in_structure)
-        message(sprintf("Added %d recommended fields from ndar_subject01", nrow(recommended_in_structure)))
+        if (verbose) message(sprintf("Added %d recommended fields from ndar_subject01", nrow(recommended_in_structure)))
       }
     }
 
@@ -1452,26 +1460,28 @@ mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, 
     ]
     if (nrow(unchanged_elements) > 0) {
       new_data_elements <- rbind(new_data_elements, unchanged_elements)
-      message(sprintf("Preserved %d original structure fields", nrow(unchanged_elements)))
+      if (verbose) message(sprintf("Preserved %d original structure fields", nrow(unchanged_elements)))
     }
 
     # Replace the dataElements with the new prioritized version
     existing_structure$dataElements <- new_data_elements
 
-    message(sprintf("Enhanced structure now has %d total fields with ndar_subject01 definitions taking priority",
-                    nrow(existing_structure$dataElements)))
+    if (verbose) {
+      message(sprintf("Enhanced structure now has %d total fields with ndar_subject01 definitions taking priority",
+                      nrow(existing_structure$dataElements)))
 
-    # Show what the key fields now look like
-    key_fields <- c("race", "phenotype", "phenotype_description", "twins_study", "sibling_study")
-    present_key_fields <- intersect(key_fields, existing_structure$dataElements$name)
-    if (length(present_key_fields) > 0) {
-      message("Key ndar_subject01 field definitions now active:")
-      for (field in present_key_fields) {
-        field_def <- existing_structure$dataElements[existing_structure$dataElements$name == field, ]
-        if (nrow(field_def) > 0) {
-          message(sprintf("  - %s: %s (%s) - %s",
+      # Show what the key fields now look like
+      key_fields <- c("race", "phenotype", "phenotype_description", "twins_study", "sibling_study")
+      present_key_fields <- intersect(key_fields, existing_structure$dataElements$name)
+      if (length(present_key_fields) > 0) {
+        message("Key ndar_subject01 field definitions now active:")
+        for (field in present_key_fields) {
+          field_def <- existing_structure$dataElements[existing_structure$dataElements$name == field, ]
+          if (nrow(field_def) > 0) {
+            message(sprintf("  - %s: %s (%s) - %s",
                           field, field_def$type[1], field_def$required[1],
                           substr(field_def$description[1], 1, 50)))
+          }
         }
       }
     }

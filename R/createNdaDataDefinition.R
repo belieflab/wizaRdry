@@ -486,10 +486,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
             ]
             if (nrow(ndar_required) > 0) {
               ndar_required_names <- ndar_required$name
-              # Get required fields that exist in structure but are not super-required or DCC required
+              # Get required fields that exist in structure but are not super-required
               ndar_required_in_structure <- setdiff(
                 intersect(ndar_required_names, structure_field_names),
-                c(super_required_fields, dcc_required_fields)
+                super_required_fields
               )
             }
           }
@@ -589,16 +589,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     super_required_in_selected <- intersect(selected_columns, super_required_fields)
     fields_to_keep <- unique(c(fields_to_keep, super_required_in_selected))
     
-    # Add DCC required fields (even if not in structure)
-    dcc_required_in_selected <- intersect(selected_columns, dcc_required_fields)
-    fields_to_keep <- unique(c(fields_to_keep, dcc_required_in_selected))
-    
-    # For fields added by prompt: only keep them if they exist in structure (or are super-required or DCC required)
+    # For fields added by prompt: only keep them if they exist in structure (or are super-required)
     if (length(fields_added_by_prompt) > 0) {
       prompt_fields_in_structure <- intersect(fields_added_by_prompt, structure_field_names)
       prompt_fields_super_required <- intersect(fields_added_by_prompt, super_required_fields)
-      prompt_fields_dcc_required <- intersect(fields_added_by_prompt, dcc_required_fields)
-      fields_to_keep <- unique(c(fields_to_keep, prompt_fields_in_structure, prompt_fields_super_required, prompt_fields_dcc_required))
+      fields_to_keep <- unique(c(fields_to_keep, prompt_fields_in_structure, prompt_fields_super_required))
     }
     
     fields_to_remove <- setdiff(selected_columns, fields_to_keep)
