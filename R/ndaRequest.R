@@ -970,7 +970,14 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
     if (nrow(missing_data) > 0) {
       if (DEBUG) message("[DEBUG] Found ", nrow(missing_data), " rows with missing required data")
-      View(missing_data)
+      # Only show View in interactive mode
+      if (interactive()) {
+        tryCatch({
+          View(missing_data)
+        }, error = function(e) {
+          message("Could not open View (X11 not available)")
+        })
+      }
     }
 
     # Re-integrate ndaValidator with proper environment management

@@ -912,7 +912,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   user_added_fields <- selected_columns[!selected_columns %in% all_nda_fields]
 
   # Identify ndar_subject01 variables that should never be modified
-  ndar_subject01_fields <- all_nda_fields[grepl("^ndar_subject01", all_nda_fields)]
+  # These are the 5 super required fields that must be present in all NDA submissions
+  ndar_subject01_fields <- SUPER_REQUIRED_FIELDS
 
   # Initialize lists for different field categories
   new_fields <- character(0)
@@ -1070,8 +1071,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     )
   )
 
-  # Persist NDA element names for downstream export/formatting without relying on outer scope
+  # Persist NDA element names and verbose flag for downstream export/formatting
   data_definition$metadata$nda_element_names <- names(nda_lookup)
+  data_definition$metadata$verbose <- verbose
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -1609,6 +1611,9 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 
 #' @noRd
 exportDataDefinition <- function(data_definition) {
+  # Extract verbose flag from data_definition if it exists
+  verbose <- if (!is.null(data_definition$metadata$verbose)) data_definition$metadata$verbose else FALSE
+  
   # Create directory structure if it doesn't exist
   tmp_path <- file.path(".", "tmp")
   if (!dir.exists(tmp_path)) {
@@ -1636,25 +1641,25 @@ exportDataDefinition <- function(data_definition) {
              field_names <- as.character(field_names)
            }
            field_names <- setdiff(field_names, excluded_internal)
-           # Also exclude REDCap completion fields (ending with "_complete")
-           field_names <- field_names[!grepl("_complete$", field_names)]
-           if (length(field_names) == 0) {
-             warning("No fields to export")
-             return(invisible(NULL))
-           }
+            # Also exclude REDCap completion fields (ending with "_complete")
+            field_names <- field_names[!grepl("_complete$", field_names)]
+            if (length(field_names) == 0) {
+              warning("No fields to export")
+              return(invisible(NULL))
+            }
 
-           element_names <- field_names
+            element_names <- field_names
 
-           data_types <- sapply(field_names, function(fname) {
-             tryCatch({
-               x <- data_definition$fields[[fname]]
-               if (!is.null(x$nda_metadata) && "type" %in% names(x$nda_metadata)) {
-                 as.character(x$nda_metadata$type %||% "String")
-               } else {
-                 as.character(x$data_type %||% "String")
-               }
-             }, error = function(e) "String")
-           })
+            data_types <- sapply(field_names, function(fname) {
+              tryCatch({
+                x <- data_definition$fields[[fname]]
+                if (!is.null(x$nda_metadata) && "type" %in% names(x$nda_metadata)) {
+                  as.character(x$nda_metadata$type %||% "String")
+                } else {
+                  as.character(x$data_type %||% "String")
+                }
+              }, error = function(e) "String")
+            })
 
            sizes <- sapply(field_names, function(fname) {
              tryCatch({
@@ -1826,10 +1831,10 @@ exportDataDefinition <- function(data_definition) {
            if (length(non_string_idx) > 0) {
              fields_df$Size[non_string_idx] <- ""
            }
-           fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
-           fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
+            fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
+            fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
 
-           # Build workbook with formatting
+            # Build workbook with formatting
            wb <- openxlsx::createWorkbook()
            openxlsx::addWorksheet(wb, "Data Definitions")
            openxlsx::writeData(wb, "Data Definitions", fields_df, startRow = 1, startCol = 1, withFilter = TRUE)
@@ -2094,30 +2099,37 @@ exportDataDefinition <- function(data_definition) {
              openxlsx::writeData(wb, "Routes", routes_df, startRow = 1, startCol = 1, withFilter = TRUE)
              openxlsx::setColWidths(wb, "Routes", cols = seq_len(ncol(routes_df)), widths = "auto")
 
-             # Ensure Notes for Data Curator defaults for unchanged NDA elements
-             idx_no_change <- which(element_is_in_nda & !row_modified & !nda_range_mismatch)
-             if (length(idx_no_change) > 0) {
-               notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
-               default_notes <- paste0("Requesting to add ", element_names[idx_no_change], " as is.")
-               # Overwrite cells in worksheet to guarantee desired phrasing
-               for (k in seq_along(idx_no_change)) {
-                 openxlsx::writeData(wb, "Data Definitions", default_notes[k], startRow = idx_no_change[k] + 1, startCol = notes_col, colNames = FALSE)
-               }
+              # Ensure Notes for Data Curator defaults for unchanged NDA elements
+              idx_no_change <- which(element_is_in_nda & !row_modified & !nda_range_mismatch)
+              
+              # Filter out ndar_subject01 fields (super required + recommended) from clearing
+              # These fields should ALWAYS show their NDA metadata since they're authoritative
+              ndar_subject01_names <- c(SUPER_REQUIRED_FIELDS,
+                                       c("ethnic_group", "site", "study", "subsiteid"))
+              idx_no_change <- idx_no_change[!element_names[idx_no_change] %in% ndar_subject01_names]
+              
+              if (length(idx_no_change) > 0) {
+                notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+                default_notes <- paste0("Requesting to add ", element_names[idx_no_change], " as is.")
+                # Overwrite cells in worksheet to guarantee desired phrasing
+                for (k in seq_along(idx_no_change)) {
+                  openxlsx::writeData(wb, "Data Definitions", default_notes[k], startRow = idx_no_change[k] + 1, startCol = notes_col, colNames = FALSE)
+                }
 
-               # For unchanged NDA elements, clear all definition columns
-               cols_to_clear <- c("DataType", "Size", "Required", "ElementDescription", "ValueRange", "Notes", "Aliases")
-               clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
-               if (length(clear_cols_idx) > 0) {
-                 for (cc in clear_cols_idx) {
-                   # write empty strings into each target row for this column
-                   for (r in idx_no_change) {
-                     openxlsx::writeData(wb, "Data Definitions", "", startRow = r + 1, startCol = cc, colNames = FALSE)
-                   }
-                 }
-               }
+                # For unchanged NDA elements (excluding ndar_subject01 fields), clear all definition columns
+                cols_to_clear <- c("DataType", "Size", "Required", "ElementDescription", "ValueRange", "Notes", "Aliases")
+                clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
+                if (length(clear_cols_idx) > 0) {
+                  for (cc in clear_cols_idx) {
+                    # write empty strings into each target row for this column
+                    for (r in idx_no_change) {
+                      openxlsx::writeData(wb, "Data Definitions", "", startRow = r + 1, startCol = cc, colNames = FALSE)
+                    }
+                  }
+                }
 
-              # Do not populate Notes with version string for unchanged elements
-             }
+               # Do not populate Notes with version string for unchanged elements
+              }
            }
           
           # Auto widths
