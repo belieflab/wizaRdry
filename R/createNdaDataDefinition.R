@@ -1521,7 +1521,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
 
   # Auto-export to XLSX
   tryCatch({
-    exportDataDefinition(data_definition, "xlsx")
+    exportDataDefinition(data_definition)
   }, error = function(e) {
     warning("Data definition export failed: ", e$message, call. = FALSE)
     message("Note: This is unexpected. Please report this issue.")
@@ -1608,7 +1608,7 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 }
 
 #' @noRd
-exportDataDefinition <- function(data_definition, format = "csv") {
+exportDataDefinition <- function(data_definition) {
   # Create directory structure if it doesn't exist
   tmp_path <- file.path(".", "tmp")
   if (!dir.exists(tmp_path)) {
@@ -1618,282 +1618,16 @@ exportDataDefinition <- function(data_definition, format = "csv") {
   # Internal-only fields that must never be exported
   excluded_internal <- c("state", "lost_to_followup", "lost_to_follow-up", "study_status")
 
-  # Create file path with appropriate extension
-  file_path <- file.path(tmp_path, paste0(data_definition$measure_name, "_definitions.", format))
+  # Create file path - data definitions are always Excel files
+  file_path <- file.path(tmp_path, paste0(data_definition$measure_name, "_definitions.xlsx"))
 
-  switch(format,
-         "json" = {
-           if (requireNamespace("jsonlite", quietly = TRUE)) {
-             jsonlite::write_json(data_definition, file_path, pretty = TRUE, auto_unbox = TRUE)
-             cat("Data definition exported to:", file_path, "\n")
-           } else {
-             stop("jsonlite package required for JSON export")
-           }
-         },
-
-         "csv" = {
-           # Flatten the fields for CSV export with exact NDA column names and case
-           field_names <- names(data_definition$fields)
-           # Ensure field_names is a character vector
-           if (is.null(field_names)) {
-             field_names <- character(0)
-           }
-           if (!is.character(field_names)) {
-             field_names <- as.character(field_names)
-           }
-           # Filter out excluded fields from final export
-           field_names <- setdiff(field_names, excluded_internal)
-           # Also exclude REDCap completion fields (ending with "_complete")
-           field_names <- field_names[!grepl("_complete$", field_names)]
-
-           if (length(field_names) == 0) {
-             warning("No fields to export")
-             return(invisible(NULL))
-           }
-
-           # Build each column safely with error handling
-           tryCatch({
-             element_names <- field_names
-
-             data_types <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "type" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$type %||% "String")
-                 } else {
-                   as.character(x$data_type %||% "String")
-                 }
-               }, error = function(e) "String")
-             })
-
-             sizes <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "size" %in% names(x$nda_metadata)) {
-                   size_val <- x$nda_metadata$size
-                   if (is.null(size_val) || is.na(size_val)) "" else as.numeric(size_val)
-                 } else {
-                   ""
-                 }
-               }, error = function(e) "")
-             })
-
-             required_vals <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
-                   as.character(x$nda_metadata$required %||% "No")
-                 } else if (!is.null(x$required)) {
-                   ifelse(isTRUE(x$required), "Required", "No")
-                 } else {
-                   "No"
-                 }
-               }, error = function(e) "No")
-             })
-
-             descriptions <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "description" %in% names(x$nda_metadata)) {
-                  desc_val <- as.character(x$nda_metadata$description %||% "")
-                  # Strip boilerplate
-                  desc_val <- gsub("^Missing field: ", "", desc_val)
-                  desc_val <- gsub("^Empty field: ", "", desc_val)
-                  desc_val
-                 } else {
-                   as.character(x$description %||% "")
-                 }
-               }, error = function(e) "")
-             })
-
-             value_ranges <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "valueRange" %in% names(x$nda_metadata)) {
-                   val_range <- x$nda_metadata$valueRange %||% ""
-                   # Clean up NA values and convert to empty string
-                   if (is.na(val_range) || val_range == "NA") "" else as.character(val_range)
-                 } else {
-                   ""
-                 }
-               }, error = function(e) "")
-             })
-            # Compress numeric ranges
-            value_ranges <- vapply(value_ranges, compress_value_range, character(1))
-
-             notes <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "notes" %in% names(x$nda_metadata)) {
-                   notes_val <- x$nda_metadata$notes %||% ""
-                   # Clean up NA values and convert to empty string
-                   if (is.na(notes_val) || notes_val == "NA" || notes_val == "character(0)") "" else as.character(notes_val)
-                 } else if (!is.null(x$notes)) {
-                   as.character(x$notes %||% "")
-                 } else {
-                   ""
-                 }
-               }, error = function(e) "")
-             })
-
-             aliases <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$nda_metadata) && "aliases" %in% names(x$nda_metadata)) {
-                   alias_val <- x$nda_metadata$aliases %||% ""
-                   normalize_aliases_export(alias_val)
-                 } else {
-                   ""
-                 }
-               }, error = function(e) "")
-             })
-
-             # Extract missing value information
-             missing_counts <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$missing_info) && "missing_count" %in% names(x$missing_info)) {
-                   as.character(x$missing_info$missing_count %||% "0")
-                 } else {
-                   "0"
-                 }
-               }, error = function(e) "0")
-             })
-
-             missing_percentages <- sapply(field_names, function(fname) {
-               tryCatch({
-                 x <- data_definition$fields[[fname]]
-                 if (!is.null(x$missing_info) && "missing_percentage" %in% names(x$missing_info)) {
-                   paste0(as.character(x$missing_info$missing_percentage %||% "0"), "%")
-                 } else {
-                   "0%"
-                 }
-               }, error = function(e) "0%")
-             })
-
-             # Curator notes to summarize changes
-             # Check if field exists in NDA to avoid marking existing fields as "New field"
-             nda_element_names <- data_definition$metadata$nda_element_names
-             if (is.null(nda_element_names) || !is.character(nda_element_names) || length(nda_element_names) == 0) {
-               nda_element_names <- character(0)
-             }
-             # Ensure field_names is a character vector
-             if (is.null(field_names) || !is.character(field_names)) {
-               field_names <- character(0)
-             }
-             curator_notes <- sapply(field_names, function(fname) {
-               if (is.null(fname) || !is.character(fname) || length(fname) != 1) {
-                 return("")
-               }
-               x <- data_definition$fields[[fname]]
-               if (is.null(x)) return("")
-               parts <- character(0)
-               # Check if field exists in NDA (ensure both are character vectors)
-               exists_in_nda <- if (is.character(fname) && is.character(nda_element_names) && length(fname) == 1) {
-                 fname %in% nda_element_names
-               } else {
-                 FALSE
-               }
-               # Source summary
-              if (!is.null(x$source)) {
-                if (identical(x$source, "computed_from_data")) {
-                  # If field exists in NDA but was marked as computed, it's likely a modified value range
-                  if (exists_in_nda || isTRUE(x$is_modified)) {
-                    parts <- c(parts, "Modified value range")
-                  } else {
-                    parts <- c(parts, "New field (not in NDA)")
-                  }
-                } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
-                  parts <- c(parts, "Modified value range")
-                } else if (identical(x$source, "template_only")) {
-                  parts <- c(parts, "In template only; no data observed")
-                } else if (identical(x$source, "nda_validated")) {
-                  # Existing NDA fields that match perfectly - no curator notes needed
-                  # Return empty string early to skip all curator annotations
-                  return("")
-                }
-              }
-               # Required status
-               reqFlag <- NULL
-               if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
-                 reqFlag <- x$nda_metadata$required
-               } else if (!is.null(x$required)) {
-                 reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
-               }
-               if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
-                 parts <- c(parts, "Required by NDA")
-               }
-               # Skip missing percentage in curator notes
-               note <- paste(parts, collapse = " | ")
-               if (identical(note, "")) {
-                 note <- paste0("Requesting to add ", fname, " as is")
-               }
-               note
-             })
-
-             # Create data frame with explicit length checking
-            fields_df <- data.frame(
-               ElementName = element_names,
-               DataType = data_types,
-               Size = sizes,
-               Required = required_vals,
-               ElementDescription = descriptions,
-               ValueRange = value_ranges,
-               Notes = notes,
-               Aliases = aliases,
-              `Notes for Data Curator` = curator_notes,
-              stringsAsFactors = FALSE,
-              check.names = FALSE
-             )
-
-             # --- Safe export sanitization ---
-             # Drop rows with empty ElementName
-             fields_df$ElementName <- as.character(fields_df$ElementName)
-             fields_df <- fields_df[!is.na(fields_df$ElementName) & fields_df$ElementName != "", , drop = FALSE]
-
-             # NA -> ""
-             for (nm in names(fields_df)) {
-               fields_df[[nm]][is.na(fields_df[[nm]])] <- ""
-             }
-
-             # Normalize DataType and Required
-             fields_df$DataType <- as.character(fields_df$DataType)
-             fields_df$Required <- as.character(fields_df$Required)
-             fields_df$DataType[!fields_df$DataType %in% c("String", "Integer", "Float", "Date", "GUID", "Boolean")] <- "String"
-             fields_df$Required[!fields_df$Required %in% c("Required", "Recommended", "Conditional", "No")] <- "No"
-
-             # Coerce Size to numeric-like text or empty
-             suppressWarnings(sz <- as.numeric(fields_df$Size))
-             sz[is.na(sz)] <- NA_real_
-             fields_df$Size <- ifelse(is.na(sz), "", as.character(sz))
-
-             # Only Strings have Size; clear Size for non-String types
-             non_string_idx <- which(fields_df$DataType != "String")
-             if (length(non_string_idx) > 0) {
-               fields_df$Size[non_string_idx] <- ""
-             }
-
-             # Compress numeric ValueRange and normalize spacing
-             fields_df$ValueRange <- vapply(fields_df$ValueRange, compress_value_range, character(1))
-
-             # Normalize Aliases to comma-separated without quotes/c()
-             fields_df$Aliases <- vapply(fields_df$Aliases, normalize_aliases_export, character(1))
-
-             write.csv(fields_df, file_path, row.names = FALSE)
-             cat("Data definition exported to:", file_path, "\n")
-
-           }, error = function(e) {
-             warning("Error creating CSV export: ", e$message)
-             cat("Debug info - field count:", length(field_names), "\n")
-             cat("Debug info - fields:", paste(head(field_names, 5), collapse = ", "), "\n")
-           })
-         },
-
-         "xlsx" = {
-           # openxlsx is a hard dependency (Imports); proceed directly
-
-           # Reuse the same field assembly as CSV branch
-           field_names <- names(data_definition$fields)
+  # Export data definition as Excel file (XLSX)
+  # openxlsx is a hard dependency (Imports); proceed directly
+  
+  # Assemble field data for export
+  # openxlsx is a hard dependency (Imports); proceed directly
+  
+  field_names <- names(data_definition$fields)
            # Ensure field_names is a character vector
            if (is.null(field_names)) {
              field_names <- character(0)
@@ -2039,7 +1773,9 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                } else if (identical(x$source, "template_only")) {
                  parts <- c(parts, "In template only; no data observed")
                } else if (identical(x$source, "nda_validated")) {
-                 parts <- c(parts, "Matched NDA field")
+                 # Existing NDA fields that match perfectly - no curator notes needed
+                 # Return empty string early to skip all curator annotations
+                 return("")
                }
              }
              reqFlag <- NULL
@@ -2498,21 +2234,6 @@ exportDataDefinition <- function(data_definition, format = "csv") {
             }
           }
           cat("  [OK] Data definition created successfully\n")
-         },
-
-         "yaml" = {
-           if (requireNamespace("yaml", quietly = TRUE)) {
-             write_yaml_func <- get("write_yaml", asNamespace("yaml"))
-             write_yaml_func(data_definition, file_path)
-             cat("Data definition exported to:", file_path, "\n")
-           } else {
-             warning("yaml package not available. Install with install.packages('yaml')")
-             return(invisible(NULL))
-           }
-         },
-
-         stop("Unsupported format. Use 'json', 'csv', or 'yaml'")
-  )
 }
 
 # Helper function for null coalescing
