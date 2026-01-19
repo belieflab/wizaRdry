@@ -1010,18 +1010,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     new_fields <- setdiff(selected_columns, excluded_from_change)
   }
 
-  # Include fields that are new, modified, OR selected unchanged fields
-  # Only include fields that were explicitly selected (not all essential_nda_fields)
-  # The selected_columns already contains only the fields the user wants
-  ordered_columns <- c(new_fields, modified_fields)
-  
-  # Add any remaining selected columns that are unchanged NDA fields
-  # (but only if they're in selected_columns - user explicitly selected them)
+  # Order fields: modified first, then unchanged NDA fields, then new fields at bottom
+  # This puts new elements (not in NDA) at the end of the Excel file
   unchanged_selected <- intersect(unchanged_fields, selected_columns)
-  if (length(unchanged_selected) > 0) {
-    ordered_columns <- c(ordered_columns, unchanged_selected)
-  }
-
+  
+  ordered_columns <- c(modified_fields, unchanged_selected, new_fields)
+  
   # Ensure we don't drop any selected columns: append remaining ones and de-duplicate
   remaining_columns <- setdiff(selected_columns, ordered_columns)
   if (length(remaining_columns) > 0) {
@@ -1843,15 +1837,6 @@ exportDataDefinition <- function(data_definition) {
              openxlsx::addStyle(wb, "Data Definitions", wrapStyle, rows = 2:(nrow(fields_df) + 1), cols = wrapCols, gridExpand = TRUE)
            }
 
-            # Red text for Required == "Required"
-           if (nrow(fields_df) > 0) {
-             reqRows <- which(fields_df$Required == "Required")
-             if (length(reqRows) > 0) {
-                redText <- openxlsx::createStyle(fontColour = "#FF0000")
-               openxlsx::addStyle(wb, "Data Definitions", redText, rows = reqRows + 1, cols = which(colnames(fields_df) == "Required"), gridExpand = TRUE)
-             }
-           }
-
            # NDA Highlighting Rules
            if (nrow(fields_df) > 0) {
              elementCol <- which(colnames(fields_df) == "ElementName")
@@ -1966,18 +1951,34 @@ exportDataDefinition <- function(data_definition) {
              applied_red <- rep(FALSE, length(field_names))
              nda_range_mismatch <- rep(FALSE, length(field_names))
 
-             # Blue: NEW fields from NDA that weren't in the original structure
-              # These are fields that:
-              #   1. Exist in NDA globally (element_is_in_nda = TRUE)
-              #   2. Were NOT in the original fetched structure (in_local_nda = FALSE)
-              # This highlights fields the user added from the NDA dictionary
-              idx_new_from_nda <- which(element_is_in_nda & !in_local_nda)
-              if (length(idx_new_from_nda) > 0) {
-                openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_new_from_nda + 1, cols = elementCol, gridExpand = TRUE)
-                applied_blue[idx_new_from_nda] <- TRUE
-              }
+              # Blue: NEW fields from NDA that weren't in the original structure
+               # These are fields that:
+               #   1. Exist in NDA globally (element_is_in_nda = TRUE)
+               #   2. Were NOT in the original fetched structure (in_local_nda = FALSE)
+               # This highlights fields the user added from the NDA dictionary
+               idx_new_from_nda <- which(element_is_in_nda & !in_local_nda)
+               if (length(idx_new_from_nda) > 0) {
+                 openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_new_from_nda + 1, cols = elementCol, gridExpand = TRUE)
+                 applied_blue[idx_new_from_nda] <- TRUE
+                 
+                 # For new elements (blue): clear all metadata columns and set curator note
+                 cols_to_clear <- c("DataType", "Size", "Required", "ElementDescription", "ValueRange", "Notes", "Aliases")
+                 clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
+                 notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+                 
+                 for (idx in idx_new_from_nda) {
+                   # Clear metadata columns
+                   for (cc in clear_cols_idx) {
+                     openxlsx::writeData(wb, "Data Definitions", "", startRow = idx + 1, startCol = cc, colNames = FALSE)
+                   }
+                   # Set curator note
+                   if (length(notes_col) > 0) {
+                     openxlsx::writeData(wb, "Data Definitions", "New field (not in NDA)", startRow = idx + 1, startCol = notes_col, colNames = FALSE)
+                   }
+                 }
+               }
 
-             # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
+              # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
              idx_modified <- which(row_modified & element_is_in_nda)
              if (length(idx_modified) > 0 && length(valueCols) > 0) {
                # Yellow highlight on ValueRange and Notes cells
