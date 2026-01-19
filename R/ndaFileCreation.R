@@ -32,10 +32,57 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
     measure_name <- validation_state$measure_name
     nda_structure <- validation_state$nda_structure
     
+    # Add STEP 4 header for non-verbose mode
+    if (!verbose) {
+      message("\n=== STEP 4: Generating NDA Files ===")
+    }
+    
+    # Determine modification type
+    modification_type <- if (is_new) {
+      "NEW"
+    } else if (needs_definition) {
+      "EXISTING (modified)"
+    } else {
+      "EXISTING (unmodified)"
+    }
+    
     if (verbose) {
       message(sprintf("\n=== Creating NDA Files for '%s' ===", measure_name))
       message(sprintf("Structure type: %s", if(is_new) "NEW" else "EXISTING"))
       message(sprintf("Modification status: %s", reason))
+    } else {
+      message(sprintf("Structure: %s\n", modification_type))
+    }
+    
+    # Show modification details for MODIFIED structures (non-verbose only)
+    if (!verbose && needs_definition && !is_new) {
+      message("[MODIFIED STRUCTURE]")
+      message("  Changes detected:")
+      
+      # Show new fields
+      if (length(validation_state$new_fields) > 0) {
+        for (field in validation_state$new_fields) {
+          message(sprintf("    - Added new element: %s", field))
+        }
+      }
+      
+      # Show value range changes
+      if (length(validation_state$value_range_violations) > 0) {
+        for (field in names(validation_state$value_range_violations)) {
+          violation <- validation_state$value_range_violations[[field]]
+          if (!is.null(violation$expected)) {
+            # Extract just the unique violating values for cleaner display
+            violating_vals <- unique(violation$actual)
+            message(sprintf("    - Updated value range: %s (extended from %s to include: %s)",
+                           field,
+                           violation$expected,
+                           paste(violating_vals, collapse = ", ")))
+          } else {
+            message(sprintf("    - Added value range for new element: %s", field))
+          }
+        }
+      }
+      message("")
     }
     
     # Use centralized field selection (user prompted ONCE)
@@ -49,9 +96,11 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       # NEW structure: Only create data definition
       if (verbose) {
         message("\n[NEW STRUCTURE]")
-        message("  [OK] Creating data definition (for structure registration)")
-        message("  [SKIP] Skipping submission template (structure doesn't exist in NDA yet)")
+      } else {
+        message("[NEW STRUCTURE]")
       }
+      message("  [OK] Creating data definition (for structure registration)")
+      message("  [SKIP] Skipping submission template (structure doesn't exist in NDA yet)")
       
       tryCatch({
         createNdaDataDefinition(
@@ -69,8 +118,10 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       # EXISTING structure: Always create submission template
       if (verbose) {
         message("\n[EXISTING STRUCTURE]")
-        message("  [OK] Creating submission template (for data upload)")
+      } else {
+        message("[EXISTING STRUCTURE]")
       }
+      message("  [OK] Creating submission template (for data upload)")
       
       tryCatch({
         createNdaSubmissionTemplate(
@@ -88,6 +139,8 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
       if (needs_definition) {
         if (verbose) {
           message(sprintf("  [OK] Creating data definition (reason: %s)", reason))
+        } else {
+          message("  [OK] Creating data definition (structure modifications require approval)")
         }
         
         tryCatch({
@@ -102,9 +155,29 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
           warning(sprintf("Error creating data definition: %s", e$message))
         })
       } else {
-        if (verbose) {
-          message("  [SKIP] Skipping data definition (structure unmodified)")
-        }
+        message("  [SKIP] Skipping data definition (structure unmodified)")
+      }
+    }
+    
+    # Add final file creation summary (non-verbose only)
+    if (!verbose) {
+      message("")  # Blank line
+      files_created <- character()
+      
+      if (!is_new) {
+        files_created <- c(files_created, "submission template")
+      }
+      
+      if (needs_definition) {
+        files_created <- c(files_created, "data definition")
+      }
+      
+      if (length(files_created) == 0) {
+        message("Files Created: none")
+      } else if (length(files_created) == 1) {
+        message(sprintf("Files Created: %s only", files_created[1]))
+      } else {
+        message(sprintf("Files Created: %s AND %s", files_created[1], files_created[2]))
       }
     }
     

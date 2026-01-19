@@ -66,6 +66,16 @@ ndaValidator <- function(measure_name,
     # Create ValidationState object
     state <- ValidationState$new(measure_name, api, df, nda_structure)
     
+    # Add STEP 2 header (only in non-verbose mode)
+    if (!verbose) {
+      if (state$is_new_structure) {
+        message("\n=== STEP 2: Preparing New Structure ===")
+      } else {
+        message("\n=== STEP 2: Validating Data Structure ===")
+        message(sprintf("Validating against NDA structure '%s'...", measure_name))
+      }
+    }
+    
     if (verbose) {
       message(sprintf("Structure type: %s", 
                      if(state$is_new_structure) "NEW (not in NDA)" else "EXISTING"))
@@ -106,10 +116,62 @@ ndaValidator <- function(measure_name,
     # ============================================================================
     # PHASE 3: De-identification
     # ============================================================================
-    if (verbose) message("\n--- PHASE 3: De-identification ---")
+    if (!verbose) {
+      message("\n=== STEP 3: De-identifying Data ===")
+    } else {
+      message("\n--- PHASE 3: De-identification ---")
+    }
     
-    df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
-    df <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
+    # Date-shifting with HIPAA reference (always show message in non-verbose)
+    if ("interview_date" %in% names(df)) {
+      if (!verbose && !limited_dataset) {
+        message("Applying date-shifting to interview_date (per HIPAA Safe Harbor de-identification standard)...")
+      }
+      df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
+      if (!verbose && !limited_dataset) {
+        message("[OK] Date-shifting complete")
+      }
+    }
+    
+    # Age-capping with HIPAA reference (always show message in non-verbose)
+    if ("interview_age" %in% names(df)) {
+      if (!verbose && !limited_dataset) {
+        message("Applying age-capping to interview_age (threshold: 89 years per HIPAA Safe Harbor de-identification standard)...")
+      }
+      
+      age_result <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
+      
+      # Defensive check: ensure age_result is a list with df and stats
+      if (is.list(age_result) && "df" %in% names(age_result) && "stats" %in% names(age_result)) {
+        df <- age_result$df
+        age_stats <- age_result$stats
+        
+        # Show result based on statistics (always show in non-verbose, not just verbose)
+        if (!verbose && !limited_dataset) {
+          if (isTRUE(age_stats$all_na)) {
+            message("[OK] All values are NA - no age-capping needed")
+          } else if (!is.null(age_stats$values_capped) && age_stats$values_capped > 0) {
+            message(sprintf("[WARN] %d value%s exceeded threshold and %s capped to 1068 months (89 years)",
+                           age_stats$values_capped,
+                           if (age_stats$values_capped > 1) "s" else "",
+                           if (age_stats$values_capped > 1) "were" else "was"))
+          } else if (!is.null(age_stats$non_na_count) && age_stats$non_na_count > 0) {
+            message(sprintf("[OK] All %d values below threshold - no capping needed", age_stats$non_na_count))
+          } else {
+            message("[OK] No age-capping needed")
+          }
+        }
+      } else {
+        # Fallback: age_result might be just a dataframe (old format)
+        if (is.data.frame(age_result)) {
+          df <- age_result
+        }
+        if (!verbose && !limited_dataset) {
+          message("[OK] Age-capping complete")
+        }
+      }
+    }
+    
     state$set_df(df)
     
     if (limited_dataset == FALSE && verbose) {
@@ -123,6 +185,41 @@ ndaValidator <- function(measure_name,
     
     # This is the critical function that properly tracks violations
     violations <- check_value_range_violations(state, elements, verbose)
+    
+    # Show value range summary (violations only, unless verbose)
+    if (!verbose) {
+      total_fields <- length(intersect(names(state$get_df()), elements$name))
+      
+      if (length(violations) == 0) {
+        message(sprintf("Checking %d fields for NDA compliance...", total_fields))
+        message("[OK] All fields validated successfully (0 violations)")
+      } else {
+        message(sprintf("Checking %d fields for NDA compliance...", total_fields))
+        message("[WARN] Value range violations found:\n")
+        
+        for (field_name in names(violations)) {
+          violation <- violations[[field_name]]
+          expected_str <- if (is.null(violation$expected_range)) {
+            "no range defined"
+          } else {
+            violation$expected_range
+          }
+          
+          violating_vals <- violation$violating_values
+          message(sprintf("  Field: %s", field_name))
+          message(sprintf("  Expected range: %s", expected_str))
+          message(sprintf("  Violating values found: %s (%d occurrence%s)", 
+                         paste(violating_vals, collapse = ", "),
+                         length(violating_vals),
+                         if (length(violating_vals) > 1) "s" else ""))
+          message("")
+        }
+        
+        message(sprintf("[WARN] Validation completed with %d violation%s",
+                       length(violations),
+                       if (length(violations) > 1) "s" else ""))
+      }
+    }
     
     if (length(violations) > 0 && verbose) {
       message(sprintf("\nDetected %d field(s) with value range issues", length(violations)))
@@ -165,9 +262,15 @@ ndaValidator <- function(measure_name,
       message(paste(capture.output(traceback()), collapse="\n"))
     }
     
+    # Try to get the dataframe for error state
+    error_df <- tryCatch(base::get(measure_name, envir = .wizaRdry_env), error = function(e2) data.frame())
+    
+    # Use the modified_structure if provided (existing structures), otherwise NULL (new structures)
+    error_nda_structure <- if (!is.null(modified_structure)) modified_structure else NULL
+    
     # Return error state for graceful failure
     error_state <- ValidationState$new(measure_name, api, 
-                                       data.frame(), NULL)
+                                       error_df, error_nda_structure)
     error_state$is_valid <- FALSE
     error_state$errors <- c(error_msg)
     return(error_state)

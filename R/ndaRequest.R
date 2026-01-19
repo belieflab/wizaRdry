@@ -1090,12 +1090,14 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     # Update local df variable
     df <- validation_state$get_df()
     
-    # Add de-identification summary
-    if (limited_dataset == FALSE) {
+    # Add de-identification summary (verbose mode only)
+    if (limited_dataset == FALSE && verbose) {
       message("\nDataset has been de-identified using date-shifting and age-capping.")
     }
 
-    formatElapsedTime(start_time)
+    # Calculate elapsed time and show completion message
+    elapsed_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+    message(sprintf("\n[OK] NDA processing complete in %.1f seconds", elapsed_time))
 
     # Play completion sound AFTER all processing, including data definition export
     if (exists("validation_state") && inherits(validation_state, "ValidationState")) {
@@ -1132,6 +1134,161 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   }
 
   return(result)  # Return the result of the processing
+}
+
+#' Process required fields from ndar_subject01
+#'
+#' @description
+#' Processes ALL required fields from ndar_subject01 metadata.
+#' Adds missing required fields and ensures correct data types.
+#'
+#' @param df Data frame to process
+#' @param required_elements Data frame of required field metadata from ndar_subject01
+#' @param verbose Logical - print detailed processing messages
+#' @return Modified data frame with required fields processed
+#' @noRd
+processRequiredFields <- function(df, required_elements, verbose = FALSE) {
+  if (is.null(required_elements) || nrow(required_elements) == 0) {
+    return(df)
+  }
+  
+  if (verbose) message("\n--- Processing ALL REQUIRED fields ---")
+  
+  for (i in 1:nrow(required_elements)) {
+    col_name <- required_elements$name[i]
+    col_type <- required_elements$type[i]
+    
+    if (verbose) message(sprintf("Processing required field: %s (%s)", col_name, col_type))
+    
+    # Determine R data type
+    if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
+      default_value <- NA_character_
+      conversion_func <- as.character
+    } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
+      default_value <- NA_integer_
+      conversion_func <- as.integer
+    } else if (grepl("Float", col_type, ignore.case = TRUE)) {
+      default_value <- NA_real_
+      conversion_func <- as.numeric
+    } else if (grepl("Date", col_type, ignore.case = TRUE)) {
+      default_value <- NA_character_
+      conversion_func <- as.character
+    } else {
+      default_value <- NA_character_
+      conversion_func <- as.character
+    }
+    
+    # Process field
+    if (col_name %in% names(df)) {
+      # Column exists - ensure correct type and preserve existing values
+      existing_data <- df[[col_name]]
+      non_na_count <- sum(!is.na(existing_data))
+      
+      if (non_na_count > 0) {
+        if (verbose) message(sprintf("  - Field exists with %d values, ensuring %s type",
+                                    non_na_count, col_type))
+        df[[col_name]] <- tryCatch({
+          conversion_func(existing_data)
+        }, error = function(e) {
+          if (verbose) message(sprintf("    Warning: Type conversion failed for %s", col_name))
+          existing_data
+        })
+      } else {
+        if (verbose) message(sprintf("  - Field exists but empty, setting to %s type", col_type))
+        df[[col_name]] <- rep(default_value, nrow(df))
+      }
+    } else {
+      # Column doesn't exist - add it (REQUIRED fields are always added)
+      if (verbose) message(sprintf("  - Adding new required field as %s type", col_type))
+      df[[col_name]] <- rep(default_value, nrow(df))
+    }
+  }
+  
+  if (!verbose) {
+    message(sprintf("[OK] Processed %d required field%s", 
+                   nrow(required_elements),
+                   if (nrow(required_elements) > 1) "s" else ""))
+  }
+  
+  return(df)
+}
+
+#' Process recommended fields from ndar_subject01
+#'
+#' @description
+#' Processes ONLY recommended fields that are common between ndar_subject01 and the dataframe.
+#' Ensures correct data types but does NOT add missing fields.
+#'
+#' @param df Data frame to process
+#' @param recommended_elements Data frame of recommended field metadata (already filtered to common only)
+#' @param verbose Logical - print detailed processing messages
+#' @return Modified data frame with recommended fields processed
+#' @noRd
+processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) {
+  if (is.null(recommended_elements) || nrow(recommended_elements) == 0) {
+    if (!verbose) {
+      message("No common recommended fields to process")
+    } else {
+      message("\n--- No common recommended fields to process ---")
+    }
+    return(df)
+  }
+  
+  if (verbose) message("\n--- Processing COMMON RECOMMENDED fields ---")
+  
+  for (i in 1:nrow(recommended_elements)) {
+    col_name <- recommended_elements$name[i]
+    col_type <- recommended_elements$type[i]
+    
+    if (verbose) message(sprintf("Processing common recommended field: %s (%s)", col_name, col_type))
+    
+    # Determine R data type (same logic as required)
+    if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
+      default_value <- NA_character_
+      conversion_func <- as.character
+    } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
+      default_value <- NA_integer_
+      conversion_func <- as.integer
+    } else if (grepl("Float", col_type, ignore.case = TRUE)) {
+      default_value <- NA_real_
+      conversion_func <- as.numeric
+    } else if (grepl("Date", col_type, ignore.case = TRUE)) {
+      default_value <- NA_character_
+      conversion_func <- as.character
+    } else {
+      default_value <- NA_character_
+      conversion_func <- as.character
+    }
+    
+    # Since we filtered for common fields, we know the column exists
+    # Just ensure correct type and preserve existing values
+    existing_data <- df[[col_name]]
+    non_na_count <- sum(!is.na(existing_data))
+    
+    if (non_na_count > 0) {
+      if (verbose) {
+        message(sprintf("  - Field exists with %d values, ensuring %s type",
+                       non_na_count, col_type))
+      }
+      df[[col_name]] <- tryCatch({
+        conversion_func(existing_data)
+      }, error = function(e) {
+        if (verbose) message(sprintf("    Warning: Type conversion failed for %s", col_name))
+        existing_data
+      })
+    } else {
+      if (verbose) message(sprintf("  - Field exists but empty, setting to %s type", col_type))
+      df[[col_name]] <- rep(default_value, nrow(df))
+    }
+  }
+  
+  if (!verbose) {
+    message(sprintf("[OK] Processed %d common recommended field%s",
+                   nrow(recommended_elements),
+                   if (nrow(recommended_elements) > 1) "s" else ""))
+  }
+  
+  return(df)
 }
 
 addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
@@ -1173,136 +1330,50 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
           ]
 
 
-          message(sprintf("Found %d required elements from ndar_subject01 (will process ALL)", nrow(required_elements)))
-          message(sprintf("Found %d recommended elements in ndar_subject01, %d are common with dataframe (will process COMMON only)",
-                          nrow(all_recommended_elements), nrow(recommended_elements)))
-
-          if (nrow(recommended_elements) > 0) {
-            message(sprintf("Common recommended fields: %s",
-                            paste(recommended_elements$name, collapse = ", ")))
-          } else {
-            message("No common recommended fields found between ndar_subject01 and dataframe")
+          # Display what we found
+          if (!verbose) {
+            message("\n=== STEP 1: Processing Required and Recommended Fields ===\n")
+            message("Required Elements:")
           }
-
+          
+          message(sprintf("  Found %d required elements from ndar_subject01 (will process ALL)", 
+                         nrow(required_elements)))
+          
+          if (!verbose) {
+            message("\nRecommended Elements:")
+          }
+          
+          message(sprintf("  Found %d recommended elements, %d are common with dataframe",
+                         nrow(all_recommended_elements), nrow(recommended_elements)))
+          
+          if (nrow(recommended_elements) > 0) {
+            message(sprintf("  Common recommended fields: %s",
+                           paste(recommended_elements$name, collapse = ", ")))
+          } else {
+            message("  No common recommended fields found")
+          }
+          
           # PRESERVE ALL METADATA for required and COMMON recommended only
           result$required_metadata <- required_elements
-          result$recommended_metadata <- recommended_elements  # Only common ones
-
-          # Process ALL REQUIRED elements (add missing, ensure correct types)
-          if (verbose) message("\n--- Processing ALL REQUIRED fields ---")
-          for (i in 1:nrow(required_elements)) {
-            col_name <- required_elements$name[i]
-            col_type <- required_elements$type[i]
-
-            if (verbose) message(sprintf("Processing required field: %s (%s)", col_name, col_type))
-
-            # Determine R data type
-            if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
-              default_value <- NA_character_
-              conversion_func <- as.character
-            } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
-              default_value <- NA_integer_
-              conversion_func <- as.integer
-            } else if (grepl("Float", col_type, ignore.case = TRUE)) {
-              default_value <- NA_real_
-              conversion_func <- as.numeric
-            } else if (grepl("Date", col_type, ignore.case = TRUE)) {
-              default_value <- NA_character_
-              conversion_func <- as.character
-            } else {
-              default_value <- NA_character_
-              conversion_func <- as.character
-            }
-
-            if (col_name %in% names(df)) {
-              # Column exists - preserve existing values but ensure correct type
-              existing_data <- df[[col_name]]
-              non_na_count <- sum(!is.na(existing_data))
-
-              if (non_na_count > 0) {
-                if (verbose) message(sprintf("  - Field exists with %d values, ensuring %s type",
-                                non_na_count, col_type))
-                df[[col_name]] <- tryCatch({
-                  conversion_func(existing_data)
-                }, error = function(e) {
-                  if (verbose) message(sprintf("    Warning: Type conversion failed for %s", col_name))
-                  existing_data
-                })
-              } else {
-                if (verbose) message(sprintf("  - Field exists but empty, setting to %s type", col_type))
-                df[[col_name]] <- rep(default_value, nrow(df))
-              }
-            } else {
-              # Column doesn't exist - add it (REQUIRED fields are always added)
-              if (verbose) message(sprintf("  - Adding new required field as %s type", col_type))
-              df[[col_name]] <- rep(default_value, nrow(df))
-            }
-          }
-
-          # Process ONLY COMMON RECOMMENDED elements
-          if (nrow(recommended_elements) > 0) {
-            if (verbose) message("\n--- Processing COMMON RECOMMENDED fields ---")
-            for (i in 1:nrow(recommended_elements)) {
-              col_name <- recommended_elements$name[i]
-              col_type <- recommended_elements$type[i]
-
-              if (verbose) message(sprintf("Processing common recommended field: %s (%s)", col_name, col_type))
-
-              # Determine R data type (same logic as required)
-              if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
-                default_value <- NA_character_
-                conversion_func <- as.character
-              } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
-                default_value <- NA_integer_
-                conversion_func <- as.integer
-              } else if (grepl("Float", col_type, ignore.case = TRUE)) {
-                default_value <- NA_real_
-                conversion_func <- as.numeric
-              } else if (grepl("Date", col_type, ignore.case = TRUE)) {
-                default_value <- NA_character_
-                conversion_func <- as.character
-              } else {
-                default_value <- NA_character_
-                conversion_func <- as.character
-              }
-
-              # Since we filtered for common fields, we know the column exists
-              # Just ensure correct type and preserve existing values
-              existing_data <- df[[col_name]]
-              non_na_count <- sum(!is.na(existing_data))
-
-              if (non_na_count > 0) {
-                if (verbose) {
-                  message(sprintf("  - Field exists with %d values, ensuring %s type",
-                                  non_na_count, col_type))
-                }
-                df[[col_name]] <- tryCatch({
-                  conversion_func(existing_data)
-                }, error = function(e) {
-                  if (verbose) message(sprintf("    Warning: Type conversion failed for %s", col_name))
-                  existing_data
-                })
-              } else {
-                if (verbose) message(sprintf("  - Field exists but empty, setting to %s type", col_type))
-                df[[col_name]] <- rep(default_value, nrow(df))
-              }
-            }
-          } else {
-            if (verbose) message("\n--- No common recommended fields to process ---")
-          }
-
+          result$recommended_metadata <- recommended_elements
+          
+          # Process fields using helper functions
+          message("")  # Blank line before processing messages
+          df <- processRequiredFields(df, required_elements, verbose)
+          df <- processRecommendedFields(df, recommended_elements, verbose)
+          
           # Reorder columns: REQUIRED first, then COMMON RECOMMENDED, then others
           required_field_names <- required_elements$name
           recommended_field_names <- recommended_elements$name  # Only common ones
           other_field_names <- setdiff(names(df), c(required_field_names, recommended_field_names))
-
+          
           present_required <- intersect(required_field_names, names(df))
           present_recommended <- intersect(recommended_field_names, names(df))
-
+          
           df <- df[, c(present_required, present_recommended, other_field_names)]
           result$df <- df
-
-          message("\nSuccessfully processed ndar_subject01 elements")
+          
+          message("\n[OK] Successfully processed ndar_subject01 elements")
           if (verbose) {
             message(sprintf("Required fields (%d): %s",
                             length(present_required), paste(present_required, collapse = ", ")))

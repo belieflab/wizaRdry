@@ -128,40 +128,66 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
 #'
 #' @description
 #' Caps age at 1068 months (89 years) for de-identification when limited_dataset=FALSE.
-#' NDA requires age-capping for privacy protection.
+#' NDA requires age-capping for privacy protection per HIPAA Safe Harbor standard.
 #'
 #' @param df Data frame
 #' @param verbose Logical - print detailed output
 #' @param limited_dataset Logical - if FALSE, performs age-capping
-#' @return Data frame with standardized age
+#' @return List with two elements: df (modified dataframe) and stats (age statistics)
 #' @noRd
 standardize_age <- function(df, verbose = TRUE, limited_dataset = FALSE) {
-  if ("interview_age" %in% names(df) && limited_dataset == FALSE) {
-    if(verbose && limited_dataset == FALSE) message("\nDe-identifying interview_age using age-capping...")
-    
-    # Convert to numeric first
+  # Initialize statistics
+  age_stats <- list(
+    values_capped = 0,
+    non_na_count = 0,
+    all_na = TRUE,
+    max_age = NA
+  )
+  
+  if ("interview_age" %in% names(df)) {
+    # Convert to numeric
     df$interview_age <- as.numeric(df$interview_age)
-    orig_age_stats <- summary(df$interview_age)
     
-    # Count values that will be changed
-    values_to_change <- sum(df$interview_age > 1068, na.rm = TRUE)
+    # Check if all values are NA
+    age_stats$all_na <- all(is.na(df$interview_age))
+    age_stats$non_na_count <- sum(!is.na(df$interview_age))
     
-    # Apply the age standardization (cap at 1068 months = 89 years * 12)
-    df$interview_age <- pmin(df$interview_age, 1068)
-    
-    if(verbose) {
-      cat("Age standardization summary:")
-      cat("\nBefore:", capture.output(orig_age_stats))
-      cat("\nAfter:", capture.output(summary(df$interview_age)))
-      if(values_to_change > 0) {
-        cat(sprintf("\nNumber of values capped at 1068 months: %d", values_to_change))
-      } else {
-        cat("\nNo values needed capping (all were <= 1068 months)")
+    if (!age_stats$all_na) {
+      age_stats$max_age <- max(df$interview_age, na.rm = TRUE)
+      
+      if (!limited_dataset) {
+        # Count values that will be capped
+        age_stats$values_capped <- sum(df$interview_age > 1068, na.rm = TRUE)
+        
+        # Store original for verbose output
+        if (verbose) {
+          orig_age_stats <- summary(df$interview_age)
+        }
+        
+        # Apply age-capping (cap at 1068 months = 89 years)
+        df$interview_age <- pmin(df$interview_age, 1068)
+        
+        # Verbose output
+        if (verbose) {
+          cat("\nAge standardization summary:")
+          cat("\nBefore:", capture.output(orig_age_stats))
+          cat("\nAfter:", capture.output(summary(df$interview_age)))
+          if (age_stats$values_capped > 0) {
+            cat(sprintf("\nNumber of values capped at 1068 months: %d", age_stats$values_capped))
+          } else {
+            cat("\nNo values needed capping (all were <= 1068 months)")
+          }
+          cat("\n")
+        }
       }
     }
   }
   
-  return(df)
+  # Return both dataframe and statistics
+  return(list(
+    df = df,
+    stats = age_stats
+  ))
 }
 
 #' Standardize handedness values to NDA format
