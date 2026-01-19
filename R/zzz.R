@@ -4,6 +4,29 @@ NULL
 # Create a package environment to store state between functions
 .pkg_env <- new.env(parent = emptyenv())
 
+#' NDA Super Required Fields
+#'
+#' @description
+#' The 5 mandatory fields required for ALL NDA submissions.
+#' These are always sourced from ndar_subject01 and added to all structures.
+#' 
+#' Order matches NDA documentation convention:
+#' 1. subjectkey - Unique GUID identifier
+#' 2. src_subject_id - Study-specific subject ID
+#' 3. interview_date - Date of data collection
+#' 4. interview_age - Age at interview (months)
+#' 5. sex - Biological sex (M/F/O)
+#'
+#' @keywords internal
+#' @noRd
+SUPER_REQUIRED_FIELDS <- c(
+  "subjectkey",
+  "src_subject_id",
+  "interview_date",
+  "interview_age",
+  "sex"
+)
+
 .onLoad <- function(libname, pkgname) {
   options(mongolite.quiet = TRUE)
   options(wizaRdry.nda_base_url = "https://nda.nih.gov/api/datadictionary/v2")

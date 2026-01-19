@@ -11,7 +11,8 @@ nda(
   spss = FALSE,
   limited_dataset = FALSE,
   skip_prompt = TRUE,
-  verbose = FALSE
+  verbose = FALSE,
+  strict = TRUE
 )
 }
 \arguments{
@@ -29,6 +30,10 @@ nda(
 prompts for confirmation unless the user has previously chosen to remember their preference.}
 
 \item{verbose}{Logical. If TRUE, shows detailed processing information. If FALSE (default), shows only essential user-facing messages.}
+
+\item{strict}{Logical. If TRUE (default), enforce strict NDA validation: required fields with ANY missing data or
+recommended fields with ALL missing data will cause validation failure. If FALSE (lenient mode), missing data
+triggers warnings but allows processing to continue.}
 }
 \value{
 Prints the time taken for the data request process.
@@ -49,6 +54,9 @@ unit tests to verify that the data quality standards are met.
   
   # Show detailed processing information
   nda("prl", verbose=TRUE)
+  
+  # Use lenient validation mode (allow missing data with warnings)
+  nda("prl", strict=FALSE)
 }
 
 }

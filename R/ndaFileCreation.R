@@ -5,6 +5,51 @@
 #' based on ValidationState results.
 #'
 
+#' Check if files should be created based on validation state
+#'
+#' @description
+#' Validation gate that determines whether file creation should proceed.
+#' In strict mode: validation failure → no files created
+#' In lenient mode: validation failure → files created with warnings
+#'
+#' @param validation_state ValidationState object
+#' @param strict Logical - if TRUE, enforce strict validation (no files on failure)
+#' @param verbose Logical - print detailed messages
+#' @return Logical - TRUE if files should be created, FALSE if validation failed
+#' @noRd
+should_create_nda_files <- function(validation_state, strict = TRUE, verbose = TRUE) {
+  # Only check ValidationState objects (not legacy lists)
+  if (!inherits(validation_state, "ValidationState")) {
+    return(TRUE)  # Legacy format always proceeds
+  }
+  
+  # LENIENT MODE with validation failures: Create files anyway (with warnings)
+  if (!validation_state$is_valid && !strict) {
+    if (verbose) {
+      message("[WARN] Creating files despite validation failure (lenient mode)")
+    }
+    return(TRUE)  # Proceed to file creation
+  }
+  
+  # STRICT MODE with validation failures: Skip file creation
+  if (!validation_state$is_valid) {
+    if (verbose) {
+      message("[VALIDATION FAILED] Skipping file creation due to validation errors")
+      if (length(validation_state$errors) > 0) {
+        message("Validation errors:")
+        for (err in validation_state$errors) {
+          message(sprintf("  - %s", err))
+        }
+      }
+    } else {
+      message("[SKIPPED - Validation failed]")
+    }
+    return(FALSE)  # Do not create files
+  }
+  
+  return(TRUE)  # Validation passed, create files
+}
+
 #' Create NDA files based on ValidationState
 #'
 #' @description
@@ -18,10 +63,21 @@
 #'
 #' @param validation_state ValidationState object OR legacy list (for backward compatibility)
 #' @param measure Measure name (used for legacy list format)
+#' @param strict Logical - if TRUE, enforce strict validation (no files on failure)
 #' @param verbose Logical - print detailed messages
 #' @return Invisible NULL
 #' @noRd
-create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
+create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, verbose = TRUE) {
+  
+  # Print STEP 4 header once (before validation gate)
+  if (!verbose) {
+    message("\n=== STEP 4: Generating NDA Files ===")
+  }
+  
+  # Validation gate: Check if files should be created
+  if (!should_create_nda_files(validation_state, strict, verbose)) {
+    return(invisible(NULL))
+  }
   
   # Handle both ValidationState and legacy list formats
   if (inherits(validation_state, "ValidationState")) {
@@ -31,11 +87,6 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
     reason <- validation_state$get_modification_reason()
     measure_name <- validation_state$measure_name
     nda_structure <- validation_state$nda_structure
-    
-    # Add STEP 4 header for non-verbose mode
-    if (!verbose) {
-      message("\n=== STEP 4: Generating NDA Files ===")
-    }
     
     # Determine modification type
     modification_type <- if (is_new) {
@@ -94,13 +145,18 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
     
     if (is_new) {
       # NEW structure: Only create data definition
-      if (verbose) {
-        message("\n[NEW STRUCTURE]")
+      if (!verbose) {
+        message("\n=== STEP 4A: Generating NDA Submission Template ===")
+        message("[SKIP] Structure doesn't exist in NDA yet (cannot create submission template)")
+        message("")
+        message("=== STEP 4B: Generating NDA Data Definition ===")
+        message("[NEW STRUCTURE] Creating data definition for structure registration")
       } else {
-        message("[NEW STRUCTURE]")
+        message("\n[NEW STRUCTURE]")
+        message("[OK] Creating data definition (for structure registration)")
+        message("")  # Blank line
+        message("[SKIP] Skipping submission template (structure doesn't exist in NDA yet)")
       }
-      message("  [OK] Creating data definition (for structure registration)")
-      message("  [SKIP] Skipping submission template (structure doesn't exist in NDA yet)")
       
       tryCatch({
         createNdaDataDefinition(
@@ -109,19 +165,24 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
           skip_prompts = TRUE,
           verbose = verbose
         )
-        if (verbose) message("  [OK] Data definition created successfully")
+        if (!verbose) {
+          message(sprintf("[OK] Data definition created at: ./tmp/%s_data-definition.xlsx", measure_name))
+        } else {
+          message("[OK] Data definition created successfully")
+        }
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
       })
       
     } else {
-      # EXISTING structure: Always create submission template
-      if (verbose) {
-        message("\n[EXISTING STRUCTURE]")
+      # EXISTING structure: Create submission template (and data definition if modified)
+      
+      # STEP 4A: Submission Template
+      if (!verbose) {
+        message("\n=== STEP 4A: Generating NDA Submission Template ===")
       } else {
-        message("[EXISTING STRUCTURE]")
+        message("\n[EXISTING STRUCTURE]")
       }
-      message("  [OK] Creating submission template (for data upload)")
       
       tryCatch({
         createNdaSubmissionTemplate(
@@ -130,17 +191,24 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
           selected_fields = field_selection$selected_fields,
           skip_prompts = TRUE   # Skip field selection prompts
         )
-        if (verbose) message("  [OK] Submission template created successfully")
+        if (!verbose) {
+          message(sprintf("[OK] Template created at: ./tmp/%s_template.csv", measure_name))
+        } else {
+          message("[OK] Submission template created successfully")
+        }
       }, error = function(e) {
         warning(sprintf("Error creating submission template: %s", e$message))
       })
       
-      # Create data definition ONLY if modified
+      # STEP 4B: Data Definition (only if modified)
       if (needs_definition) {
-        if (verbose) {
-          message(sprintf("  [OK] Creating data definition (reason: %s)", reason))
+        if (!verbose) {
+          message("")  # Blank line
+          message("=== STEP 4B: Generating NDA Data Definition ===")
+          message("[MODIFIED STRUCTURE] Creating data definition for NDA approval")
         } else {
-          message("  [OK] Creating data definition (structure modifications require approval)")
+          message("")  # Blank line
+          message(sprintf("[OK] Creating data definition (reason: %s)", reason))
         }
         
         tryCatch({
@@ -148,14 +216,26 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
             validation_state,
             selected_fields = field_selection$selected_fields,
             skip_prompts = TRUE,
-            verbose = verbose
-          )
-          if (verbose) message("  [OK] Data definition created successfully")
-        }, error = function(e) {
-          warning(sprintf("Error creating data definition: %s", e$message))
-        })
+          verbose = verbose
+        )
+        if (!verbose) {
+          message(sprintf("[OK] Definition created at: ./tmp/%s_data-definition.xlsx", measure_name))
+          message("(Structure modifications require NDA approval)")
+        } else {
+          message("[OK] Data definition created successfully")
+        }
+      }, error = function(e) {
+        warning(sprintf("Error creating data definition: %s", e$message))
+      })
       } else {
-        message("  [SKIP] Skipping data definition (structure unmodified)")
+        if (!verbose) {
+          message("")  # Blank line
+          message("=== STEP 4B: Generating NDA Data Definition ===")
+          message("[SKIP] Structure unmodified (no data definition needed)")
+        } else {
+          message("")  # Blank line
+          message("[SKIP] Skipping data definition (structure unmodified)")
+        }
       }
     }
     
@@ -209,7 +289,7 @@ create_nda_files <- function(validation_state, measure = NULL, verbose = TRUE) {
         new_fields <- setdiff(df_fields, structure_fields)
         # Exclude special fields
         new_fields <- new_fields[!grepl("_complete$", new_fields)]
-        super_required <- c("subjectkey", "src_subject_id", "sex", "interview_age", "interview_date")
+        super_required <- SUPER_REQUIRED_FIELDS
         new_fields <- setdiff(new_fields, super_required)
         has_new_fields <- length(new_fields) > 0
       }

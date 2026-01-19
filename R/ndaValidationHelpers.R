@@ -5,6 +5,22 @@
 #' Includes value range checking, GUID validation, and violation tracking.
 #'
 
+#' Determine if validation messages should be shown
+#'
+#' @description
+#' Helper function to centralize message suppression logic.
+#' Messages are shown in strict mode OR when verbose is enabled.
+#' In lenient non-verbose mode, individual messages are suppressed
+#' to avoid duplication with summary warnings.
+#'
+#' @param strict Logical - if TRUE, enforce strict validation
+#' @param verbose Logical - if TRUE, show detailed messages
+#' @return Logical - TRUE if messages should be shown
+#' @noRd
+should_show_validation_message <- function(strict, verbose) {
+  strict || verbose
+}
+
 #' Check for value range violations and update ValidationState
 #'
 #' @description
@@ -164,8 +180,7 @@ detect_new_fields <- function(df, elements) {
   }
   
   # Exclude super-required fields (added by addNdarSubjectElements)
-  super_required <- c("subjectkey", "src_subject_id", "sex", 
-                     "interview_age", "interview_date")
+  super_required <- SUPER_REQUIRED_FIELDS
   new_fields <- setdiff(new_fields, super_required)
   
   return(new_fields)
@@ -269,6 +284,131 @@ get_violations <- function(value, range_str) {
   }
   
   return(character(0))
+}
+
+#' Check required and recommended fields for missing data
+#'
+#' @description
+#' Validates that fields contain sufficient non-NA data according to NDA requirements.
+#' In strict mode, ANY NA in required fields or ALL NA in recommended fields = failure.
+#' In lenient mode, these trigger warnings only.
+#'
+#' IMPORTANT: Only checks the 5 super required fields from ndar_subject01.
+#' Structure-level required fields (like phq9_1, phq9_2, etc.) are NOT validated.
+#'
+#' @param state ValidationState object
+#' @param elements Data elements from NDA structure
+#' @param super_required_fields Character vector - the 5 mandatory NDA fields to check
+#' @param strict Logical - if TRUE, enforce strict validation
+#' @param verbose Logical - print detailed output
+#' @return List with two elements: required_violations and recommended_violations
+#' @keywords internal
+#' @noRd
+check_field_data_completeness <- function(state, elements, super_required_fields = SUPER_REQUIRED_FIELDS, strict = TRUE, verbose = FALSE) {
+  df <- state$get_df()
+  
+  # Force elements to be base data.frame to avoid tibble/data.table evaluation issues
+  # When dplyr is loaded, jsonlite::fromJSON returns tibbles which have different
+  # scoping behavior during subsetting operations (e.g., tibble[condition, ])
+  if (!is.data.frame(elements) || inherits(elements, c("tbl_df", "tbl", "data.table"))) {
+    elements <- as.data.frame(elements, stringsAsFactors = FALSE)
+  }
+  
+  required_violations <- list()
+  recommended_violations <- list()
+  
+  # Get required elements - ONLY check super required fields
+  # Structure-level required fields (like phq9_*) are NOT validated
+  # This prevents false positives for fields that are required in the structure
+  # but not part of the core 5 super required fields from ndar_subject01
+  required_elements <- elements[
+    elements$required == "Required" & 
+    elements$name %in% super_required_fields,
+  ]
+  
+  # Get recommended elements (check all of them)
+  recommended_elements <- elements[elements$required == "Recommended", ]
+  
+  # Check REQUIRED fields for ANY NA
+  if (nrow(required_elements) > 0) {
+    for (i in 1:nrow(required_elements)) {
+      field_name <- required_elements$name[i]
+      
+      if (field_name %in% names(df)) {
+        field_values <- df[[field_name]]
+        na_count <- sum(is.na(field_values))
+        total_count <- length(field_values)
+        
+        # In strict mode: ANY NA is a violation
+        # In lenient mode: ANY NA is also a violation (but handled as warning)
+        if (na_count > 0) {
+          required_violations[[field_name]] <- list(
+            field = field_name,
+            total_rows = total_count,
+            na_count = na_count,
+            percent_missing = round((na_count / total_count) * 100, 1),
+            issue = if (na_count == total_count) {
+              "All values are NA"
+            } else {
+              sprintf("%d of %d values are NA (%.1f%%)", na_count, total_count, (na_count / total_count) * 100)
+            }
+          )
+          
+          # Show individual messages only in strict mode OR verbose mode
+          # In lenient non-verbose mode, suppress to avoid duplication with summary
+          if (should_show_validation_message(strict, verbose)) {
+            message(sprintf("[REQUIRED FIELD ISSUE] %s: %s", field_name, required_violations[[field_name]]$issue))
+          }
+        }
+      } else {
+        # Field doesn't exist at all
+        required_violations[[field_name]] <- list(
+          field = field_name,
+          total_rows = nrow(df),
+          na_count = nrow(df),
+          percent_missing = 100,
+          issue = "Field missing from dataframe"
+        )
+        
+        # Show individual messages only in strict mode OR verbose mode
+        if (should_show_validation_message(strict, verbose)) {
+          message(sprintf("[REQUIRED FIELD ISSUE] %s: Field missing from dataframe", field_name))
+        }
+      }
+    }
+  }
+  
+  # Check RECOMMENDED fields for ALL NA (only matters in strict mode)
+  if (strict && nrow(recommended_elements) > 0) {
+    for (i in 1:nrow(recommended_elements)) {
+      field_name <- recommended_elements$name[i]
+      
+      if (field_name %in% names(df)) {
+        field_values <- df[[field_name]]
+        
+        # Only flag if ALL values are NA
+        if (all(is.na(field_values))) {
+          recommended_violations[[field_name]] <- list(
+            field = field_name,
+            total_rows = length(field_values),
+            na_count = length(field_values),
+            percent_missing = 100,
+            issue = "All values are NA"
+          )
+          
+          # Show individual messages only in strict mode OR verbose mode
+          if (should_show_validation_message(strict, verbose)) {
+            message(sprintf("[RECOMMENDED FIELD ISSUE] %s: All values are NA", field_name))
+          }
+        }
+      }
+    }
+  }
+  
+  return(list(
+    required = required_violations,
+    recommended = recommended_violations
+  ))
 }
 
 #' Print validation summary

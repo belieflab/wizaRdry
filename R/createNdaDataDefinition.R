@@ -445,8 +445,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   original_selected_columns <- selected_columns
 
   # Check for required fields from ndar_subject01 that exist in the structure
-  # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
-  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+  # Super-required fields (always included): subjectkey, src_subject_id, interview_date, interview_age, sex
+  super_required_fields <- SUPER_REQUIRED_FIELDS
   
   # Get structure field names once for reuse
   structure_field_names <- character(0)
@@ -2230,12 +2230,16 @@ exportDataDefinition <- function(data_definition, format = "csv") {
              applied_red <- rep(FALSE, length(field_names))
              nda_range_mismatch <- rep(FALSE, length(field_names))
 
-             # Blue: all rows whose ElementName exists in NDA
-             idx_in_nda <- which(element_is_in_nda)
-             if (length(idx_in_nda) > 0) {
-               openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_in_nda + 1, cols = elementCol, gridExpand = TRUE)
-               applied_blue[idx_in_nda] <- TRUE
-             }
+             # Blue: NEW fields from NDA that weren't in the original structure
+              # These are fields that:
+              #   1. Exist in NDA globally (element_is_in_nda = TRUE)
+              #   2. Were NOT in the original fetched structure (in_local_nda = FALSE)
+              # This highlights fields the user added from the NDA dictionary
+              idx_new_from_nda <- which(element_is_in_nda & !in_local_nda)
+              if (length(idx_new_from_nda) > 0) {
+                openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_new_from_nda + 1, cols = elementCol, gridExpand = TRUE)
+                applied_blue[idx_new_from_nda] <- TRUE
+              }
 
              # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
              idx_modified <- which(row_modified & element_is_in_nda)

@@ -15,6 +15,7 @@
 #' @param auto_drop_unknown Logical - automatically drop unknown fields
 #' @param interactive_mode Logical - allow user prompts
 #' @param modified_structure Pre-enhanced NDA structure (from ndaRequest.R)
+#' @param strict Logical - if TRUE (default), enforce strict validation for missing data
 #' @return ValidationState object with validation results
 #' @keywords internal
 #' @noRd
@@ -26,7 +27,8 @@ ndaValidator <- function(measure_name,
                              debug = FALSE,
                              auto_drop_unknown = FALSE,
                              interactive_mode = TRUE,
-                             modified_structure = NULL) {
+                             modified_structure = NULL,
+                             strict = TRUE) {
   
   tryCatch({
     # Initialize environment
@@ -66,16 +68,6 @@ ndaValidator <- function(measure_name,
     # Create ValidationState object
     state <- ValidationState$new(measure_name, api, df, nda_structure)
     
-    # Add STEP 2 header (only in non-verbose mode)
-    if (!verbose) {
-      if (state$is_new_structure) {
-        message("\n=== STEP 2: Preparing New Structure ===")
-      } else {
-        message("\n=== STEP 2: Validating Data Structure ===")
-        message(sprintf("Validating against NDA structure '%s'...", measure_name))
-      }
-    }
-    
     if (verbose) {
       message(sprintf("Structure type: %s", 
                      if(state$is_new_structure) "NEW (not in NDA)" else "EXISTING"))
@@ -114,72 +106,138 @@ ndaValidator <- function(measure_name,
     }
     
     # ============================================================================
-    # PHASE 3: De-identification
+    # PHASE 3: Required Field Data Validation
     # ============================================================================
+    
+    # Add STEP 2 header (only in non-verbose mode)
     if (!verbose) {
-      message("\n=== STEP 3: De-identifying Data ===")
-    } else {
-      message("\n--- PHASE 3: De-identification ---")
-    }
-    
-    # Date-shifting with HIPAA reference (always show message in non-verbose)
-    if ("interview_date" %in% names(df)) {
-      if (!verbose && !limited_dataset) {
-        message("Applying date-shifting to interview_date (per HIPAA Safe Harbor de-identification standard)...")
-      }
-      df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
-      if (!verbose && !limited_dataset) {
-        message("[OK] Date-shifting complete")
-      }
-    }
-    
-    # Age-capping with HIPAA reference (always show message in non-verbose)
-    if ("interview_age" %in% names(df)) {
-      if (!verbose && !limited_dataset) {
-        message("Applying age-capping to interview_age (threshold: 89 years per HIPAA Safe Harbor de-identification standard)...")
-      }
-      
-      age_result <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
-      
-      # Defensive check: ensure age_result is a list with df and stats
-      if (is.list(age_result) && "df" %in% names(age_result) && "stats" %in% names(age_result)) {
-        df <- age_result$df
-        age_stats <- age_result$stats
-        
-        # Show result based on statistics (always show in non-verbose, not just verbose)
-        if (!verbose && !limited_dataset) {
-          if (isTRUE(age_stats$all_na)) {
-            message("[OK] All values are NA - no age-capping needed")
-          } else if (!is.null(age_stats$values_capped) && age_stats$values_capped > 0) {
-            message(sprintf("[WARN] %d value%s exceeded threshold and %s capped to 1068 months (89 years)",
-                           age_stats$values_capped,
-                           if (age_stats$values_capped > 1) "s" else "",
-                           if (age_stats$values_capped > 1) "were" else "was"))
-          } else if (!is.null(age_stats$non_na_count) && age_stats$non_na_count > 0) {
-            message(sprintf("[OK] All %d values below threshold - no capping needed", age_stats$non_na_count))
-          } else {
-            message("[OK] No age-capping needed")
-          }
-        }
+      if (state$is_new_structure) {
+        message("\n=== STEP 2: Preparing New Structure ===")
       } else {
-        # Fallback: age_result might be just a dataframe (old format)
-        if (is.data.frame(age_result)) {
-          df <- age_result
-        }
-        if (!verbose && !limited_dataset) {
-          message("[OK] Age-capping complete")
-        }
+        message("\n=== STEP 2: Validating Data Structure ===")
+        message(sprintf("Validating against NDA structure '%s'...", measure_name))
       }
     }
     
-    state$set_df(df)
+    if (verbose) message("\n--- PHASE 3: Required Field Data Validation ---")
     
-    if (limited_dataset == FALSE && verbose) {
-      message("\nDataset has been de-identified using date-shifting and age-capping.")
+    # Check field data completeness (only validates 5 super required fields)
+    data_violations <- check_field_data_completeness(
+      state, 
+      elements, 
+      super_required_fields = SUPER_REQUIRED_FIELDS,
+      strict = strict, 
+      verbose = verbose
+    )
+    required_violations <- data_violations$required
+    recommended_violations <- data_violations$recommended
+    
+    # Handle violations based on strict mode
+    has_violations <- length(required_violations) > 0 || length(recommended_violations) > 0
+    
+    if (has_violations) {
+      # BOTH strict and lenient: Mark as invalid and store violations
+      state$is_valid <- FALSE
+      
+      # Store violations in state (same for both modes)
+      for (field_name in names(required_violations)) {
+        state$errors <- c(state$errors, 
+                         sprintf("Required field '%s': %s", 
+                                field_name, 
+                                required_violations[[field_name]]$issue))
+      }
+      
+      for (field_name in names(recommended_violations)) {
+        state$errors <- c(state$errors,
+                         sprintf("Recommended field '%s': %s",
+                                field_name,
+                                recommended_violations[[field_name]]$issue))
+      }
+      
+      if (strict) {
+        # STRICT MODE: Stop processing, skip remaining phases
+        
+        # Non-verbose output
+        if (!verbose) {
+          message("")  # Blank line
+          message("[ERROR] Field validation failed:\n")
+          
+          if (length(required_violations) > 0) {
+            message("  Required Fields:")
+            for (field_name in names(required_violations)) {
+              violation <- required_violations[[field_name]]
+              message(sprintf("    - %s: %s", field_name, violation$issue))
+            }
+            message("")
+          }
+          
+          if (length(recommended_violations) > 0) {
+            message("  Recommended Fields (strict mode):")
+            for (field_name in names(recommended_violations)) {
+              violation <- recommended_violations[[field_name]]
+              message(sprintf("    - %s: %s", field_name, violation$issue))
+            }
+            message("")
+          }
+          
+          total_violations <- length(required_violations) + length(recommended_violations)
+          message(sprintf("[ERROR] Validation failed with %d field violation%s",
+                         total_violations,
+                         if (total_violations > 1) "s" else ""))
+          message("")  # Blank line
+          
+          # Skip remaining phases
+          message("\n=== STEP 3: De-identifying Data ===")
+          message("[SKIPPED - Validation failed]")
+          message("")
+          message("\n=== STEP 4: Generating NDA Files ===")
+          message("[SKIPPED - Validation failed]")
+          message("")
+        }
+        
+        # Return early with failed state
+        return(state)
+        
+      } else {
+        # LENIENT MODE: Show warnings but continue processing
+        state$warnings <- c(state$warnings, 
+                           sprintf("Found %d field(s) with missing data", 
+                                  length(required_violations) + length(recommended_violations)))
+        
+        if (!verbose) {
+          message("")  # Blank line
+          message("[WARN] Field validation failed (lenient mode):\n")
+          
+          if (length(required_violations) > 0) {
+            message("  Required Fields:")
+            for (field_name in names(required_violations)) {
+              violation <- required_violations[[field_name]]
+              message(sprintf("    - %s: %s", field_name, violation$issue))
+            }
+            message("")
+          }
+          
+          if (length(recommended_violations) > 0) {
+            message("  Recommended Fields:")
+            for (field_name in names(recommended_violations)) {
+              violation <- recommended_violations[[field_name]]
+              message(sprintf("    - %s: %s", field_name, violation$issue))
+            }
+            message("")
+          }
+          
+          total_violations <- length(required_violations) + length(recommended_violations)
+          message(sprintf("[WARN] Validation failed with %d field violation%s (continuing anyway)",
+                         total_violations,
+                         if (total_violations > 1) "s" else ""))
+          message("[WARN] Files will be created with caveats")
+          message("")  # Blank line
+        }
+      }
     }
     
     # ============================================================================
-    # PHASE 4: Value Range Validation (THE KEY FIX)
+    # PHASE 4: Value Range Validation
     # ============================================================================
     if (verbose) message("\n--- PHASE 4: Value Range Validation ---")
     
@@ -192,7 +250,9 @@ ndaValidator <- function(measure_name,
       
       if (length(violations) == 0) {
         message(sprintf("Checking %d fields for NDA compliance...", total_fields))
-        message("[OK] All fields validated successfully (0 violations)")
+        message("")  # Blank line before [OK]
+        message(sprintf("[OK] All %d fields validated successfully (0 violations)", total_fields))
+        message("")  # Blank line after [OK]
       } else {
         message(sprintf("Checking %d fields for NDA compliance...", total_fields))
         message("[WARN] Value range violations found:\n")
@@ -215,9 +275,11 @@ ndaValidator <- function(measure_name,
           message("")
         }
         
+        message("")  # Blank line before final summary
         message(sprintf("[WARN] Validation completed with %d violation%s",
                        length(violations),
                        if (length(violations) > 1) "s" else ""))
+        message("")  # Blank line after summary
       }
     }
     
@@ -243,7 +305,78 @@ ndaValidator <- function(measure_name,
     }
     
     # ============================================================================
-    # PHASE 6: Final Validation Summary
+    # PHASE 6: De-identification
+    # ============================================================================
+    if (!verbose) {
+      message("\n=== STEP 3: De-identifying Data ===")
+    } else {
+      message("\n--- PHASE 6: De-identification ---")
+    }
+    
+    # Date-shifting with HIPAA reference (always show message in non-verbose)
+    if ("interview_date" %in% names(df)) {
+      if (!verbose && !limited_dataset) {
+        message("Applying date-shifting to interview_date (per HIPAA Safe Harbor de-identification standard)...")
+      }
+      df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
+      if (!verbose && !limited_dataset) {
+        message("")  # Blank line before [OK]
+        message("[OK] Date-shifting complete")
+        message("")  # Blank line after [OK]
+      }
+    }
+    
+    # Age-capping with HIPAA reference (always show message in non-verbose)
+    if ("interview_age" %in% names(df)) {
+      if (!verbose && !limited_dataset) {
+        message("Applying age-capping to interview_age (threshold: 89 years per HIPAA Safe Harbor de-identification standard)...")
+      }
+      
+      age_result <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
+      
+      # Defensive check: ensure age_result is a list with df and stats
+      if (is.list(age_result) && "df" %in% names(age_result) && "stats" %in% names(age_result)) {
+        df <- age_result$df
+        age_stats <- age_result$stats
+        
+        # Show result based on statistics (always show in non-verbose, not just verbose)
+        if (!verbose && !limited_dataset) {
+          message("")  # Blank line before result
+          if (isTRUE(age_stats$all_na)) {
+            message("[OK] All values are NA - no age-capping needed")
+          } else if (!is.null(age_stats$values_capped) && age_stats$values_capped > 0) {
+            message(sprintf("[WARN] %d value%s exceeded threshold and %s capped to 1068 months (89 years)",
+                           age_stats$values_capped,
+                           if (age_stats$values_capped > 1) "s" else "",
+                           if (age_stats$values_capped > 1) "were" else "was"))
+          } else if (!is.null(age_stats$non_na_count) && age_stats$non_na_count > 0) {
+            message(sprintf("[OK] All %d values below threshold - no capping needed", age_stats$non_na_count))
+          } else {
+            message("[OK] No age-capping needed")
+          }
+          message("")  # Blank line after result
+        }
+      } else {
+        # Fallback: age_result might be just a dataframe (old format)
+        if (is.data.frame(age_result)) {
+          df <- age_result
+        }
+        if (!verbose && !limited_dataset) {
+          message("")
+          message("[OK] Age-capping complete")
+          message("")
+        }
+      }
+    }
+    
+    state$set_df(df)
+    
+    if (limited_dataset == FALSE && verbose) {
+      message("\nDataset has been de-identified using date-shifting and age-capping.")
+    }
+    
+    # ============================================================================
+    # PHASE 7: Final Validation Summary
     # ============================================================================
     if (verbose) {
       message("\n--- PHASE 6: Validation Summary ---")

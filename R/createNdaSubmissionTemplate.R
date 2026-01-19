@@ -145,8 +145,8 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   # Define fields to exclude from submission templates
   excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
   
-  # Super-required fields (always included): subjectkey, src_subject_id, sex, interview_age, interview_date
-  super_required_fields <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+  # Super-required fields (always included): subjectkey, src_subject_id, interview_date, interview_age, sex
+  super_required_fields <- SUPER_REQUIRED_FIELDS
   
   # Get structure field names to check which required fields exist in this structure
   structure_field_names <- character(0)
@@ -341,10 +341,20 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     structure_suffix <- "01"
   }
 
+  # Remove columns with NA names BEFORE writing anything (prevents parser warnings)
+  valid_cols <- !is.na(names(template))
+  if (!all(valid_cols)) {
+    invalid_count <- sum(!valid_cols)
+    if (invalid_count > 0) {
+      message(sprintf("Note: Removing %d column(s) with invalid (NA) names", invalid_count))
+    }
+    template <- template[, valid_cols, drop = FALSE]
+  }
+
   # Write the line with separated components
   writeLines(paste0(structure_short_name, ",", structure_suffix), con)
 
-  # Write column headers manually
+  # Write column headers manually (now with NA columns already removed)
   writeLines(paste(names(template), collapse = ","), con)
 
   # Close the connection to save changes

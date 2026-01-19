@@ -75,30 +75,69 @@ oracle(table_name, ...)
 
 ### Validation Architecture
 
-**Modular NDA validation system** (refactored Dec 2024):
+**Modular NDA validation system** (refactored Dec 2024, updated Jan 2025):
 
 **Main Components:**
 - `ValidationState` (R6): State management for validation results
-- `ndaValidator()`: Main validation orchestrator (172 lines, down from 4,262)
+- `ndaValidator()`: Main validation orchestrator with strict/lenient modes
 - Helper modules (all internal, not exported):
-  - `ndaValidationHelpers.R`: Value range checking, GUID validation
+  - `ndaValidationHelpers.R`: Value range checking, GUID validation, field data completeness
   - `ndaTransformations.R`: Date/age standardization, type conversions
   - `ndaFieldMapping.R`: Field detection and similarity matching
   - `ndaFieldSelection.R`: Centralized user prompts for field selection
-  - `ndaFileCreation.R`: Template and definition file creation
+  - `ndaFileCreation.R`: Template and definition file creation with validation gate
+
+**Super Required Fields (5 mandatory for ALL NDA submissions):**
+1. `subjectkey` - Unique GUID identifier
+2. `src_subject_id` - Study-specific subject ID
+3. `interview_date` - Date of data collection
+4. `interview_age` - Age at interview (months)
+5. `sex` - Biological sex (M/F/O)
+
+These fields are defined in the `SUPER_REQUIRED_FIELDS` constant (`R/zzz.R`) and automatically sourced from `ndar_subject01`. They are added to all structures regardless of whether the structure explicitly requires them.
+
+**IMPORTANT:** Validation ONLY checks these 5 super required fields. Structure-level required fields (e.g., phq9_1, phq9_2) are NOT validated to prevent false positives.
+
+**Validation Modes:**
+- `strict = TRUE` (default): Required fields with ANY missing data → validation fails (`is_valid = FALSE`), no files created
+- `strict = FALSE` (lenient): Required fields with missing data → validation fails (`is_valid = FALSE`), but files created anyway with warnings
 
 **Key Validation Logic:**
-- String, GUID, Date, Integer, Float fields **without valueRange** = unbounded (valid)
-- Only flag violations when data exceeds **defined** valueRange
-- No false positives for compliant unbounded fields
+- **Super required fields:** ANY NA values = validation failure (both modes)
+- **Recommended fields:** ALL NA values = violation (strict mode only)
+- **Value ranges:** Only flag violations when data exceeds **defined** valueRange
+- **Unbounded fields:** String, GUID, Date, Integer, Float fields **without valueRange** = valid (no violations)
+- **Message suppression:** In lenient non-verbose mode, individual field messages suppressed to avoid duplication (still shown in verbose mode)
+- **Validation status:** Both modes set `is_valid = FALSE` on violations. Difference is whether files are created.
+
+**Validation Gate Logic:**
+```r
+# In should_create_nda_files():
+if (!validation_state$is_valid && !strict) {
+  # LENIENT: Create files despite failure
+  return(TRUE)
+}
+if (!validation_state$is_valid) {
+  # STRICT: Skip file creation
+  return(FALSE)
+}
+return(TRUE)  # Validation passed
+```
 
 **File Creation Decision Tree:**
 ```
-Does NDA structure exist?
-├─ YES → Create submission template (always)
-│        Create data definition (only if modified: new fields OR value range violations)
-└─ NO  → Skip submission template (can't submit to non-existent structure)
-         Create data definition (for structure registration)
+Validation check:
+├─ FAILED + strict=TRUE  → Skip all file creation (show errors)
+├─ FAILED + strict=FALSE → Continue to file creation (show warnings)
+└─ PASSED → Continue to file creation
+
+File creation logic:
+├─ NEW structure → STEP 4A: Skip template (doesn't exist yet)
+│                  STEP 4B: Create data definition (for registration)
+├─ EXISTING unmodified → STEP 4A: Create submission template
+│                        STEP 4B: Skip data definition (not needed)
+└─ EXISTING modified → STEP 4A: Create submission template
+                       STEP 4B: Create data definition (requires approval)
 ```
 
 ---
@@ -260,6 +299,15 @@ config_env$get_missing_data_codes()
 ---
 
 ## Recent Major Changes
+
+### January 2025 - Validation System Refinements
+- **SUPER_REQUIRED_FIELDS constant:** Centralized definition of 5 mandatory NDA fields (DRY principle)
+- **Validation scope fix:** Only checks 5 super required fields, ignores structure-level required fields (e.g., phq9_*)
+- **Lenient mode behavior:** Both strict and lenient modes set `is_valid=FALSE` on violations; lenient mode creates files with warnings
+- **Message suppression:** Individual field messages hidden in lenient non-verbose mode to prevent duplication
+- **Two-step file output:** STEP 4A (template) and STEP 4B (definition) for clearer user feedback
+- **Excel highlighting fix:** Blue highlights only NEW fields from NDA (not already in base structure)
+- **Message helper:** `should_show_validation_message(strict, verbose)` centralizes display logic
 
 ### December 2024 Refactor
 - **Modularized validator:** 4,262 lines → 172 lines (96% reduction)

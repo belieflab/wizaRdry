@@ -13,6 +13,9 @@
 #' @param skip_prompt Logical. If TRUE (default), skips confirmation prompts unless preferences aren't set yet. If FALSE,
 #'   prompts for confirmation unless the user has previously chosen to remember their preference.
 #' @param verbose Logical. If TRUE, shows detailed processing information. If FALSE (default), shows only essential user-facing messages.
+#' @param strict Logical. If TRUE (default), enforce strict NDA validation: required fields with ANY missing data or
+#'   recommended fields with ALL missing data will cause validation failure. If FALSE (lenient mode), missing data
+#'   triggers warnings but allows processing to continue.
 #' @return Prints the time taken for the data request process.
 #' @export
 #' @examples
@@ -25,10 +28,13 @@
 #'   
 #'   # Show detailed processing information
 #'   nda("prl", verbose=TRUE)
+#'   
+#'   # Use lenient validation mode (allow missing data with warnings)
+#'   nda("prl", strict=FALSE)
 #' }
 #'
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE, verbose = FALSE) {
+nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE, verbose = FALSE, strict = TRUE) {
   start_time <- Sys.time()
 
   # Define base path
@@ -610,7 +616,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                                          ifelse(measure %in% sql_list, "sql", "csv")))))
     }
 
-    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset, verbose)
+    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset, verbose, strict)
   }
 
   # Clean up and record processing time
@@ -618,7 +624,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   # message(Sys.time() - start_time)  # Print time taken for processing
 }
 
-processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE, verbose = FALSE) {
+processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE, verbose = FALSE, strict = TRUE) {
   # Store the origin environment (the one that called this function)
   origin_env <- parent.frame()
 
@@ -1015,7 +1021,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # EXISTING NDA STRUCTURE - Run full validation
       validation_state <- ndaValidator(measure, api, limited_dataset, 
                                        modified_structure = nda_structure,
-                                       verbose = verbose)
+                                       verbose = verbose,
+                                       strict = strict)
 
       # Handle validation errors gracefully
       if (is.null(validation_state)) {
@@ -1042,7 +1049,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # Create NDA files using simplified helper function
-      create_nda_files(validation_state, verbose = verbose)
+      create_nda_files(validation_state, strict = strict, verbose = verbose)
 
     } else {
       # NEW STRUCTURE - Create ValidationState without NDA validation
@@ -1084,7 +1091,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # Create NDA files using simplified helper function
-      create_nda_files(validation_state, verbose = verbose)
+      create_nda_files(validation_state, strict = strict, verbose = verbose)
     }
 
     # Update local df variable
@@ -1095,9 +1102,52 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       message("\nDataset has been de-identified using date-shifting and age-capping.")
     }
 
+    # Add validation summary (non-verbose mode) - LAST THING before completion
+    if (!verbose) {
+      message("Validation Summary:")
+      
+      if (validation_state$is_valid) {
+        message("- Status: PASSED")
+      } else {
+        message("- Status: FAILED")
+        if (length(validation_state$errors) > 0) {
+          message(sprintf("- Errors: %d", length(validation_state$errors)))
+        }
+      }
+      
+      message(sprintf("- Structure Type: %s", 
+                     if(validation_state$is_new_structure) "NEW" else "EXISTING"))
+      
+      if (!validation_state$is_new_structure && validation_state$is_valid) {
+        message(sprintf("- Modified: %s", 
+                       if(validation_state$is_modified_structure) "YES" else "NO"))
+      }
+      
+      if (validation_state$is_valid) {
+        message(sprintf("- Needs Data Definition: %s (reason: %s)", 
+                       if(validation_state$needs_data_definition()) "YES" else "NO",
+                       validation_state$get_modification_reason()))
+      }
+      
+      # Show warnings if any
+      if (length(validation_state$warnings) > 0) {
+        message(sprintf("- Warnings: %d", length(validation_state$warnings)))
+        for (warning in validation_state$warnings) {
+          message(sprintf("  - %s", warning))
+        }
+      }
+      
+      message("")  # Blank line
+    }
+
     # Calculate elapsed time and show completion message
     elapsed_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-    message(sprintf("\n[OK] NDA processing complete in %.1f seconds", elapsed_time))
+    
+    if (validation_state$is_valid) {
+      message(sprintf("[OK] NDA processing complete in %.1f seconds", elapsed_time))
+    } else {
+      message(sprintf("[ERROR] NDA processing failed - please fix validation issues and try again"))
+    }
 
     # Play completion sound AFTER all processing, including data definition export
     if (exists("validation_state") && inherits(validation_state, "ValidationState")) {
@@ -1136,16 +1186,18 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   return(result)  # Return the result of the processing
 }
 
-#' Process required fields from ndar_subject01
+#' Process super required fields from ndar_subject01
 #'
 #' @description
-#' Processes ALL required fields from ndar_subject01 metadata.
+#' Processes the 5 super required fields from ndar_subject01 metadata:
+#' subjectkey, src_subject_id, interview_date, interview_age, sex.
+#' These fields are mandatory for ALL NDA submissions.
 #' Adds missing required fields and ensures correct data types.
 #'
 #' @param df Data frame to process
-#' @param required_elements Data frame of required field metadata from ndar_subject01
+#' @param required_elements Data frame of super required field metadata from ndar_subject01
 #' @param verbose Logical - print detailed processing messages
-#' @return Modified data frame with required fields processed
+#' @return Modified data frame with super required fields processed
 #' @noRd
 processRequiredFields <- function(df, required_elements, verbose = FALSE) {
   if (is.null(required_elements) || nrow(required_elements) == 0) {
@@ -1205,7 +1257,7 @@ processRequiredFields <- function(df, required_elements, verbose = FALSE) {
   }
   
   if (!verbose) {
-    message(sprintf("[OK] Processed %d required field%s", 
+    message(sprintf("[OK] Processed %d super required field%s", 
                    nrow(required_elements),
                    if (nrow(required_elements) > 1) "s" else ""))
   }
@@ -1291,6 +1343,18 @@ processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) 
   return(df)
 }
 
+#' Add ndar_subject01 elements to dataframe
+#'
+#' @description
+#' Fetches ndar_subject01 from NDA API and adds:
+#' - 5 super required fields (subjectkey, src_subject_id, interview_date, interview_age, sex)
+#' - Common recommended fields (intersection with dataframe columns)
+#'
+#' @param df Data frame to enhance
+#' @param measure Measure name
+#' @param verbose Logical - print detailed processing messages
+#' @return List with: df, required_metadata, recommended_metadata
+#' @noRd
 addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
   # Initialize return structure
   result <- list(
@@ -1313,9 +1377,20 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
         subject_structure <- jsonlite::fromJSON(raw_content)
 
         if ("dataElements" %in% names(subject_structure)) {
-          # Get REQUIRED elements (ALL of them)
-          required_elements <- subject_structure$dataElements[
+          # Force dataElements to base data.frame to avoid tibble evaluation issues
+          if (inherits(subject_structure$dataElements, c("tbl_df", "tbl", "data.table"))) {
+            subject_structure$dataElements <- as.data.frame(subject_structure$dataElements, stringsAsFactors = FALSE)
+          }
+          
+          # Get the 5 super required fields that are mandatory for all NDA submissions
+          super_required_fields <- SUPER_REQUIRED_FIELDS
+          
+          # Get REQUIRED elements (filter to super required fields only)
+          all_required_elements <- subject_structure$dataElements[
             subject_structure$dataElements$required == "Required",
+          ]
+          required_elements <- all_required_elements[
+            all_required_elements$name %in% super_required_fields,
           ]
 
           # Get RECOMMENDED elements (ALL of them initially)
@@ -1336,7 +1411,7 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
             message("Required Elements:")
           }
           
-          message(sprintf("  Found %d required elements from ndar_subject01 (will process ALL)", 
+          message(sprintf("  Found %d super required elements from ndar_subject01 (subjectkey, src_subject_id, interview_date, interview_age, sex)", 
                          nrow(required_elements)))
           
           if (!verbose) {
@@ -1375,7 +1450,7 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
           
           message("\n[OK] Successfully processed ndar_subject01 elements")
           if (verbose) {
-            message(sprintf("Required fields (%d): %s",
+            message(sprintf("Super required fields (%d): %s",
                             length(present_required), paste(present_required, collapse = ", ")))
             if (length(present_recommended) > 0) {
               message(sprintf("Common recommended fields (%d): %s",
@@ -1472,6 +1547,12 @@ mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, 
 
     if (nrow(ndar_metadata) == 0) {
       return(existing_structure)
+    }
+
+    # Ensure dataElements is base data.frame to avoid tibble evaluation issues
+    if (!is.null(existing_structure$dataElements) && 
+        inherits(existing_structure$dataElements, c("tbl_df", "tbl", "data.table"))) {
+      existing_structure$dataElements <- as.data.frame(existing_structure$dataElements, stringsAsFactors = FALSE)
     }
 
     # Get existing and ndar field names
