@@ -40,12 +40,14 @@ get_validation_config <- function() {
 #' @noRd
 ElementName <- R6::R6Class("ElementName",
   public = list(
+    value = NULL,  # Alias for name (used by NdaDataStructure)
     name = NULL,
     is_valid = NULL,
     validation_errors = NULL,
     
     initialize = function(name = "") {
       self$name <- name
+      self$value <- name  # Keep value in sync with name
       self$validation_errors <- character(0)
       self$validate()
     },
@@ -96,6 +98,95 @@ ElementName <- R6::R6Class("ElementName",
     
     matches = function(pattern) {
       grepl(pattern, self$name, ignore.case = TRUE)
+    }
+  )
+)
+
+# =============================================================================
+# DATA TYPE CLASS
+# =============================================================================
+
+#' Data Type Management
+#'
+#' Validates and manages NDA data types
+#' 
+#' @field value Character - the data type value
+#' @field valid_types Character vector - allowed NDA types
+#' @field is_valid Logical - whether value is a valid NDA type
+#' @field validation_errors Character vector - validation issues
+#' 
+#' @keywords internal
+#' @noRd
+DataType <- R6::R6Class("DataType",
+  public = list(
+    value = NULL,
+    valid_types = c("String", "Integer", "Float", "Date", "GUID", "Boolean"),
+    is_valid = NULL,
+    validation_errors = NULL,
+    
+    initialize = function(type = "String") {
+      self$value <- type
+      self$validation_errors <- character(0)
+      self$validate()
+    },
+    
+    validate = function() {
+      config <- get_validation_config()
+      self$validation_errors <- character(0)
+      
+      if (is.null(self$value) || !nzchar(self$value)) {
+        self$validation_errors <- c(self$validation_errors, "Type cannot be empty")
+        self$is_valid <- FALSE
+        
+        if (config$strict_validation) {
+          stop(sprintf("Invalid data type: %s", paste(self$validation_errors, collapse = "; ")))
+        }
+        return(invisible(self))
+      }
+      
+      if (!self$value %in% self$valid_types) {
+        self$validation_errors <- c(self$validation_errors, 
+                                   sprintf("Type '%s' not in valid types: %s", 
+                                          self$value, 
+                                          paste(self$valid_types, collapse = ", ")))
+        self$is_valid <- FALSE
+        
+        if (config$strict_validation) {
+          stop(sprintf("Invalid data type: %s", paste(self$validation_errors, collapse = "; ")))
+        }
+      } else {
+        self$is_valid <- TRUE
+      }
+      
+      invisible(self)
+    },
+    
+    to_string = function() {
+      self$value
+    },
+    
+    is_string = function() {
+      self$value == "String"
+    },
+    
+    is_numeric = function() {
+      self$value %in% c("Integer", "Float")
+    },
+    
+    is_date = function() {
+      self$value == "Date"
+    },
+    
+    is_guid = function() {
+      self$value == "GUID"
+    },
+    
+    is_boolean = function() {
+      self$value == "Boolean"
+    },
+    
+    requires_size = function() {
+      self$value == "String"
     }
   )
 )
@@ -452,10 +543,17 @@ Size <- R6::R6Class("Size",
     set_size = function(size) {
       if (is.null(size) || is.na(size) || !nzchar(as.character(size))) {
         self$size <- NA_integer_
-        self$is_valid <- if (!is.null(self$data_type)) {
-          !self$data_type$requires_size
+        # Check if size is required for this data type
+        if (!is.null(self$data_type)) {
+          # Handle both DataType object and string
+          if (inherits(self$data_type, "DataType")) {
+            self$is_valid <- !self$data_type$requires_size()
+          } else {
+            # String data type
+            self$is_valid <- (self$data_type != "String")
+          }
         } else {
-          TRUE
+          self$is_valid <- TRUE
         }
         return(invisible(self))
       }
@@ -476,11 +574,18 @@ Size <- R6::R6Class("Size",
     validate_for_type = function() {
       if (is.null(self$data_type)) return(TRUE)
       
-      if (self$data_type$type == "String") {
+      # Get type string (handle both DataType object and string)
+      type_str <- if (inherits(self$data_type, "DataType")) {
+        self$data_type$value
+      } else {
+        as.character(self$data_type)
+      }
+      
+      if (type_str == "String") {
         return(!is.na(self$size) && self$size > 0 && self$size <= 4000)
       }
       
-      if (self$data_type$type %in% c("Integer", "Float", "Date", "GUID", "Boolean")) {
+      if (type_str %in% c("Integer", "Float", "Date", "GUID", "Boolean")) {
         return(is.na(self$size))
       }
       

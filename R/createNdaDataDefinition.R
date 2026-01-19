@@ -143,9 +143,19 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     if (data_type == "Integer") {
       # For integers, check if values look like categorical codes
       if (unique_count <= 20 && all(clean_data >= 0 & clean_data <= 99)) {
-        # Likely categorical data - list all values
+        # Check if values are sequential (e.g., 0, 1, 2)
         sorted_vals <- sort(as.numeric(unique_vals))
-        return(paste(sorted_vals, collapse = ";"))
+        
+        # Check for sequential pattern
+        is_sequential <- all(diff(sorted_vals) == 1)
+        
+        if (is_sequential && unique_count >= 3) {
+          # Use range notation for sequential values (0::2 instead of 0;1;2)
+          return(paste0(as.integer(sorted_vals[1]), "::", as.integer(sorted_vals[length(sorted_vals)])))
+        } else {
+          # Use semicolon-separated list for non-sequential categorical data
+          return(paste(sorted_vals, collapse = ";"))
+        }
       } else {
         # Likely continuous data - use range notation
         min_val <- min(clean_data, na.rm = TRUE)

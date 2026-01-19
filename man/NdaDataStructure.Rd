@@ -21,40 +21,39 @@ It provides:
 
 The field structure matches the NDA data dictionary schema:
 ElementName, DataType, Size, Required, ElementDescription, ValueRange, Notes, Aliases
+
+Uses typed R6 classes from NdaClasses.R for all fields (ElementName, DataType,
+Size, RequirementLevel, Description, ValueRange, Notes, Aliases, etc.)
 }
 \keyword{internal}
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{element_name}}{Character - field name (ElementName in Excel)}
+\item{\code{element_name}}{ElementName object - field name (ElementName in Excel)}
 
-\item{\code{data_type}}{Character - data type (String, Integer, Float, Date, GUID, Boolean)}
+\item{\code{data_type}}{DataType object - data type (String, Integer, Float, Date, GUID, Boolean)}
 
-\item{\code{size}}{Numeric - size for String types (NULL for other types)}
+\item{\code{size}}{Size object - size for String types}
 
-\item{\code{required}}{Character - requirement level (Required, Recommended, Conditional, No)}
+\item{\code{required}}{RequirementLevel object - requirement level (Required, Recommended, Conditional, No)}
 
-\item{\code{element_description}}{Character - field description}
+\item{\code{element_description}}{Description object - field description}
 
-\item{\code{value_range}}{Character - allowed values or range}
+\item{\code{value_range}}{ValueRange object - allowed values or range}
 
-\item{\code{notes}}{Character - field notes}
+\item{\code{notes}}{Notes object - field notes}
 
-\item{\code{aliases}}{Character - field aliases}
+\item{\code{aliases}}{Aliases object - field aliases}
 
 \item{\code{selection_order}}{Integer - order in which field was selected}
 
 \item{\code{selected_for_submission}}{Logical - whether field is selected for NDA submission}
 
-\item{\code{source}}{Character - field source (nda_validated, nda_modified, computed_from_data, etc.)}
+\item{\code{source_metadata}}{SourceMetadata object - field source tracking}
 
-\item{\code{is_modified}}{Logical - whether field was modified from original NDA definition}
+\item{\code{missing_info}}{MissingInfo object - missing data information}
 
-\item{\code{modification_notes}}{Character - notes about modifications}
-
-\item{\code{missing_info}}{List - missing data information (missing_count, missing_percentage, total_count)}
-
-\item{\code{validation_rules}}{List - validation rules (min_value, max_value, allowed_values, pattern)}
+\item{\code{validation_rules}}{ValidationRules object - validation rules}
 }
 \if{html}{\out{</div>}}
 }
@@ -66,8 +65,13 @@ ElementName, DataType, Size, Required, ElementDescription, ValueRange, Notes, Al
 \item \href{#method-NdaDataStructure-to_list}{\code{NdaDataStructure$to_list()}}
 \item \href{#method-NdaDataStructure-is_super_required}{\code{NdaDataStructure$is_super_required()}}
 \item \href{#method-NdaDataStructure-is_from_ndar_subject}{\code{NdaDataStructure$is_from_ndar_subject()}}
+\item \href{#method-NdaDataStructure-is_dcc_required}{\code{NdaDataStructure$is_dcc_required()}}
+\item \href{#method-NdaDataStructure-is_dcc_recommended}{\code{NdaDataStructure$is_dcc_recommended()}}
 \item \href{#method-NdaDataStructure-modify}{\code{NdaDataStructure$modify()}}
 \item \href{#method-NdaDataStructure-print}{\code{NdaDataStructure$print()}}
+\item \href{#method-NdaDataStructure-merge_value_ranges}{\code{NdaDataStructure$merge_value_ranges()}}
+\item \href{#method-NdaDataStructure-get_merge_warnings}{\code{NdaDataStructure$get_merge_warnings()}}
+\item \href{#method-NdaDataStructure-clear_merge_warnings}{\code{NdaDataStructure$clear_merge_warnings()}}
 \item \href{#method-NdaDataStructure-clone}{\code{NdaDataStructure$clone()}}
 }
 }
@@ -88,6 +92,9 @@ Create a new NdaDataStructure instance
   aliases = "",
   selection_order = NULL,
   source = NULL,
+  source_metadata = NULL,
+  missing_info = NULL,
+  validation_rules = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -95,25 +102,31 @@ Create a new NdaDataStructure instance
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{element_name}}{Field name (required)}
+\item{\code{element_name}}{Field name (required) - accepts string or ElementName object}
 
-\item{\code{data_type}}{Data type (default: "String")}
+\item{\code{data_type}}{Data type (default: "String") - accepts string or DataType object}
 
-\item{\code{size}}{Size for String types}
+\item{\code{size}}{Size for String types - accepts numeric or Size object}
 
-\item{\code{required}}{Requirement level (default: "No")}
+\item{\code{required}}{Requirement level (default: "No") - accepts string or RequirementLevel object}
 
-\item{\code{element_description}}{Field description}
+\item{\code{element_description}}{Field description - accepts string or Description object}
 
-\item{\code{value_range}}{Allowed values or range}
+\item{\code{value_range}}{Allowed values or range - accepts string or ValueRange object}
 
-\item{\code{notes}}{Field notes}
+\item{\code{notes}}{Field notes - accepts string or Notes object}
 
-\item{\code{aliases}}{Field aliases}
+\item{\code{aliases}}{Field aliases - accepts string, list, or Aliases object}
 
 \item{\code{selection_order}}{Selection order}
 
-\item{\code{source}}{Field source}
+\item{\code{source}}{Field source (legacy - use source_metadata instead)}
+
+\item{\code{source_metadata}}{SourceMetadata object}
+
+\item{\code{missing_info}}{MissingInfo object or list}
+
+\item{\code{validation_rules}}{ValidationRules object or list}
 
 \item{\code{...}}{Additional fields}
 }
@@ -176,20 +189,53 @@ Logical
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-NdaDataStructure-is_dcc_required"></a>}}
+\if{latex}{\out{\hypertarget{method-NdaDataStructure-is_dcc_required}{}}}
+\subsection{Method \code{is_dcc_required()}}{
+Check if field is a DCC required field
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$is_dcc_required()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Logical
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-NdaDataStructure-is_dcc_recommended"></a>}}
+\if{latex}{\out{\hypertarget{method-NdaDataStructure-is_dcc_recommended}{}}}
+\subsection{Method \code{is_dcc_recommended()}}{
+Check if field is a DCC recommended field
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$is_dcc_recommended()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Logical
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-NdaDataStructure-modify"></a>}}
 \if{latex}{\out{\hypertarget{method-NdaDataStructure-modify}{}}}
 \subsection{Method \code{modify()}}{
 Create a modified copy of this field
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$modify(value_range = NULL, notes = NULL, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$modify(
+  value_range = NULL,
+  notes = NULL,
+  modification_note = NULL,
+  ...
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{value_range}}{New value range}
+\item{\code{value_range}}{New value range (string or ValueRange object)}
 
-\item{\code{notes}}{New notes}
+\item{\code{notes}}{New notes (string or Notes object)}
+
+\item{\code{modification_note}}{Description of modification}
 
 \item{\code{...}}{Other fields to modify}
 }
@@ -206,6 +252,63 @@ New NdaDataStructure object
 Print method for NdaDataStructure
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$print()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Self (invisibly)
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-NdaDataStructure-merge_value_ranges"></a>}}
+\if{latex}{\out{\hypertarget{method-NdaDataStructure-merge_value_ranges}{}}}
+\subsection{Method \code{merge_value_ranges()}}{
+Merge value ranges from multiple sources
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$merge_value_ranges(
+  nda_range = NULL,
+  redcap_range = NULL,
+  data_range = NULL,
+  missing_codes = character(0)
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{nda_range}}{ValueRange from NDA (may be NULL)}
+
+\item{\code{redcap_range}}{ValueRange from REDCap (may be NULL)}
+
+\item{\code{data_range}}{ValueRange from data (may be NULL)}
+
+\item{\code{missing_codes}}{Character vector of missing data codes}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Self (invisibly) with merged value_range
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-NdaDataStructure-get_merge_warnings"></a>}}
+\if{latex}{\out{\hypertarget{method-NdaDataStructure-get_merge_warnings}{}}}
+\subsection{Method \code{get_merge_warnings()}}{
+Get any warnings from merge operations
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$get_merge_warnings()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Character vector of warnings
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-NdaDataStructure-clear_merge_warnings"></a>}}
+\if{latex}{\out{\hypertarget{method-NdaDataStructure-clear_merge_warnings}{}}}
+\subsection{Method \code{clear_merge_warnings()}}{
+Clear merge warnings
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{NdaDataStructure$clear_merge_warnings()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
