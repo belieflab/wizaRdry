@@ -12,7 +12,8 @@ nda(
   limited_dataset = FALSE,
   skip_prompt = TRUE,
   verbose = FALSE,
-  strict = TRUE
+  strict = TRUE,
+  dcc = FALSE
 )
 }
 \arguments{
@@ -34,6 +35,9 @@ prompts for confirmation unless the user has previously chosen to remember their
 \item{strict}{Logical. If TRUE (default), enforce strict NDA validation: required fields with ANY missing data or
 recommended fields with ALL missing data will cause validation failure. If FALSE (lenient mode), missing data
 triggers warnings but allows processing to continue.}
+
+\item{dcc}{Logical. If TRUE, include 11 DCC (Data Coordinating Center) fields from ndar_subject01
+(7 required + 4 recommended). Default FALSE.}
 }
 \value{
 Prints the time taken for the data request process.
@@ -57,6 +61,9 @@ unit tests to verify that the data quality standards are met.
   
   # Use lenient validation mode (allow missing data with warnings)
   nda("prl", strict=FALSE)
+  
+  # Include DCC fields from ndar_subject01
+  nda("prl", dcc=TRUE)
 }
 
 }

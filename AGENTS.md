@@ -97,14 +97,59 @@ oracle(table_name, ...)
 
 These fields are defined in the `SUPER_REQUIRED_FIELDS` constant (`R/zzz.R`) and automatically sourced from `ndar_subject01`. They are added to all structures regardless of whether the structure explicitly requires them.
 
-**IMPORTANT:** Validation ONLY checks these 5 super required fields. Structure-level required fields (e.g., phq9_1, phq9_2) are NOT validated to prevent false positives.
+**DCC (Data Coordinating Center) Fields (11 optional fields, controlled by `dcc` parameter):**
+
+**7 Required:**
+1. `race` - Race category
+2. `phenotype` - Phenotype
+3. `phenotype_description` - Phenotype description
+4. `twins_study` - Twin study participation
+5. `sibling_study` - Sibling study participation
+6. `family_study` - Family study participation
+7. `sample_taken` - Sample collection status
+
+**4 Recommended:**
+1. `ethnic_group` - Ethnicity
+2. `site` - Study site
+3. `study` - Study identifier
+4. `subsiteid` - Sub-site identifier
+
+These fields are defined in three constants in `R/zzz.R`:
+- `DCC_REQUIRED_FIELDS` - 7 required fields
+- `DCC_RECOMMENDED_FIELDS` - 4 recommended fields
+- `DCC_FIELDS` - All 11 fields combined
+
+**DCC Usage:**
+```r
+# Default: DCC fields NOT included (appear as blue "new" fields in Excel)
+nda("cde_phq901")
+
+# Include DCC fields: merged and validated
+nda("cde_phq901", dcc = TRUE)
+
+# Include DCC fields with strict validation
+nda("cde_phq901", dcc = TRUE, strict = TRUE)
+```
+
+**DCC Validation Behavior:**
+- `dcc = FALSE` (default): DCC fields excluded from merge, appear as "new" fields in Excel output
+- `dcc = TRUE`: DCC fields merged with full metadata and validated:
+  - DCC required fields: ANY NA = validation failure
+  - DCC recommended fields: ALL NA = violation (strict mode only)
+
+**BREAKING CHANGE:** Prior to v0.x.x, `ethnic_group`, `site`, and `subsiteid` were automatically included from ndar_subject01 (unintentional behavior). They now require `dcc = TRUE`.
+
+**IMPORTANT:** Validation checks super required fields (5) and DCC fields (when `dcc = TRUE`). Structure-level required fields (e.g., phq9_1, phq9_2) are NOT validated to prevent false positives.
 
 **Validation Modes:**
 - `strict = TRUE` (default): Required fields with ANY missing data → validation fails (`is_valid = FALSE`), no files created
 - `strict = FALSE` (lenient): Required fields with missing data → validation fails (`is_valid = FALSE`), but files created anyway with warnings
 
 **Key Validation Logic:**
-- **Super required fields:** ANY NA values = validation failure (both modes)
+- **Super required fields (5):** ANY NA values = validation failure (both modes)
+- **DCC fields (when `dcc=TRUE`):**
+  - DCC required (7): ANY NA = validation failure
+  - DCC recommended (4): ALL NA = violation (strict mode only)
 - **Recommended fields:** ALL NA values = violation (strict mode only)
 - **Value ranges:** Only flag violations when data exceeds **defined** valueRange
 - **Unbounded fields:** String, GUID, Date, Integer, Float fields **without valueRange** = valid (no violations)

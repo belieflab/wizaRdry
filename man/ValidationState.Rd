@@ -59,6 +59,8 @@ file should be created based on whether the structure is new or modified.
 \item{\code{warnings}}{Character vector - warning messages}
 
 \item{\code{errors}}{Character vector - error messages}
+
+\item{\code{dcc}}{Logical - whether DCC fields should be validated}
 }
 \if{html}{\out{</div>}}
 }
@@ -83,7 +85,7 @@ file should be created based on whether the structure is new or modified.
 \subsection{Method \code{new()}}{
 Create a new ValidationState instance
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ValidationState$new(measure_name, api, df, nda_structure = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ValidationState$new(measure_name, api, df, nda_structure = NULL, dcc = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -96,6 +98,8 @@ Create a new ValidationState instance
 \item{\code{df}}{Initial dataframe}
 
 \item{\code{nda_structure}}{NDA structure definition (NULL for new structures)}
+
+\item{\code{dcc}}{Logical - whether DCC fields should be validated}
 }
 \if{html}{\out{</div>}}
 }

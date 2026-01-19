@@ -16,6 +16,8 @@
 #' @param strict Logical. If TRUE (default), enforce strict NDA validation: required fields with ANY missing data or
 #'   recommended fields with ALL missing data will cause validation failure. If FALSE (lenient mode), missing data
 #'   triggers warnings but allows processing to continue.
+#' @param dcc Logical. If TRUE, include 11 DCC (Data Coordinating Center) fields from ndar_subject01 
+#'   (7 required + 4 recommended). Default FALSE.
 #' @return Prints the time taken for the data request process.
 #' @export
 #' @examples
@@ -31,10 +33,13 @@
 #'   
 #'   # Use lenient validation mode (allow missing data with warnings)
 #'   nda("prl", strict=FALSE)
+#'   
+#'   # Include DCC fields from ndar_subject01
+#'   nda("prl", dcc=TRUE)
 #' }
 #'
 #' @author Joshua Kenney <joshua.kenney@yale.edu>
-nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE, verbose = FALSE, strict = TRUE) {
+nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset = FALSE, skip_prompt = TRUE, verbose = FALSE, strict = TRUE, dcc = FALSE) {
   start_time <- Sys.time()
 
   # Define base path
@@ -616,7 +621,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
                                          ifelse(measure %in% sql_list, "sql", "csv")))))
     }
 
-    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset, verbose, strict)
+    processNda(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset, verbose, strict, dcc)
   }
 
   # Clean up and record processing time
@@ -624,7 +629,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
   # message(Sys.time() - start_time)  # Print time taken for processing
 }
 
-processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE, verbose = FALSE, strict = TRUE) {
+processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, limited_dataset = FALSE, verbose = FALSE, strict = TRUE, dcc = FALSE) {
   # Store the origin environment (the one that called this function)
   origin_env <- parent.frame()
 
@@ -713,7 +718,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # ADD REQUIRED AND RECOMMENDED ELEMENTS
-      enhancement_result <- addNdarSubjectElements(df, measure, verbose)
+      enhancement_result <- addNdarSubjectElements(df, measure, verbose, dcc)
       df <- enhancement_result$df
       required_field_metadata <- enhancement_result$required_metadata
       recommended_field_metadata <- enhancement_result$recommended_metadata  # NEW
@@ -1029,13 +1034,14 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       validation_state <- ndaValidator(measure, api, limited_dataset, 
                                        modified_structure = nda_structure,
                                        verbose = verbose,
-                                       strict = strict)
+                                       strict = strict,
+                                       dcc = dcc)
 
       # Handle validation errors gracefully
       if (is.null(validation_state)) {
         message("Warning: Validation returned NULL - this should not happen with new validator")
         # Create error state
-        validation_state <- ValidationState$new(measure, api, base::get0(measure), nda_structure)
+        validation_state <- ValidationState$new(measure, api, base::get0(measure), nda_structure, dcc = dcc)
         validation_state$is_valid <- FALSE
         validation_state$errors <- c("Validation returned NULL")
       }
@@ -1355,14 +1361,15 @@ processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) 
 #' @description
 #' Fetches ndar_subject01 from NDA API and adds:
 #' - 5 super required fields (subjectkey, src_subject_id, interview_date, interview_age, sex)
-#' - Common recommended fields (intersection with dataframe columns)
+#' - Optional DCC fields (7 required + 4 recommended) when dcc = TRUE
 #'
 #' @param df Data frame to enhance
 #' @param measure Measure name
 #' @param verbose Logical - print detailed processing messages
+#' @param dcc Logical - include DCC fields from ndar_subject01
 #' @return List with: df, required_metadata, recommended_metadata
 #' @noRd
-addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
+addNdarSubjectElements <- function(df, measure, verbose = FALSE, dcc = FALSE) {
   # Initialize return structure
   result <- list(
     df = df,
@@ -1392,24 +1399,47 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
           # Get the 5 super required fields that are mandatory for all NDA submissions
           super_required_fields <- SUPER_REQUIRED_FIELDS
           
-          # Get REQUIRED elements (filter to super required fields only)
+          # Get REQUIRED elements
           all_required_elements <- subject_structure$dataElements[
             subject_structure$dataElements$required == "Required",
           ]
+          
+          # Determine which required fields to include based on dcc parameter
+          if (dcc) {
+            # Include super required + DCC required fields (if they exist in data)
+            dcc_required_in_data <- intersect(DCC_REQUIRED_FIELDS, names(df))
+            dcc_required_in_ndar <- dcc_required_in_data[dcc_required_in_data %in% all_required_elements$name]
+            required_fields_to_include <- c(super_required_fields, dcc_required_in_ndar)
+          } else {
+            # Only include the 5 super required fields
+            required_fields_to_include <- super_required_fields
+          }
+          
           required_elements <- all_required_elements[
-            all_required_elements$name %in% super_required_fields,
+            all_required_elements$name %in% required_fields_to_include,
           ]
 
-          # Get RECOMMENDED elements (ALL of them initially)
+          # Get RECOMMENDED elements
           all_recommended_elements <- subject_structure$dataElements[
             subject_structure$dataElements$required == "Recommended",
           ]
 
-          # Filter RECOMMENDED to only those that exist in BOTH ndar_subject01 AND the dataframe
+          # Filter RECOMMENDED based on dcc parameter
           common_recommended_names <- intersect(all_recommended_elements$name, names(df))
-          recommended_elements <- all_recommended_elements[
-            all_recommended_elements$name %in% common_recommended_names,
-          ]
+          
+          if (dcc) {
+            # Include only DCC recommended fields that exist in data
+            dcc_recommended_in_data <- intersect(DCC_RECOMMENDED_FIELDS, common_recommended_names)
+            recommended_elements <- all_recommended_elements[
+              all_recommended_elements$name %in% dcc_recommended_in_data,
+            ]
+          } else {
+            # EXCLUDE all DCC fields from recommended (fixes auto-include bug)
+            recommended_names_no_dcc <- setdiff(common_recommended_names, DCC_FIELDS)
+            recommended_elements <- all_recommended_elements[
+              all_recommended_elements$name %in% recommended_names_no_dcc,
+            ]
+          }
 
 
           # Display what we found
@@ -1418,15 +1448,25 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE) {
             message("Required Elements:")
           }
           
-          message(sprintf("  Found %d super required elements from ndar_subject01 (subjectkey, src_subject_id, interview_date, interview_age, sex)", 
-                         nrow(required_elements)))
+          if (dcc) {
+            dcc_required_count <- sum(required_elements$name %in% DCC_REQUIRED_FIELDS)
+            message(sprintf("  Found %d required elements from ndar_subject01 (5 super required + %d DCC required)", 
+                           nrow(required_elements), dcc_required_count))
+          } else {
+            message(sprintf("  Found %d super required elements from ndar_subject01 (subjectkey, src_subject_id, interview_date, interview_age, sex)", 
+                           nrow(required_elements)))
+          }
           
           if (!verbose) {
             message("\nRecommended Elements:")
           }
           
-          message(sprintf("  Found %d recommended elements, %d are common with dataframe",
-                         nrow(all_recommended_elements), nrow(recommended_elements)))
+          if (dcc) {
+            message(sprintf("  Found %d DCC recommended elements in dataframe", nrow(recommended_elements)))
+          } else {
+            message(sprintf("  Found %d recommended elements, %d are common with dataframe (excluding DCC fields)",
+                           nrow(all_recommended_elements), nrow(recommended_elements)))
+          }
           
           if (nrow(recommended_elements) > 0) {
             message(sprintf("  Common recommended fields: %s",

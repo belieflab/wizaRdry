@@ -71,14 +71,18 @@ ValidationState <- R6::R6Class("ValidationState",
     #' @field errors Character vector - error messages
     errors = character(),
     
+    #' @field dcc Logical - whether DCC fields should be validated
+    dcc = FALSE,
+    
     #' @description
     #' Create a new ValidationState instance
     #' @param measure_name Name of the measure/structure
     #' @param api API type (redcap, qualtrics, mongo, csv, oracle, sql)
     #' @param df Initial dataframe
     #' @param nda_structure NDA structure definition (NULL for new structures)
+    #' @param dcc Logical - whether DCC fields should be validated
     #' @return A new ValidationState object
-    initialize = function(measure_name, api, df, nda_structure = NULL) {
+    initialize = function(measure_name, api, df, nda_structure = NULL, dcc = FALSE) {
       if (missing(measure_name) || is.null(measure_name) || measure_name == "") {
         stop("measure_name is required and cannot be empty")
       }
@@ -93,6 +97,7 @@ ValidationState <- R6::R6Class("ValidationState",
       self$api <- api
       self$data_env <- DataEnvironment$new(measure_name, df)
       self$nda_structure <- nda_structure
+      self$dcc <- dcc
       
       # Determine if this is a new structure
       self$is_new_structure <- is.null(nda_structure) || 

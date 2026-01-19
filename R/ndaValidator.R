@@ -16,6 +16,7 @@
 #' @param interactive_mode Logical - allow user prompts
 #' @param modified_structure Pre-enhanced NDA structure (from ndaRequest.R)
 #' @param strict Logical - if TRUE (default), enforce strict validation for missing data
+#' @param dcc Logical - if TRUE, validate DCC fields from ndar_subject01
 #' @return ValidationState object with validation results
 #' @keywords internal
 #' @noRd
@@ -28,7 +29,8 @@ ndaValidator <- function(measure_name,
                              auto_drop_unknown = FALSE,
                              interactive_mode = TRUE,
                              modified_structure = NULL,
-                             strict = TRUE) {
+                             strict = TRUE,
+                             dcc = FALSE) {
   
   tryCatch({
     # Initialize environment
@@ -66,7 +68,7 @@ ndaValidator <- function(measure_name,
     }
     
     # Create ValidationState object
-    state <- ValidationState$new(measure_name, api, df, nda_structure)
+    state <- ValidationState$new(measure_name, api, df, nda_structure, dcc = dcc)
     
     if (verbose) {
       message(sprintf("Structure type: %s", 
@@ -232,6 +234,87 @@ ndaValidator <- function(measure_name,
                          if (total_violations > 1) "s" else ""))
           message("[WARN] Files will be created with caveats")
           message("")  # Blank line
+        }
+      }
+    }
+    
+    # ============================================================================
+    # PHASE 3.5: DCC Fields Validation (if dcc = TRUE)
+    # ============================================================================
+    if (state$dcc) {
+      if (verbose || strict) {
+        message("\n--- Checking DCC Fields ---")
+      }
+      
+      dcc_result <- check_dcc_fields(
+        state = state,
+        elements = elements,
+        strict = strict,
+        verbose = verbose
+      )
+      
+      dcc_required_violations <- dcc_result$required_violations
+      dcc_recommended_violations <- dcc_result$recommended_violations
+      
+      # Add to state
+      state$add_violations("dcc_required", dcc_required_violations)
+      state$add_violations("dcc_recommended", dcc_recommended_violations)
+      
+      # Update validation status if violations found
+      if (length(dcc_required_violations) > 0 || (strict && length(dcc_recommended_violations) > 0)) {
+        state$set_valid(FALSE)
+        
+        if (strict) {
+          # STRICT MODE: Show errors and return early
+          if (!verbose) {
+            message("")  # Blank line
+            message("[ERROR] DCC field validation failed:\n")
+            
+            if (length(dcc_required_violations) > 0) {
+              message("  DCC Required Fields:")
+              for (field_name in names(dcc_required_violations)) {
+                violation <- dcc_required_violations[[field_name]]
+                message(sprintf("    - %s: %s", field_name, violation$issue))
+              }
+              message("")
+            }
+            
+            if (length(dcc_recommended_violations) > 0) {
+              message("  DCC Recommended Fields:")
+              for (field_name in names(dcc_recommended_violations)) {
+                violation <- dcc_recommended_violations[[field_name]]
+                message(sprintf("    - %s: %s", field_name, violation$issue))
+              }
+              message("")
+            }
+            
+            total_violations <- length(dcc_required_violations) + length(dcc_recommended_violations)
+            message(sprintf("[ERROR] Validation failed with %d DCC field violation%s",
+                           total_violations,
+                           if (total_violations > 1) "s" else ""))
+            message("")
+          }
+          
+          # Skip remaining phases
+          message("\n=== STEP 3: De-identifying Data ===")
+          message("[SKIPPED - DCC validation failed]")
+          message("")
+          message("\n=== STEP 4: Generating NDA Files ===")
+          message("[SKIPPED - DCC validation failed]")
+          message("")
+          
+          # Return early with failed state
+          return(state)
+          
+        } else {
+          # LENIENT MODE: Show warnings but continue
+          if (!verbose) {
+            total_violations <- length(dcc_required_violations) + length(dcc_recommended_violations)
+            message(sprintf("[WARN] %d DCC field violation%s found (continuing anyway)",
+                           total_violations,
+                           if (total_violations > 1) "s" else ""))
+            message("")
+          }
         }
       }
     }
@@ -403,7 +486,7 @@ ndaValidator <- function(measure_name,
     
     # Return error state for graceful failure
     error_state <- ValidationState$new(measure_name, api, 
-                                       error_df, error_nda_structure)
+                                       error_df, error_nda_structure, dcc = dcc)
     error_state$is_valid <- FALSE
     error_state$errors <- c(error_msg)
     return(error_state)

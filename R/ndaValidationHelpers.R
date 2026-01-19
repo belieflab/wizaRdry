@@ -411,6 +411,111 @@ check_field_data_completeness <- function(state, elements, super_required_fields
   ))
 }
 
+#' Check DCC Fields for Missing Data
+#'
+#' @description
+#' Validates that DCC (Data Coordinating Center) fields contain sufficient
+#' non-NA data when dcc = TRUE. Checks both required and recommended DCC fields.
+#'
+#' @param state ValidationState object
+#' @param elements Data elements from NDA structure
+#' @param dcc_required_fields Character vector - DCC required fields to check
+#' @param dcc_recommended_fields Character vector - DCC recommended fields to check
+#' @param strict Logical - if TRUE, enforce strict validation
+#' @param verbose Logical - print detailed output
+#' @return List with two elements: required_violations and recommended_violations
+#' @keywords internal
+#' @noRd
+check_dcc_fields <- function(state, elements, 
+                             dcc_required_fields = DCC_REQUIRED_FIELDS,
+                             dcc_recommended_fields = DCC_RECOMMENDED_FIELDS,
+                             strict = TRUE, verbose = FALSE) {
+  df <- state$get_df()
+  
+  # Force elements to be base data.frame
+  if (!is.data.frame(elements) || inherits(elements, c("tbl_df", "tbl", "data.table"))) {
+    elements <- as.data.frame(elements, stringsAsFactors = FALSE)
+  }
+  
+  required_violations <- list()
+  recommended_violations <- list()
+  
+  # Get DCC required elements that are in the structure
+  dcc_required_in_structure <- elements[
+    elements$required == "Required" & 
+    elements$name %in% dcc_required_fields,
+  ]
+  
+  # Get DCC recommended elements that are in the structure
+  dcc_recommended_in_structure <- elements[
+    elements$required == "Recommended" &
+    elements$name %in% dcc_recommended_fields,
+  ]
+  
+  # Check DCC required fields - ANY NA = violation
+  if (nrow(dcc_required_in_structure) > 0) {
+    for (i in seq_len(nrow(dcc_required_in_structure))) {
+      field_name <- dcc_required_in_structure$name[i]
+      
+      if (field_name %in% names(df)) {
+        field_data <- df[[field_name]]
+        na_count <- sum(is.na(field_data))
+        
+        if (na_count > 0) {
+          issue <- sprintf("DCC required field has %d/%d missing values",
+                          na_count, length(field_data))
+          required_violations[[field_name]] <- list(
+            field = field_name,
+            issue = issue,
+            na_count = na_count,
+            total_count = length(field_data)
+          )
+          
+          if (should_show_validation_message(strict, verbose)) {
+            message(sprintf("  [%s] %s: %s",
+                           if (strict) "ERROR" else "WARN",
+                           field_name,
+                           issue))
+          }
+        }
+      }
+    }
+  }
+  
+  # Check DCC recommended fields - ALL NA = violation (strict mode only)
+  if (strict && nrow(dcc_recommended_in_structure) > 0) {
+    for (i in seq_len(nrow(dcc_recommended_in_structure))) {
+      field_name <- dcc_recommended_in_structure$name[i]
+      
+      if (field_name %in% names(df)) {
+        field_data <- df[[field_name]]
+        
+        if (all(is.na(field_data))) {
+          issue <- "DCC recommended field is entirely missing (all NA)"
+          recommended_violations[[field_name]] <- list(
+            field = field_name,
+            issue = issue,
+            na_count = length(field_data),
+            total_count = length(field_data)
+          )
+          
+          if (should_show_validation_message(strict, verbose)) {
+            message(sprintf("  [%s] %s: %s",
+                           if (strict) "ERROR" else "WARN",
+                           field_name,
+                           issue))
+          }
+        }
+      }
+    }
+  }
+  
+  return(list(
+    required_violations = required_violations,
+    recommended_violations = recommended_violations
+  ))
+}
+
 #' Print validation summary
 #' @param state ValidationState object
 #' @noRd

@@ -16,5 +16,8 @@ utils::globalVariables(c(
   "View", "write.csv", "write.table", "ymd", "mdy",
   ".wizaRdry_env",  # Environment for NDA validation workflow
   "SUPER_REQUIRED_FIELDS",  # NDA super required fields constant
-  "NdaDataStructure"  # R6 class for NDA field definitions
+  "NdaDataStructure",  # R6 class for NDA field definitions
+  "DCC_REQUIRED_FIELDS",  # DCC required fields constant
+  "DCC_RECOMMENDED_FIELDS",  # DCC recommended fields constant
+  "DCC_FIELDS"  # All DCC fields constant
 ))

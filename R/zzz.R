@@ -27,6 +27,49 @@ SUPER_REQUIRED_FIELDS <- c(
   "sex"
 )
 
+#' DCC Required Fields
+#'
+#' @description
+#' The 7 required fields from ndar_subject01 that are mandatory for
+#' Data Coordinating Center (DCC) submissions. These fields are only
+#' included when dcc = TRUE.
+#'
+#' @keywords internal
+#' @noRd
+DCC_REQUIRED_FIELDS <- c(
+  "race",
+  "phenotype",
+  "phenotype_description",
+  "twins_study",
+  "sibling_study",
+  "family_study",
+  "sample_taken"
+)
+
+#' DCC Recommended Fields
+#'
+#' @description
+#' The 4 recommended fields from ndar_subject01 for Data Coordinating
+#' Center (DCC) submissions. These fields are only included when dcc = TRUE.
+#'
+#' @keywords internal
+#' @noRd
+DCC_RECOMMENDED_FIELDS <- c(
+  "ethnic_group",
+  "site",
+  "study",
+  "subsiteid"
+)
+
+#' All DCC Fields
+#'
+#' @description
+#' Combined list of all DCC required and recommended fields (11 total).
+#'
+#' @keywords internal
+#' @noRd
+DCC_FIELDS <- c(DCC_REQUIRED_FIELDS, DCC_RECOMMENDED_FIELDS)
+
 .onLoad <- function(libname, pkgname) {
   options(mongolite.quiet = TRUE)
   options(wizaRdry.nda_base_url = "https://nda.nih.gov/api/datadictionary/v2")
