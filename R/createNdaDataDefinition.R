@@ -1978,16 +1978,17 @@ exportDataDefinition <- function(data_definition) {
                  clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
                  notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
                  
-                 for (idx in idx_new_from_nda) {
-                   # Clear metadata columns
-                   for (cc in clear_cols_idx) {
-                     openxlsx::writeData(wb, "Data Definitions", "", startRow = idx + 1, startCol = cc, colNames = FALSE)
-                   }
-                   # Set curator note
-                   if (length(notes_col) > 0) {
-                     openxlsx::writeData(wb, "Data Definitions", "New field (not in NDA)", startRow = idx + 1, startCol = notes_col, colNames = FALSE)
-                   }
-                 }
+                  for (idx in idx_new_from_nda) {
+                    # Clear metadata columns
+                    for (cc in clear_cols_idx) {
+                      openxlsx::writeData(wb, "Data Definitions", "", startRow = idx + 1, startCol = cc, colNames = FALSE)
+                    }
+                    # Set curator note
+                    if (length(notes_col) > 0) {
+                      field_name <- element_names[idx]
+                      openxlsx::writeData(wb, "Data Definitions", sprintf("Requesting to add %s as is", field_name), startRow = idx + 1, startCol = notes_col, colNames = FALSE)
+                    }
+                  }
                }
 
               # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
@@ -2071,10 +2072,164 @@ exportDataDefinition <- function(data_definition) {
                 }
                   applied_yellow[i] <- TRUE
                   nda_range_mismatch[i] <- TRUE
-                  # Update curator notes to "Modified value range" for fields with mismatches
-                  notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
-                  if (length(notes_col) == 1) {
-                    openxlsx::writeData(wb, "Data Definitions", "Modified value range", startRow = i + 1, startCol = notes_col, colNames = FALSE)
+                  
+                  # Update ValueRange column to show comparison: "NDA_range | Proposed_range"
+                  vr_col <- which(colnames(fields_df) == "ValueRange")
+                  if (length(vr_col) == 1) {
+                    our_range <- fields_df$ValueRange[i]
+                    nda_range <- if (!is.null(nda_meta$valueRange) && nzchar(nda_meta$valueRange)) {
+                      nda_meta$valueRange
+                    } else {
+                      "(no range defined)"
+                    }
+                    comparison_text <- sprintf("%s | %s", nda_range, our_range)
+                    openxlsx::writeData(wb, "Data Definitions", comparison_text, 
+                                       startRow = i + 1, startCol = vr_col, colNames = FALSE)
+                  }
+                  
+                  # Update curator notes with specific modification details
+                  notes_col_curator <- which(colnames(fields_df) == "Notes for Data Curator")
+                  if (length(notes_col_curator) == 1) {
+                    # Determine what kind of modification occurred
+                    modification_detail <- ""
+                    curator_rich_text_parts <- NULL  # For rich text formatting
+                    
+                    # Check if this is a pure range extension first
+                    is_range_extension <- FALSE
+                    if (!is.null(ours_vals) && !is.null(nda_allowed)) {
+                      our_min <- min(ours_vals)
+                      our_max <- max(ours_vals)
+                      nda_min <- min(nda_allowed)
+                      nda_max <- max(nda_allowed)
+                      
+                      # It's a range extension if bounds changed and there's only one token that looks like a range
+                      if ((our_min < nda_min || our_max > nda_max) && 
+                          length(added_tokens) == 1 && 
+                          grepl("::", added_tokens[1], fixed = TRUE)) {
+                        is_range_extension <- TRUE
+                        modification_detail <- sprintf("We extended range from %s::%s to %s::%s", 
+                                                      nda_min, nda_max, our_min, our_max)
+                      }
+                    }
+                    
+                    # If not a range extension, categorize and format the additions
+                    if (!is_range_extension && length(added_tokens) > 0) {
+                      # Categorize added tokens: categorical (contain "=") vs numeric ranges
+                      categorical_additions <- added_tokens[grepl("=", added_tokens, fixed = TRUE)]
+                      numeric_range_additions <- added_tokens[!grepl("=", added_tokens, fixed = TRUE) & 
+                                                             grepl("::", added_tokens, fixed = TRUE)]
+                      
+                      # Extract codes from categorical additions
+                      added_codes <- character(0)
+                      if (length(categorical_additions) > 0) {
+                        added_codes <- sapply(categorical_additions, function(x) {
+                          trimws(sub("=.*$", "", x))
+                        }, USE.NAMES = FALSE)
+                      } else if (length(numeric_range_additions) > 0) {
+                        added_codes <- numeric_range_additions
+                      }
+                      
+                      # Format the curator note message
+                      if (length(categorical_additions) > 0) {
+                        # Categorical values added
+                        if (length(added_codes) == 1) {
+                          modification_detail <- sprintf("We added another value, %s, to this data element", 
+                                                        added_codes[1])
+                          # Rich text parts: "We added another value, " + RED(code) + ", to this data element"
+                          curator_rich_text_parts <- list(
+                            list(text = "Modified value range: We added another value, ", color = "000000"),
+                            list(text = added_codes[1], color = "FF0000"),
+                            list(text = ", to this data element", color = "000000")
+                          )
+                        } else if (length(added_codes) == 2) {
+                          values_str <- paste(added_codes, collapse = " and ")
+                          modification_detail <- sprintf("We added values %s to this data element", values_str)
+                          # Rich text: "We added values " + RED(code1) + " and " + RED(code2) + " to this data element"
+                          curator_rich_text_parts <- list(
+                            list(text = "Modified value range: We added values ", color = "000000"),
+                            list(text = added_codes[1], color = "FF0000"),
+                            list(text = " and ", color = "000000"),
+                            list(text = added_codes[2], color = "FF0000"),
+                            list(text = " to this data element", color = "000000")
+                          )
+                        } else {
+                          # 3+ values: "We added values 4, 5, and 6 to this data element"
+                          values_str <- paste(paste(head(added_codes, -1), collapse = ", "), 
+                                            "and", tail(added_codes, 1))
+                          modification_detail <- sprintf("We added values %s to this data element", values_str)
+                          # Rich text: alternate between black and red for each code
+                          curator_rich_text_parts <- list(
+                            list(text = "Modified value range: We added values ", color = "000000")
+                          )
+                          for (j in seq_along(added_codes)) {
+                            curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                              list(text = added_codes[j], color = "FF0000")
+                            if (j < length(added_codes) - 1) {
+                              curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                                list(text = ", ", color = "000000")
+                            } else if (j == length(added_codes) - 1) {
+                              curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                                list(text = " and ", color = "000000")
+                            }
+                          }
+                          curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                            list(text = " to this data element", color = "000000")
+                        }
+                      } else if (length(numeric_range_additions) > 0) {
+                        # Range segments added (not extensions)
+                        if (length(numeric_range_additions) == 1) {
+                          modification_detail <- sprintf("We added another range, %s, to this data element", 
+                                                        numeric_range_additions[1])
+                          # Rich text: "We added another range, " + RED(range) + ", to this data element"
+                          curator_rich_text_parts <- list(
+                            list(text = "Modified value range: We added another range, ", color = "000000"),
+                            list(text = numeric_range_additions[1], color = "FF0000"),
+                            list(text = ", to this data element", color = "000000")
+                          )
+                        } else {
+                          ranges_str <- paste(numeric_range_additions, collapse = ", ")
+                          modification_detail <- sprintf("We added ranges %s to this data element", ranges_str)
+                          # Rich text: alternate between black and red for each range
+                          curator_rich_text_parts <- list(
+                            list(text = "Modified value range: We added ranges ", color = "000000")
+                          )
+                          for (j in seq_along(numeric_range_additions)) {
+                            curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                              list(text = numeric_range_additions[j], color = "FF0000")
+                            if (j < length(numeric_range_additions)) {
+                              curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                                list(text = ", ", color = "000000")
+                            }
+                          }
+                          curator_rich_text_parts[[length(curator_rich_text_parts) + 1]] <- 
+                            list(text = " to this data element", color = "000000")
+                        }
+                      } else {
+                        # Fallback for other additions
+                        added_str <- paste(added_tokens, collapse = ", ")
+                        modification_detail <- sprintf("We added value(s): %s", added_str)
+                      }
+                    } else if (!is_range_extension && !is.null(ours_vals) && !is.null(nda_allowed)) {
+                      # Some other kind of modification
+                      modification_detail <- "Value range differs from NDA"
+                    } else if (modification_detail == "") {
+                      # Fallback
+                      modification_detail <- "Value range differs from NDA"
+                    }
+                    
+                    # Write curator note (plain text - will be replaced with rich text later if available)
+                    curator_note <- sprintf("Modified value range: %s", modification_detail)
+                    openxlsx::writeData(wb, "Data Definitions", curator_note, 
+                                       startRow = i + 1, startCol = notes_col_curator, colNames = FALSE)
+                    
+                    # Add to rich_text_edits for curator note column if we have rich text formatting
+                    if (!is.null(curator_rich_text_parts)) {
+                      rich_text_edits[[length(rich_text_edits) + 1]] <- list(
+                        row = i + 1,
+                        curator_col = notes_col_curator,
+                        curator_rich_text_parts = curator_rich_text_parts
+                      )
+                    }
                   }
                 }
               }
@@ -2130,19 +2285,45 @@ exportDataDefinition <- function(data_definition) {
             } else {
               tryCatch({
                 # Validate rich_text_edits structure before processing
+                # Note: rich_text_edits can contain two types:
+                # 1. ValueRange/Notes edits (have tokens, token_is_added, vr_col, notes_col)
+                # 2. Curator note edits (have curator_col, curator_rich_text_parts)
                 valid_edits <- Filter(function(edit) {
-                  is.list(edit) &&
-                  !is.null(edit$row) &&
-                  !is.null(edit$tokens) &&
-                  !is.null(edit$token_is_added) &&
-                  is.character(edit$tokens) &&
-                  is.logical(edit$token_is_added) &&
-                  length(edit$tokens) == length(edit$token_is_added) &&
-                  length(edit$tokens) > 0 &&
-                  # Ensure row, vr_col, notes_col are scalar values (length 1 or NA)
-                  (is.numeric(edit$row) && length(edit$row) == 1) &&
-                  (is.na(edit$vr_col) || (is.numeric(edit$vr_col) && length(edit$vr_col) == 1)) &&
-                  (is.na(edit$notes_col) || (is.numeric(edit$notes_col) && length(edit$notes_col) == 1))
+                  tryCatch({
+                    if (!is.list(edit) || is.null(edit$row)) return(FALSE)
+                    if (!(is.numeric(edit$row) && length(edit$row) == 1)) return(FALSE)
+                    
+                    # Check Type 1: ValueRange/Notes edit
+                    is_type1 <- FALSE
+                    if (!is.null(edit$tokens) && !is.null(edit$token_is_added)) {
+                      is_type1 <- (
+                        is.character(edit$tokens) &&
+                        is.logical(edit$token_is_added) &&
+                        length(edit$tokens) == length(edit$token_is_added) &&
+                        length(edit$tokens) > 0 &&
+                        (is.null(edit$vr_col) || isTRUE(is.na(edit$vr_col)) || 
+                         (is.numeric(edit$vr_col) && length(edit$vr_col) == 1)) &&
+                        (is.null(edit$notes_col) || isTRUE(is.na(edit$notes_col)) || 
+                         (is.numeric(edit$notes_col) && length(edit$notes_col) == 1))
+                      )
+                    }
+                    
+                    # Check Type 2: Curator note edit
+                    is_type2 <- FALSE
+                    if (!is.null(edit$curator_col) && !is.null(edit$curator_rich_text_parts)) {
+                      is_type2 <- (
+                        is.numeric(edit$curator_col) &&
+                        length(edit$curator_col) == 1 &&
+                        is.list(edit$curator_rich_text_parts) &&
+                        length(edit$curator_rich_text_parts) > 0
+                      )
+                    }
+                    
+                    return(is_type1 || is_type2)
+                  }, error = function(e) {
+                    # If validation fails for this edit, skip it
+                    return(FALSE)
+                  })
                 }, rich_text_edits)
                 
                 if (length(valid_edits) == 0) {
@@ -2207,6 +2388,26 @@ exportDataDefinition <- function(data_definition) {
                         if (length(runs2) > 0) {
                           dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
                           wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
+                        }
+                      }
+                      
+                      # Curator Notes rich text (Notes for Data Curator column)
+                      if (!is.null(edit$curator_col) && !is.na(edit$curator_col) && 
+                          length(edit$curator_col) == 1 && 
+                          !is.null(edit$curator_rich_text_parts) && 
+                          length(edit$curator_rich_text_parts) > 0) {
+                        curator_runs <- list()
+                        for (part in edit$curator_rich_text_parts) {
+                          if (is.list(part) && !is.null(part$text) && !is.null(part$color)) {
+                            curator_runs[[length(curator_runs) + 1]] <- 
+                              create_rich_text_fn(text = as.character(part$text), 
+                                                color = part$color)
+                          }
+                        }
+                        if (length(curator_runs) > 0) {
+                          curator_dims <- paste0(num_to_col(edit$curator_col), edit$row)
+                          wb_add_rich_text_fn(wb2, sheet = "Data Definitions", 
+                                            dims = curator_dims, x = curator_runs)
                         }
                       }
                     }, error = function(e) {
