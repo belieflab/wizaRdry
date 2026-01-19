@@ -23,7 +23,19 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     nda_structure <- validation_state$nda_structure
     
     message(sprintf("\n[DATA DEFINITION] Creating for '%s'", measure_name))
-    message(sprintf("[DATA DEFINITION] Reason: %s", validation_state$get_modification_reason()))
+    
+    # Build reason message
+    reason <- validation_state$get_modification_reason()
+    
+    # In verbose mode, append DCC exclusion info if dcc=FALSE
+    if (verbose && !validation_state$dcc) {
+      dcc_count <- sum(names(data_frame) %in% DCC_FIELDS)
+      if (dcc_count > 0) {
+        reason <- sprintf("%s (%d DCC fields excluded)", reason, dcc_count)
+      }
+    }
+    
+    message(sprintf("[DATA DEFINITION] Reason: %s", reason))
     
     # Convert to legacy format for rest of function
     submission_template <- list(columns = names(data_frame))

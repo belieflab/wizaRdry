@@ -303,21 +303,11 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   })
   
   # Filter template columns:
-  # 1. Remove excluded fields
-  # 2. Only include fields that exist in the current structure (if structure was fetched)
-  #    OR all fields if structure couldn't be fetched
+  # Just remove explicitly excluded fields
+  # The dataframe has already been cleaned up by the nda script and DCC removal logic,
+  # so we trust that all remaining fields should be in the template
   excluded_cols <- template_cols[template_cols %in% excluded_from_template]
-  
-  # Only filter by structure if we successfully fetched it
-  if (length(structure_field_names) > 0) {
-    # Only include fields that are in the current structure
-    # This ensures we don't include required fields from ndar_subject01 that aren't in this structure
-    filtered_cols <- template_cols[template_cols %in% structure_field_names]
-    filtered_cols <- filtered_cols[!filtered_cols %in% excluded_from_template]
-  } else {
-    # If structure couldn't be fetched, just exclude the excluded fields
-    filtered_cols <- template_cols[!template_cols %in% excluded_from_template]
-  }
+  filtered_cols <- template_cols[!template_cols %in% excluded_from_template]
   
   template <- template[, filtered_cols, drop = FALSE]
   

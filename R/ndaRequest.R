@@ -1060,6 +1060,32 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         message(sprintf("[DEBUG] Retrieved dataframe from ValidationState (nrow=%d, ncol=%d)", 
                        nrow(df), ncol(df)))
       }
+      
+      # Remove DCC fields from dataframe if dcc = FALSE
+      # Only remove DCC fields that are NOT in the base NDA structure
+      if (!dcc && !is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
+        base_structure_fields <- nda_structure$dataElements$name
+        dcc_fields_in_data <- intersect(names(df), DCC_FIELDS)
+        # Only remove DCC fields that are NOT part of the base structure
+        dcc_fields_to_remove <- setdiff(dcc_fields_in_data, base_structure_fields)
+        
+        if (length(dcc_fields_to_remove) > 0) {
+          df <- df[, !names(df) %in% dcc_fields_to_remove, drop = FALSE]
+          
+          # Update both environments
+          base::assign(measure, df, envir = globalenv())
+          base::assign(measure, df, envir = .wizaRdry_env)
+          
+          # Update ValidationState dataframe
+          validation_state$set_df(df)
+          
+          if (verbose) {
+            message(sprintf("\n[DCC EXCLUDED] Removed %d DCC fields from dataframe (dcc=FALSE): %s",
+                           length(dcc_fields_to_remove),
+                           paste(dcc_fields_to_remove, collapse = ", ")))
+          }
+        }
+      }
 
       # Create NDA files using simplified helper function
       create_nda_files(validation_state, strict = strict, verbose = verbose)
@@ -1101,6 +1127,29 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
       if (!is.null(recommended_field_metadata)) {
         validation_state$recommended_metadata <- recommended_field_metadata
+      }
+      
+      # Remove DCC fields from dataframe if dcc = FALSE (NEW structures)
+      # For new structures, remove ALL DCC fields since there's no base structure to check
+      if (!dcc) {
+        dcc_fields_in_data <- intersect(names(df), DCC_FIELDS)
+        
+        if (length(dcc_fields_in_data) > 0) {
+          df <- df[, !names(df) %in% DCC_FIELDS, drop = FALSE]
+          
+          # Update both environments
+          base::assign(measure, df, envir = globalenv())
+          base::assign(measure, df, envir = .wizaRdry_env)
+          
+          # Update ValidationState dataframe
+          validation_state$set_df(df)
+          
+          if (verbose) {
+            message(sprintf("\n[DCC EXCLUDED] Removed %d DCC fields from dataframe (dcc=FALSE): %s",
+                           length(dcc_fields_in_data),
+                           paste(dcc_fields_in_data, collapse = ", ")))
+          }
+        }
       }
 
       # Create NDA files using simplified helper function
