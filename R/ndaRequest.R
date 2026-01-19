@@ -1027,7 +1027,11 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # Enhance existing structure with ndar_subject01 metadata BEFORE validation
       if (!is.null(required_field_metadata) || !is.null(recommended_field_metadata)) {
         if (verbose) message("Enhancing existing NDA structure with ndar_subject01 metadata...")
-        nda_structure <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata, verbose)
+        merge_result <- mergeNdarSubjectIntoExisting(nda_structure, required_field_metadata, recommended_field_metadata, verbose)
+        nda_structure <- merge_result$structure
+        ndar_additions <- merge_result$ndar_additions
+      } else {
+        ndar_additions <- character(0)
       }
 
       # EXISTING NDA STRUCTURE - Run full validation
@@ -1035,7 +1039,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
                                        modified_structure = nda_structure,
                                        verbose = verbose,
                                        strict = strict,
-                                       dcc = dcc)
+                                       dcc = dcc,
+                                       ndar_additions = ndar_additions)
 
       # Handle validation errors gracefully
       if (is.null(validation_state)) {
@@ -1733,12 +1738,22 @@ mergeNdarSubjectIntoExisting <- function(existing_structure, required_metadata, 
         }
       }
     }
+    
+    # Return both structure and list of fields added from ndar_subject01
+    # The 'new_fields' variable was already calculated at line 1662
+    return(list(
+      structure = existing_structure,
+      ndar_additions = new_fields
+    ))
 
   }, error = function(e) {
     message("Error merging ndar_subject01 into existing structure: ", e$message)
+    # Return structure with empty additions on error
+    return(list(
+      structure = existing_structure,
+      ndar_additions = character(0)
+    ))
   })
-
-  return(existing_structure)
 }
 
 # Add helper function for MongoDB cleanup

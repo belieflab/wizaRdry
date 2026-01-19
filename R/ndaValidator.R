@@ -30,7 +30,8 @@ ndaValidator <- function(measure_name,
                              interactive_mode = TRUE,
                              modified_structure = NULL,
                              strict = TRUE,
-                             dcc = FALSE) {
+                             dcc = FALSE,
+                             ndar_additions = character()) {
   
   tryCatch({
     # Initialize environment
@@ -69,6 +70,11 @@ ndaValidator <- function(measure_name,
     
     # Create ValidationState object
     state <- ValidationState$new(measure_name, api, df, nda_structure, dcc = dcc)
+    
+    # Store ndar_subject01 additions in ValidationState
+    if (length(ndar_additions) > 0) {
+      state$ndar_subject_additions <- ndar_additions
+    }
     
     if (verbose) {
       message(sprintf("Structure type: %s", 

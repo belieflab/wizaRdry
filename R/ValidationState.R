@@ -50,6 +50,9 @@ ValidationState <- R6::R6Class("ValidationState",
     #' @field new_fields Character vector - fields in data not in NDA structure
     new_fields = character(),
     
+    #' @field ndar_subject_additions Character vector - DCC fields added from ndar_subject01
+    ndar_subject_additions = character(),
+    
     #' @field renamed_fields Character vector - fields that were renamed
     renamed_fields = character(),
     
@@ -149,7 +152,8 @@ ValidationState <- R6::R6Class("ValidationState",
     #' @return Logical
     has_modifications = function() {
       length(self$new_fields) > 0 || 
-      length(self$value_range_violations) > 0
+      length(self$value_range_violations) > 0 ||
+      length(self$ndar_subject_additions) > 0
     },
     
     #' @description
@@ -173,6 +177,12 @@ ValidationState <- R6::R6Class("ValidationState",
         reasons <- c(reasons, sprintf("%d new field%s", 
                                      length(self$new_fields),
                                      if(length(self$new_fields) > 1) "s" else ""))
+      }
+      
+      if (length(self$ndar_subject_additions) > 0) {
+        reasons <- c(reasons, sprintf("%d DCC field%s added", 
+                                     length(self$ndar_subject_additions),
+                                     if(length(self$ndar_subject_additions) > 1) "s" else ""))
       }
       
       if (length(self$value_range_violations) > 0) {

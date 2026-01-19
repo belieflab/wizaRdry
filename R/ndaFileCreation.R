@@ -117,6 +117,13 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         }
       }
       
+      # Show DCC additions
+      if (length(validation_state$ndar_subject_additions) > 0) {
+        for (field in validation_state$ndar_subject_additions) {
+          message(sprintf("    - Added DCC field: %s", field))
+        }
+      }
+      
       # Show value range changes
       if (length(validation_state$value_range_violations) > 0) {
         for (field in names(validation_state$value_range_violations)) {
