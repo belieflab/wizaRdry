@@ -1795,22 +1795,24 @@ exportDataDefinition <- function(data_definition, format = "csv") {
                  FALSE
                }
                # Source summary
-               if (!is.null(x$source)) {
-                 if (identical(x$source, "computed_from_data")) {
-                   # If field exists in NDA but was marked as computed, it's likely a modified value range
-                   if (exists_in_nda || isTRUE(x$is_modified)) {
-                     parts <- c(parts, "Modified value range")
-                   } else {
-                     parts <- c(parts, "New field (not in NDA)")
-                   }
-                 } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
-                   parts <- c(parts, "Modified value range")
-                 } else if (identical(x$source, "template_only")) {
-                   parts <- c(parts, "In template only; no data observed")
-                 } else if (identical(x$source, "nda_validated")) {
-                   parts <- c(parts, "Matched NDA field")
-                 }
-               }
+              if (!is.null(x$source)) {
+                if (identical(x$source, "computed_from_data")) {
+                  # If field exists in NDA but was marked as computed, it's likely a modified value range
+                  if (exists_in_nda || isTRUE(x$is_modified)) {
+                    parts <- c(parts, "Modified value range")
+                  } else {
+                    parts <- c(parts, "New field (not in NDA)")
+                  }
+                } else if (identical(x$source, "nda_modified") || isTRUE(x$is_modified)) {
+                  parts <- c(parts, "Modified value range")
+                } else if (identical(x$source, "template_only")) {
+                  parts <- c(parts, "In template only; no data observed")
+                } else if (identical(x$source, "nda_validated")) {
+                  # Existing NDA fields that match perfectly - no curator notes needed
+                  # Return empty string early to skip all curator annotations
+                  return("")
+                }
+              }
                # Required status
                reqFlag <- NULL
                if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
