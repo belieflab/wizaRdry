@@ -166,7 +166,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           verbose = verbose
         )
         if (!verbose) {
-          message(sprintf("[OK] Data definition created at: ./tmp/%s_data-definition.xlsx", measure_name))
+          message(sprintf("[OK] Data definition created at: ./tmp/%s_definitions.xlsx", measure_name))
         } else {
           message("[OK] Data definition created successfully")
         }
@@ -219,7 +219,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           verbose = verbose
         )
         if (!verbose) {
-          message(sprintf("[OK] Definition created at: ./tmp/%s_data-definition.xlsx", measure_name))
+          message(sprintf("[OK] Definition created at: ./tmp/%s_definitions.xlsx", measure_name))
           message("(Structure modifications require NDA approval)")
         } else {
           message("[OK] Data definition created successfully")

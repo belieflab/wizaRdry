@@ -1324,8 +1324,8 @@ SourceMetadata <- R6::R6Class("SourceMetadata",
     is_modified = NULL,
     modifications = NULL,
     
-    initialize = function(source = "unknown") {
-      self$primary_source <- source
+    initialize = function(primary_source = "unknown") {
+      self$primary_source <- primary_source
       self$nda_matched <- FALSE
       self$redcap_matched <- FALSE
       self$is_modified <- FALSE
