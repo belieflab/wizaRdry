@@ -1275,30 +1275,28 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         }
       }
 
-      data_definition$fields[[column_name]] <- list(
-        name = column_name,
+      # Create NdaDataStructure from NDA metadata
+      field_struct <- NdaDataStructure$new(
+        element_name = column_name,
+        data_type = nda_metadata_to_use$type %||% "String",
+        size = nda_metadata_to_use$size,
+        required = nda_metadata_to_use$required %||% "No",
+        element_description = fallback_desc,
+        value_range = nda_metadata_to_use$valueRange %||% "",
+        notes = nda_metadata_to_use$notes %||% "",
+        aliases = nda_metadata_to_use$aliases %||% "",
         selection_order = i,
-        selected_for_submission = TRUE,
-        source = source,
-
-        # Copy NDA metadata
-        data_type = if ("type" %in% names(nda_field)) nda_field$type else "unknown",
-        description = fallback_desc,
-        required = if ("required" %in% names(nda_field)) as.logical(nda_field$required) else FALSE,
-
-        # Validation rules
-        validation_rules = validation_rules,
-
-        # Additional NDA metadata
-        nda_metadata = nda_metadata_to_use,
-
-        # Missing value information
-        missing_info = missing_info,
-
-        # Modification information
-        is_modified = is_modified_structure,
-        modification_notes = modification_notes
+        source = source
       )
+      
+      # Set additional metadata
+      field_struct$missing_info <- missing_info
+      field_struct$is_modified <- is_modified_structure
+      field_struct$modification_notes <- modification_notes
+      field_struct$validation_rules <- validation_rules
+      
+      # Store as list for backward compatibility with export code
+      data_definition$fields[[column_name]] <- field_struct$to_list()
 
     } else {
       # Field not found in NDA structure - compute metadata from data
@@ -1418,36 +1416,31 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       data_definition$metadata$validation_summary$warnings <-
         c(data_definition$metadata$validation_summary$warnings, warning_msg)
 
-      data_definition$fields[[column_name]] <- list(
-        name = column_name,
-        selection_order = i,
-        selected_for_submission = TRUE,
-        source = if (field_exists_in_data) "computed_from_data" else "template_only",
+      # Create NdaDataStructure from computed metadata
+      field_struct <- NdaDataStructure$new(
+        element_name = column_name,
         data_type = computed_metadata$data_type,
-        description = computed_desc,
-        required = computed_metadata$required == "Required",
-        validation_rules = list(
-          min_value = NULL,
-          max_value = NULL,
-          allowed_values = computed_metadata$valueRange,
-          pattern = NULL
-        ),
-        # Create NDA-style metadata structure
-        nda_metadata = list(
-          name = column_name,
-          type = computed_metadata$data_type,
-          size = computed_metadata$size,
-          required = computed_metadata$required,
-          description = computed_desc,
-          valueRange = computed_metadata$valueRange,
-          notes = computed_metadata$notes,
-          aliases = computed_metadata$aliases
-        ),
-        computed = TRUE,
-        exists_in_data = field_exists_in_data,
-        warning = warning_msg,
-        missing_info = computed_metadata$missing_info
+        size = computed_metadata$size,
+        required = computed_metadata$required,
+        element_description = computed_desc,
+        value_range = computed_metadata$valueRange %||% "",
+        notes = computed_metadata$notes %||% "",
+        aliases = computed_metadata$aliases %||% "",
+        selection_order = i,
+        source = if (field_exists_in_data) "computed_from_data" else "template_only"
       )
+      
+      # Set additional metadata
+      field_struct$missing_info <- computed_metadata$missing_info
+      field_struct$validation_rules <- list(
+        min_value = NULL,
+        max_value = NULL,
+        allowed_values = computed_metadata$valueRange,
+        pattern = NULL
+      )
+      
+      # Store as list for backward compatibility
+      data_definition$fields[[column_name]] <- field_struct$to_list()
 
       data_definition$metadata$validation_summary$unmatched_fields <-
         data_definition$metadata$validation_summary$unmatched_fields + 1
@@ -2099,37 +2092,12 @@ exportDataDefinition <- function(data_definition) {
              openxlsx::writeData(wb, "Routes", routes_df, startRow = 1, startCol = 1, withFilter = TRUE)
              openxlsx::setColWidths(wb, "Routes", cols = seq_len(ncol(routes_df)), widths = "auto")
 
-              # Ensure Notes for Data Curator defaults for unchanged NDA elements
-              idx_no_change <- which(element_is_in_nda & !row_modified & !nda_range_mismatch)
+              # NOTE: With NdaDataStructure, we now ALWAYS show NDA metadata for ALL fields.
+              # The old behavior was to clear metadata for "unchanged" NDA fields and only show
+              # "Requesting to add X as is" in curator notes. This was bad UX.
+              # Now we show full metadata so users can see field definitions without external lookup.
               
-              # Filter out ndar_subject01 fields (super required + recommended) from clearing
-              # These fields should ALWAYS show their NDA metadata since they're authoritative
-              ndar_subject01_names <- c(SUPER_REQUIRED_FIELDS,
-                                       c("ethnic_group", "site", "study", "subsiteid"))
-              idx_no_change <- idx_no_change[!element_names[idx_no_change] %in% ndar_subject01_names]
-              
-              if (length(idx_no_change) > 0) {
-                notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
-                default_notes <- paste0("Requesting to add ", element_names[idx_no_change], " as is.")
-                # Overwrite cells in worksheet to guarantee desired phrasing
-                for (k in seq_along(idx_no_change)) {
-                  openxlsx::writeData(wb, "Data Definitions", default_notes[k], startRow = idx_no_change[k] + 1, startCol = notes_col, colNames = FALSE)
-                }
-
-                # For unchanged NDA elements (excluding ndar_subject01 fields), clear all definition columns
-                cols_to_clear <- c("DataType", "Size", "Required", "ElementDescription", "ValueRange", "Notes", "Aliases")
-                clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
-                if (length(clear_cols_idx) > 0) {
-                  for (cc in clear_cols_idx) {
-                    # write empty strings into each target row for this column
-                    for (r in idx_no_change) {
-                      openxlsx::writeData(wb, "Data Definitions", "", startRow = r + 1, startCol = cc, colNames = FALSE)
-                    }
-                  }
-                }
-
-               # Do not populate Notes with version string for unchanged elements
-              }
+              # We no longer clear metadata columns for any NDA fields.
            }
           
           # Auto widths

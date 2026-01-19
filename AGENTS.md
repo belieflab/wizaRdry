@@ -79,6 +79,7 @@ oracle(table_name, ...)
 
 **Main Components:**
 - `ValidationState` (R6): State management for validation results
+- `NdaDataStructure` (R6): Typed struct for NDA field definitions (Jan 2025)
 - `ndaValidator()`: Main validation orchestrator with strict/lenient modes
 - Helper modules (all internal, not exported):
   - `ndaValidationHelpers.R`: Value range checking, GUID validation, field data completeness
@@ -139,6 +140,61 @@ File creation logic:
 └─ EXISTING modified → STEP 4A: Create submission template
                        STEP 4B: Create data definition (requires approval)
 ```
+
+### NDA Field Definition Structure
+
+**NdaDataStructure R6 Class** (added Jan 2025):
+
+A typed struct (similar to Go structs) that represents a single NDA field definition. Replaces ad-hoc list construction for consistency and type safety.
+
+**Core Fields (match Excel columns):**
+- `element_name` - Field name (ElementName)
+- `data_type` - Data type (String, Integer, Float, Date, GUID, Boolean)
+- `size` - Size for String types
+- `required` - Requirement level (Required, Recommended, Conditional, No)
+- `element_description` - Field description
+- `value_range` - Allowed values or range
+- `notes` - Field notes
+- `aliases` - Field aliases
+
+**Internal Metadata:**
+- `selection_order` - Order in which field was selected
+- `source` - Field source (nda_validated, nda_modified, computed_from_data, etc.)
+- `is_modified` - Whether field was modified from NDA
+- `missing_info` - Missing data statistics
+- `validation_rules` - Validation rules (min/max/allowed values)
+
+**Key Methods:**
+- `to_excel_row()` - Convert to Excel export row
+- `to_list()` - Convert to legacy list format
+- `is_super_required()` - Check if field is super required
+- `is_from_ndar_subject()` - Check if from ndar_subject01
+- `modify()` - Create modified copy
+
+**Usage Pattern:**
+```r
+# Create from NDA API response
+field <- NdaDataStructure$new(
+  element_name = "subjectkey",
+  data_type = "GUID",
+  required = "Required",
+  value_range = "NDAR*"
+)
+
+# Or use factory functions
+field <- nda_structure_from_nda(nda_element, selection_order = 1)
+field <- nda_structure_from_data("race", df$race, selection_order = 15)
+
+# Convert to list for backward compatibility
+field_list <- field$to_list()
+```
+
+**Benefits:**
+- Type safety and validation at construction
+- Consistent structure across all code paths
+- Eliminates 200+ lines of sapply extraction code
+- Self-documenting field definitions
+- Direct mapping to Excel export schema
 
 ---
 
@@ -300,7 +356,13 @@ config_env$get_missing_data_codes()
 
 ## Recent Major Changes
 
-### January 2025 - Validation System Refinements
+### January 2025 - Validation System Refinements & NdaDataStructure
+- **NdaDataStructure R6 class:** Typed struct for NDA field definitions (replaces ad-hoc lists)
+  - Type safety and validation at construction
+  - Factory methods: `nda_structure_from_nda()`, `nda_structure_from_data()`
+  - Direct Excel export via `to_excel_row()`
+  - Eliminates 200+ lines of sapply extraction code
+- **Excel metadata display:** ALL NDA fields now show full metadata (removed clearing logic)
 - **SUPER_REQUIRED_FIELDS constant:** Centralized definition of 5 mandatory NDA fields (DRY principle)
 - **Validation scope fix:** Only checks 5 super required fields, ignores structure-level required fields (e.g., phq9_*)
 - **Lenient mode behavior:** Both strict and lenient modes set `is_valid=FALSE` on violations; lenient mode creates files with warnings

@@ -15,5 +15,6 @@ utils::globalVariables(c(
   "subject_dob", "mongo_conn", "checkKeys", "createExtract",
   "View", "write.csv", "write.table", "ymd", "mdy",
   ".wizaRdry_env",  # Environment for NDA validation workflow
-  "SUPER_REQUIRED_FIELDS"  # NDA super required fields constant
+  "SUPER_REQUIRED_FIELDS",  # NDA super required fields constant
+  "NdaDataStructure"  # R6 class for NDA field definitions
 ))
