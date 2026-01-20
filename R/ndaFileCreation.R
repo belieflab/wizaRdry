@@ -71,7 +71,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
   
   # Print STEP 4 header once (before validation gate)
   if (!verbose) {
-    message("\n=== STEP 4: Data Structure Reconciliation ===")
+    message("\n=== STEP 4: Data Structure Harmonization ===")
   }
   
   # Validation gate: Check if files should be created
@@ -92,9 +92,9 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
     modification_type <- if (is_new) {
       "NEW"
     } else if (needs_definition) {
-      "EXISTING (modified)"
+      "MODIFIED"
     } else {
-      "EXISTING (unmodified)"
+      "EXISTING"
     }
     
     if (verbose) {
@@ -102,7 +102,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       message(sprintf("Structure type: %s", if(is_new) "NEW" else "EXISTING"))
       message(sprintf("Modification status: %s", reason))
     } else {
-      message(sprintf("Structure: %s\n", modification_type))
+      message(sprintf("Structure: %s", modification_type))
     }
     
     # Show modification details for MODIFIED structures (non-verbose only)
@@ -200,7 +200,8 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           verbose = verbose
         )
         if (!verbose) {
-          message(sprintf("[OK] Created at: ./tmp/%s_template.csv", measure_name))
+          validation_prefix <- if (!validation_state$is_valid) "[WARN] Submission Template created" else "[OK] Created"
+          message(sprintf("%s at: ./tmp/%s_template.csv", validation_prefix, measure_name))
         } else {
           message("[OK] Submission template created successfully")
         }
@@ -227,8 +228,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           verbose = verbose
         )
         if (!verbose) {
-          message(sprintf("[OK] Definition created at: ./tmp/%s_definitions.xlsx", measure_name))
-          message("(Structure modifications require NDA approval)")
+          message(sprintf("[OK] Data definition created at: ./tmp/%s_definitions.xlsx", measure_name))
         } else {
           message("[OK] Data definition created successfully")
         }
@@ -260,13 +260,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         files_created <- c(files_created, "data definition")
       }
       
-      if (length(files_created) == 0) {
-        message("Files Created: none")
-      } else if (length(files_created) == 1) {
-        message(sprintf("Files Created: %s only", files_created[1]))
-      } else {
-        message(sprintf("Files Created: %s AND %s", files_created[1], files_created[2]))
-      }
+
     }
     
   } else {

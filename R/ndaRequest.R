@@ -1213,7 +1213,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     if (validation_state$is_valid) {
       message(sprintf("[OK] NDA processing complete in %.1f seconds", elapsed_time))
     } else {
-      message(sprintf("[ERROR] NDA processing failed - please fix validation issues and try again"))
+      message("[ERROR] NDA validation failed")
     }
 
     # Play completion sound AFTER all processing, including data definition export
@@ -1346,9 +1346,9 @@ processRequiredFields <- function(df, required_elements, verbose = FALSE) {
 processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) {
   if (is.null(recommended_elements) || nrow(recommended_elements) == 0) {
     if (!verbose) {
-      message("No common recommended fields to process")
+      message("[OK] No common recommended fields to process")
     } else {
-      message("\n--- No common recommended fields to process ---")
+      message("\n[OK] No common recommended fields to process")
     }
     return(df)
   }
@@ -1526,7 +1526,7 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE, dcc = FALSE) {
             message(sprintf("  Common recommended fields: %s",
                            paste(recommended_elements$name, collapse = ", ")))
           } else {
-            message("  No common recommended fields found")
+            message("  [OK] No common recommended fields found")
           }
           
           # PRESERVE ALL METADATA for required and COMMON recommended only

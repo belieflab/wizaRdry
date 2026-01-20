@@ -890,7 +890,6 @@ redcap.dict <- function(instrument_name) {
   # Check if input is a data frame with redcap_instrument attribute
   if (is.data.frame(instrument_name) && !is.null(attr(instrument_name, "redcap_instrument"))) {
     inst <- attr(instrument_name, "redcap_instrument")
-    message(sprintf("Retrieving metadata for instrument '%s' from data frame attributes.", inst))
 
     # Fetch metadata using the instrument name
     # Validate secrets

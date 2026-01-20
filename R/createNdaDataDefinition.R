@@ -68,9 +68,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       ndar_subject_additions <- character(0)
     }
     
-    message(sprintf("\n[DATA DEFINITION] Creating for '%s'", measure_name))
-    
-    # Build reason message
+    # Build reason message (used internally, not displayed)
     reason <- validation_state$get_modification_reason()
     
     # In verbose mode, append DCC exclusion info if dcc=FALSE
@@ -80,8 +78,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         reason <- sprintf("%s (%d DCC fields excluded)", reason, dcc_count)
       }
     }
-    
-    message(sprintf("[DATA DEFINITION] Reason: %s", reason))
     
     # Convert to legacy format for rest of function
     submission_template <- list(columns = names(data_frame))
@@ -485,8 +481,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       field_names <- required_metadata$name
       # Exclude internal fields that should never appear
       field_names <- setdiff(field_names, excluded_from_change)
-      message(sprintf("Found %d required ndar_subject01 elements: %s",
-                      length(field_names), paste(head(field_names, 5), collapse = ", ")))
       field_names
     } else {
       # Fallback to essential fields if API fails
@@ -1557,15 +1551,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     )
   }
 
-  # Print summary
-  cat("\n=== Data Definition Summary ===\n")
-  cat("Measure:", measure_name, "\n")
-  cat("Selected fields:", length(selected_columns), "\n")
-  cat("Matched with NDA:", data_definition$summary$matched_fields, "\n")
-  cat("Modified NDA structures:", data_definition$summary$modified_fields, "\n")
-  cat("Computed from data:", data_definition$summary$computed_fields, "\n")
-  cat("Match percentage:", paste0(data_definition$summary$match_percentage, "%"), "\n")
-
   # Print missing value summary
   if (!is.null(data_definition$summary$missing_data_summary)) {
     missing_summary <- data_definition$summary$missing_data_summary
@@ -2169,7 +2154,6 @@ exportDataDefinition <- function(data_definition) {
 
              # Yellow + red text on ValueRange for NDA elements whose exported ValueRange extends beyond NDA-allowed values
              if (length(valueCols) > 0) {
-               cat("Comparing NDA value ranges for mismatches...\n")
               for (i in which(element_is_in_nda)) {
                 # Fast skip when our ValueRange is empty
                 ours_str <- as.character(fields_df$ValueRange[i] %||% "")
@@ -2414,7 +2398,6 @@ exportDataDefinition <- function(data_definition) {
                   }
                 }
               }
-              cat("Value range comparison complete.\n")
             }
 
             # Red text only (no yellow fill): elements not in NDA (new/proposed elements)
@@ -2610,15 +2593,9 @@ exportDataDefinition <- function(data_definition) {
                 }
               }, error = function(e) {
                 warning("Rich text formatting failed: ", e$message, call. = FALSE)
-                message("\nNote: Data definition file created successfully!")
-                message("      File location: ", file_path)
-                message("      Rich text formatting was skipped due to error")
-                message("      Yellow highlighting is still present")
-                message("\nTechnical details: ", e$message)
               })
             }
           }
-          cat("  [OK] Data definition created successfully\n")
 }
 
 # Helper function for null coalescing
