@@ -2,14 +2,14 @@
 #'
 #' @description
 #' Centralized field selection logic to eliminate redundant prompts when creating
-#' both submission files and data definition files.
+#' both submission templates and data definition files.
 #'
 
 #' Select NDA Fields Interactively
 #'
 #' @description
 #' Prompts user ONCE for field selection and returns choices.
-#' Eliminates redundant prompts between submission file and data definition.
+#' Eliminates redundant prompts between submission template and data definition.
 #' This function consolidates all field selection logic that was previously
 #' duplicated across createNdaSubmissionTemplate() and createNdaDataDefinition().
 #'

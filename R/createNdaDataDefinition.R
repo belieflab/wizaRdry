@@ -423,7 +423,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     stop("measure_name must be provided as a character string")
   }
 
-  # Extract selected columns from submission file OR use provided selected_fields
+  # Extract selected columns from submission template OR use provided selected_fields
   # Handle different possible structures
   selected_columns <- NULL
   
@@ -1555,7 +1555,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   tryCatch({
     exportDataDefinition(data_definition)
     # Print success message before Missing Data Summary
-    message(sprintf("[OK] ./tmp/%s_definitions.xlsx", measure_name))
+    message(sprintf("[OK] Data definition created at: ./tmp/%s_definitions.xlsx", measure_name))
     cat("\n")  # Blank line
   }, error = function(e) {
     warning("Data definition export failed: ", e$message, call. = FALSE)
