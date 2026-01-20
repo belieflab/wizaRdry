@@ -69,11 +69,6 @@ should_create_nda_files <- function(validation_state, strict = TRUE, verbose = T
 #' @noRd
 create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, verbose = TRUE) {
   
-  # Print STEP 4 header once (before validation gate)
-  if (!verbose) {
-    message("\n=== STEP 4: Data Structure Harmonization ===")
-  }
-  
   # Validation gate: Check if files should be created
   if (!should_create_nda_files(validation_state, strict, verbose)) {
     return(invisible(NULL))
@@ -97,17 +92,26 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       "EXISTING"
     }
     
+    # Print STEP 4 header with structure type
     if (verbose) {
       message(sprintf("\n=== Creating NDA Files for '%s' ===", measure_name))
       message(sprintf("Structure type: %s", if(is_new) "NEW" else "EXISTING"))
       message(sprintf("Modification status: %s", reason))
     } else {
-      message(sprintf("Structure: %s", modification_type))
+      # Context-aware header based on structure type
+      step4_header <- if (is_new) {
+        "=== STEP 4: New Data Structure ==="
+      } else if (needs_definition) {
+        "=== STEP 4: Modified Data Structure ==="
+      } else {
+        "=== STEP 4: Existing Data Structure ==="
+      }
+      message(sprintf("\n%s", step4_header))
     }
     
     # Show modification details for MODIFIED structures (non-verbose only)
     if (!verbose && needs_definition && !is_new) {
-      message("[MODIFIED STRUCTURE]")
+      message("")  # Blank line before changes
       message("  Changes detected:")
       
       # Show new fields
@@ -157,7 +161,6 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         message("[SKIP] Structure doesn't exist in NDA yet (cannot create submission template)")
         message("")
         message("=== Data Definition ===")
-        message("[NEW STRUCTURE] Creating data definition for structure registration")
       } else {
         message("\n[NEW STRUCTURE]")
         message("[OK] Creating data definition (for structure registration)")
@@ -172,11 +175,6 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           skip_prompts = TRUE,
           verbose = verbose
         )
-        if (!verbose) {
-          message(sprintf("[OK] Data definition created at: ./tmp/%s_definitions.xlsx", measure_name))
-        } else {
-          message("[OK] Data definition created successfully")
-        }
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
       })
@@ -214,7 +212,6 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         if (!verbose) {
           message("")  # Blank line
           message("=== Data Definition ===")
-          message("[MODIFIED STRUCTURE] Creating data definition for NDA approval")
         } else {
           message("")  # Blank line
           message(sprintf("[OK] Creating data definition (reason: %s)", reason))
@@ -227,11 +224,6 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
             skip_prompts = TRUE,
           verbose = verbose
         )
-        if (!verbose) {
-          message(sprintf("[OK] Data definition created at: ./tmp/%s_definitions.xlsx", measure_name))
-        } else {
-          message("[OK] Data definition created successfully")
-        }
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
       })

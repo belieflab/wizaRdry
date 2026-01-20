@@ -1525,8 +1525,6 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE, dcc = FALSE) {
           if (nrow(recommended_elements) > 0) {
             message(sprintf("  Common recommended fields: %s",
                            paste(recommended_elements$name, collapse = ", ")))
-          } else {
-            message("  [OK] No common recommended fields found")
           }
           
           # PRESERVE ALL METADATA for required and COMMON recommended only

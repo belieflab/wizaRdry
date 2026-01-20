@@ -1551,10 +1551,24 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     )
   }
 
+  # Auto-export to XLSX and print success message
+  tryCatch({
+    exportDataDefinition(data_definition)
+    # Print success message before Missing Data Summary
+    message(sprintf("[OK] Data definition created at: ./tmp/%s_definitions.xlsx", measure_name))
+    cat("\n")  # Blank line
+  }, error = function(e) {
+    warning("Data definition export failed: ", e$message, call. = FALSE)
+    message("Note: This is unexpected. Please report this issue.")
+    message("Full error: ", toString(e))
+    message("Traceback:")
+    print(traceback())
+  })
+
   # Print missing value summary
   if (!is.null(data_definition$summary$missing_data_summary)) {
     missing_summary <- data_definition$summary$missing_data_summary
-    cat("\n=== Missing Data Summary ===\n")
+    cat("=== Missing Data Summary ===\n")
     cat("Total missing values:", missing_summary$total_missing_values, "\n")
     cat("Total data points:", missing_summary$total_data_points, "\n")
     cat("Overall missing percentage:", paste0(missing_summary$overall_missing_percentage, "%"), "\n")
@@ -1567,17 +1581,6 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       cat("  -", warning, "\n")
     }
   }
-
-  # Auto-export to XLSX
-  tryCatch({
-    exportDataDefinition(data_definition)
-  }, error = function(e) {
-    warning("Data definition export failed: ", e$message, call. = FALSE)
-    message("Note: This is unexpected. Please report this issue.")
-    message("Full error: ", toString(e))
-    message("Traceback:")
-    print(traceback())
-  })
 
   return(data_definition)
 }
