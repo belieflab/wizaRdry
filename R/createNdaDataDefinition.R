@@ -1968,6 +1968,10 @@ exportDataDefinition <- function(data_definition) {
             blueFill <- openxlsx::createStyle(fgFill = "#00B0F0")
             yellowFill <- openxlsx::createStyle(fgFill = "#FFFF00")
             redFont <- openxlsx::createStyle(fontColour = "#FF0000")
+            
+            # Check if openxlsx2 is available for rich text formatting
+            has_openxlsx2 <- requireNamespace("openxlsx2", quietly = TRUE)
+            
             # Collect rich text edits to apply post-save via openxlsx2
             rich_text_edits <- list()
 
@@ -2132,10 +2136,14 @@ exportDataDefinition <- function(data_definition) {
               if (length(idx_modified) > 0 && length(valueCols) > 0) {
                 # Yellow highlight on ValueRange and Notes cells
                 openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
-                # Additionally make the ValueRange cell text red for modified elements
-                vr_col_only <- which(colnames(fields_df) == "ValueRange")
-                if (length(vr_col_only) == 1) {
-                  openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
+                
+                # Only apply red font as fallback when openxlsx2 is NOT available
+                # (If openxlsx2 is available, per-token rich text will be applied later)
+                if (!has_openxlsx2) {
+                  vr_col_only <- which(colnames(fields_df) == "ValueRange")
+                  if (length(vr_col_only) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
+                  }
                 }
                 applied_yellow[idx_modified] <- TRUE
                 
@@ -2239,18 +2247,122 @@ exportDataDefinition <- function(data_definition) {
                   
                   # Pull REDCap choices for NDA fields with value range mismatches
                   # This ensures extended fields have proper value labels (1=Female; 2=Male; etc.) in Notes
+                  # Enhanced: Show ALL codes with NEW codes in red (when openxlsx2 available)
+                  notes_col <- which(colnames(fields_df) == "Notes")
+                  notes_text <- ""
+                  notes_rich_text_parts <- NULL
+                  
                   if (exists("redcap_choices_map") && !is.null(redcap_choices_map) && 
                       element_names[i] %in% names(redcap_choices_map)) {
                     redcap_choices <- redcap_choices_map[[element_names[i]]]
                     if (!is.null(redcap_choices) && nzchar(redcap_choices)) {
                       parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
                       if (parsed$notes != "") {
-                        # Write value labels to Notes column
-                        notes_col <- which(colnames(fields_df) == "Notes")
-                        if (length(notes_col) == 1) {
-                          openxlsx::writeData(wb, "Data Definitions", parsed$notes,
-                                             startRow = i + 1, startCol = notes_col, colNames = FALSE)
+                        notes_text <- parsed$notes
+                        
+                        # Parse individual code=label pairs for rich text highlighting
+                        if (has_openxlsx2 && !is.null(nda_allowed) && length(nda_allowed) > 0) {
+                          note_parts <- trimws(strsplit(parsed$notes, ";", fixed = TRUE)[[1]])
+                          note_parts <- note_parts[nzchar(note_parts)]
+                          
+                          notes_rich_text_parts <- list()
+                          for (np_idx in seq_along(note_parts)) {
+                            part <- note_parts[np_idx]
+                            
+                            # Extract code from "13=Two-Spirit" format
+                            code_match <- regmatches(part, regexpr("^\\d+", part))
+                            if (length(code_match) > 0) {
+                              code <- suppressWarnings(as.integer(code_match))
+                              # Check if this code is NEW (not in NDA's allowed range)
+                              is_new <- !is.na(code) && !(code %in% nda_allowed)
+                            } else {
+                              is_new <- FALSE
+                            }
+                            
+                            # Add to rich text parts
+                            notes_rich_text_parts[[length(notes_rich_text_parts) + 1]] <- list(
+                              text = part,
+                              color = if (is_new) "FF0000" else "000000"  # Red if new, black if existing
+                            )
+                            
+                            # Add separator (unless last item)
+                            if (np_idx < length(note_parts)) {
+                              notes_rich_text_parts[[length(notes_rich_text_parts) + 1]] <- list(
+                                text = "; ",
+                                color = "000000"
+                              )
+                            }
+                          }
                         }
+                      }
+                    }
+                  }
+                  
+                  # If no REDCap choices, try to infer value labels from actual data
+                  if (!nzchar(notes_text) && !is.null(ours_vals) && length(ours_vals) > 0 && 
+                      exists("data_frame") && !is.null(data_frame) && is.data.frame(data_frame)) {
+                    field_name <- element_names[i]
+                    if (field_name %in% names(data_frame)) {
+                      # Get unique values from the data column
+                      data_vals <- unique(data_frame[[field_name]])
+                      data_vals <- data_vals[!is.na(data_vals)]
+                      
+                      # Only proceed if values are numeric and match our value range
+                      if (length(data_vals) > 0 && is.numeric(data_vals)) {
+                        data_vals <- sort(as.integer(data_vals))
+                        # Filter to only values in our proposed range
+                        data_vals <- data_vals[data_vals %in% ours_vals]
+                        
+                        if (length(data_vals) > 0) {
+                          # Build a simple list: "1; 2; 3; 4; ..." 
+                          notes_parts_inferred <- as.character(data_vals)
+                          notes_text <- paste(notes_parts_inferred, collapse = "; ")
+                          
+                          # Build rich text parts (highlight new values in red)
+                          if (has_openxlsx2 && !is.null(nda_allowed) && length(nda_allowed) > 0) {
+                            notes_rich_text_parts <- list()
+                            for (dv_idx in seq_along(data_vals)) {
+                              val <- data_vals[dv_idx]
+                              is_new <- !(val %in% nda_allowed)
+                              
+                              notes_rich_text_parts[[length(notes_rich_text_parts) + 1]] <- list(
+                                text = as.character(val),
+                                color = if (is_new) "FF0000" else "000000"
+                              )
+                              
+                              # Add separator (unless last item)
+                              if (dv_idx < length(data_vals)) {
+                                notes_rich_text_parts[[length(notes_rich_text_parts) + 1]] <- list(
+                                  text = "; ",
+                                  color = "000000"
+                                )
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  # Write Notes column
+                  if (length(notes_col) == 1 && nzchar(notes_text)) {
+                    openxlsx::writeData(wb, "Data Definitions", notes_text,
+                                       startRow = i + 1, startCol = notes_col, colNames = FALSE)
+                    
+                    # Store rich text parts for Notes column (if openxlsx2 will be used)
+                    if (has_openxlsx2 && !is.null(notes_rich_text_parts) && length(notes_rich_text_parts) > 0) {
+                      # Find or create the rich_text_edits entry for this row
+                      edit_idx <- which(sapply(rich_text_edits, function(e) e$row == (i + 1)))
+                      if (length(edit_idx) == 0) {
+                        # Create new entry
+                        rich_text_edits[[length(rich_text_edits) + 1]] <- list(
+                          row = i + 1,
+                          notes_col = notes_col,
+                          notes_rich_text_parts = notes_rich_text_parts
+                        )
+                      } else {
+                        # Update existing entry
+                        rich_text_edits[[edit_idx[1]]]$notes_rich_text_parts <- notes_rich_text_parts
                       }
                     }
                   }
@@ -2452,9 +2564,7 @@ exportDataDefinition <- function(data_definition) {
 
           # Post-process with openxlsx2 to apply per-token rich text if needed
           if (length(rich_text_edits) > 0) {
-            # Check if openxlsx2 is available
-            has_openxlsx2 <- requireNamespace("openxlsx2", quietly = TRUE)
-            
+            # Use has_openxlsx2 from earlier check (line ~1973)
             if (!has_openxlsx2) {
               message("Note: openxlsx2 package not installed - rich text formatting skipped")
               message("      Install with: install.packages('openxlsx2')")
@@ -2548,20 +2658,34 @@ exportDataDefinition <- function(data_definition) {
                           wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims, x = runs)
                         }
                       }
-                      # Notes rich text
-                      if (!is.na(edit$notes_col) && length(edit$notes_col) == 1 && 
-                          !is.null(edit$added_tokens) && length(edit$added_tokens) > 0) {
+                      # Notes rich text - Support both old format (added_tokens) and new format (notes_rich_text_parts)
+                      if (!is.na(edit$notes_col) && length(edit$notes_col) == 1) {
                         runs2 <- list()
-                        for (j in seq_along(edit$added_tokens)) {
-                          # Ensure token is scalar character
-                          tok2 <- as.character(edit$added_tokens[j])
-                          if (length(tok2) != 1) next
-                          
-                          runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = tok2, color = "FF0000")
-                          if (j < length(edit$added_tokens)) {
-                            runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                        
+                        # NEW FORMAT: Use notes_rich_text_parts if available (full code list with colors)
+                        if (!is.null(edit$notes_rich_text_parts) && length(edit$notes_rich_text_parts) > 0) {
+                          for (part in edit$notes_rich_text_parts) {
+                            if (is.list(part) && !is.null(part$text) && !is.null(part$color)) {
+                              runs2[[length(runs2) + 1]] <- create_rich_text_fn(
+                                text = as.character(part$text), 
+                                color = part$color
+                              )
+                            }
+                          }
+                        } 
+                        # OLD FORMAT: Fallback to added_tokens only (for backward compatibility)
+                        else if (!is.null(edit$added_tokens) && length(edit$added_tokens) > 0) {
+                          for (j in seq_along(edit$added_tokens)) {
+                            tok2 <- as.character(edit$added_tokens[j])
+                            if (length(tok2) != 1) next
+                            
+                            runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = tok2, color = "FF0000")
+                            if (j < length(edit$added_tokens)) {
+                              runs2[[length(runs2) + 1]] <- create_rich_text_fn(text = "; ", color = "000000")
+                            }
                           }
                         }
+                        
                         if (length(runs2) > 0) {
                           dims2 <- paste0(num_to_col(edit$notes_col), edit$row)
                           wb_add_rich_text_fn(wb2, sheet = "Data Definitions", dims = dims2, x = runs2)
