@@ -1096,10 +1096,11 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     )
   )
 
-  # Persist NDA element names, verbose flag, and ndar_subject additions for downstream export/formatting
+  # Persist NDA element names, verbose flag, ndar_subject additions, and structure type for downstream export/formatting
   data_definition$metadata$nda_element_names <- names(nda_lookup)
   data_definition$metadata$verbose <- verbose
   data_definition$metadata$ndar_subject_additions <- ndar_subject_additions
+  data_definition$metadata$is_new_structure <- validation_state$is_new_structure
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -1631,12 +1632,17 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 
 #' @noRd
 exportDataDefinition <- function(data_definition) {
-  # Extract verbose flag and ndar_subject_additions from data_definition if they exist
+  # Extract verbose flag, ndar_subject_additions, and is_new_structure from data_definition if they exist
   verbose <- if (!is.null(data_definition$metadata$verbose)) data_definition$metadata$verbose else FALSE
   ndar_subject_additions <- if (!is.null(data_definition$metadata$ndar_subject_additions)) {
     data_definition$metadata$ndar_subject_additions
   } else {
     character(0)
+  }
+  is_new_structure <- if (!is.null(data_definition$metadata$is_new_structure)) {
+    data_definition$metadata$is_new_structure
+  } else {
+    FALSE  # Default to MODIFIED structure behavior (9 columns, no Instructions)
   }
   
   # Create directory structure if it doesn't exist
@@ -1825,19 +1831,39 @@ exportDataDefinition <- function(data_definition) {
              note
            })
 
-          fields_df <- data.frame(
-             ElementName = element_names,
-             DataType = data_types,
-             Size = sizes,
-             Required = required_vals,
-             ElementDescription = descriptions,
-             ValueRange = value_ranges,
-             Notes = notes,
-             Aliases = aliases,
-            `Notes for Data Curator` = curator_notes,
-            stringsAsFactors = FALSE,
-            check.names = FALSE
-           )
+          # Conditional fields_df creation based on structure type
+           if (is_new_structure) {
+             # NEW STRUCTURE: 10 columns (with Instructions column)
+             fields_df <- data.frame(
+               ElementName = element_names,
+               DataType = data_types,
+               Size = sizes,
+               Required = required_vals,
+               ElementDescription = descriptions,
+               ValueRange = value_ranges,
+               Notes = notes,
+               Aliases = aliases,
+               `Instructions for Creating Template` = rep("", length(element_names)),
+               `Notes for Data Curator` = curator_notes,
+               stringsAsFactors = FALSE,
+               check.names = FALSE
+             )
+           } else {
+             # MODIFIED STRUCTURE: 9 columns (no Instructions column)
+             fields_df <- data.frame(
+               ElementName = element_names,
+               DataType = data_types,
+               Size = sizes,
+               Required = required_vals,
+               ElementDescription = descriptions,
+               ValueRange = value_ranges,
+               Notes = notes,
+               Aliases = aliases,
+               `Notes for Data Curator` = curator_notes,
+               stringsAsFactors = FALSE,
+               check.names = FALSE
+             )
+           }
 
            # Sanitize (same as CSV)
            fields_df$ElementName <- as.character(fields_df$ElementName)
@@ -1868,14 +1894,36 @@ exportDataDefinition <- function(data_definition) {
            headerStyle <- openxlsx::createStyle(textDecoration = "bold", fgFill = "#FFF2CC", halign = "left", valign = "top", border = "Bottom")
            openxlsx::addStyle(wb, "Data Definitions", headerStyle, rows = 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
 
-           # Wrap text for description/notes/valueRange
-           wrapStyle <- openxlsx::createStyle(wrapText = TRUE, valign = "top")
-           wrapCols <- which(colnames(fields_df) %in% c("ElementDescription", "ValueRange", "Notes", "Notes for Data Curator"))
-           if (length(wrapCols) > 0 && nrow(fields_df) > 0) {
-             openxlsx::addStyle(wb, "Data Definitions", wrapStyle, rows = 2:(nrow(fields_df) + 1), cols = wrapCols, gridExpand = TRUE)
-           }
+            # Populate Instructions column for NEW structures (write to workbook after data is written)
+            if (is_new_structure) {
+              instructions_col_idx <- which(colnames(fields_df) == "Instructions for Creating Template")
+              if (length(instructions_col_idx) == 1 && nrow(fields_df) > 0) {
+                # Super required fields get DO NOT DELETE message (highest priority)
+                super_required_names <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+                idx_super_required <- which(element_names %in% super_required_names)
+                
+                if (length(idx_super_required) > 0) {
+                  instruction_text <- "DO NOT DELETE THIS ROW\nThis is a mandatory element and data must be submitted to this element."
+                  for (idx in idx_super_required) {
+                    openxlsx::writeData(wb, "Data Definitions", instruction_text, 
+                                       startRow = idx + 1, startCol = instructions_col_idx, colNames = FALSE)
+                  }
+                }
+              }
+            }
 
-           # NDA Highlighting Rules
+            # Wrap text for description/notes/valueRange/instructions
+            wrapStyle <- openxlsx::createStyle(wrapText = TRUE, valign = "top")
+            wrap_col_names <- c("ElementDescription", "ValueRange", "Notes", "Notes for Data Curator")
+            if (is_new_structure) {
+              wrap_col_names <- c(wrap_col_names, "Instructions for Creating Template")
+            }
+            wrapCols <- which(colnames(fields_df) %in% wrap_col_names)
+            if (length(wrapCols) > 0 && nrow(fields_df) > 0) {
+              openxlsx::addStyle(wb, "Data Definitions", wrapStyle, rows = 2:(nrow(fields_df) + 1), cols = wrapCols, gridExpand = TRUE)
+            }
+
+            # NDA Highlighting Rules
            if (nrow(fields_df) > 0) {
              elementCol <- which(colnames(fields_df) == "ElementName")
              valueCols <- which(colnames(fields_df) %in% c("ValueRange", "Notes"))
@@ -2014,31 +2062,61 @@ exportDataDefinition <- function(data_definition) {
                  clear_cols_idx <- which(colnames(fields_df) %in% cols_to_clear)
                  notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
                  
-                  for (idx in idx_new_from_nda) {
-                    # Clear metadata columns
-                    for (cc in clear_cols_idx) {
-                      openxlsx::writeData(wb, "Data Definitions", "", startRow = idx + 1, startCol = cc, colNames = FALSE)
-                    }
-                    # Set curator note
-                    if (length(notes_col) > 0) {
-                      field_name <- element_names[idx]
-                      openxlsx::writeData(wb, "Data Definitions", sprintf("Requesting to add %s as is", field_name), startRow = idx + 1, startCol = notes_col, colNames = FALSE)
+                 for (idx in idx_new_from_nda) {
+                   # Clear metadata columns
+                   for (cc in clear_cols_idx) {
+                     openxlsx::writeData(wb, "Data Definitions", "", startRow = idx + 1, startCol = cc, colNames = FALSE)
+                   }
+                   # Set curator note
+                   if (length(notes_col) > 0) {
+                     field_name <- element_names[idx]
+                     openxlsx::writeData(wb, "Data Definitions", sprintf("Requesting to add %s as is", field_name), startRow = idx + 1, startCol = notes_col, colNames = FALSE)
+                   }
+                 }
+                 
+                 # Add Instructions for blue-highlighted fields (NEW structures only)
+                 if (is_new_structure && exists("instructions_col_idx") && length(instructions_col_idx) == 1) {
+                   instruction_text <- "If you found an existing Data Element, only add the exact ElementName and highlight the cell in BLUE. \nYou do not need to populate the other columns if you do not need changes to the Data Element."
+                   super_required_names <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+                   
+                   for (idx in idx_new_from_nda) {
+                     element_name <- element_names[idx]
+                     # Skip if super required (priority 1 already set)
+                     if (!(element_name %in% super_required_names)) {
+                       openxlsx::writeData(wb, "Data Definitions", instruction_text, 
+                                          startRow = idx + 1, startCol = instructions_col_idx, colNames = FALSE)
+                     }
+                   }
+                 }
+               }
+
+              # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
+              idx_modified <- which(row_modified & element_is_in_nda)
+              if (length(idx_modified) > 0 && length(valueCols) > 0) {
+                # Yellow highlight on ValueRange and Notes cells
+                openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
+                # Additionally make the ValueRange cell text red for modified elements
+                vr_col_only <- which(colnames(fields_df) == "ValueRange")
+                if (length(vr_col_only) == 1) {
+                  openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
+                }
+                applied_yellow[idx_modified] <- TRUE
+                
+                # Add Instructions for yellow-highlighted fields (NEW structures only)
+                if (is_new_structure && exists("instructions_col_idx") && length(instructions_col_idx) == 1) {
+                  instruction_text <- "If you need changes to an existing Data Element, \n1. Add and highlight the ElementName in BLUE\n2. Highlight your changes in YELLOW (see Rules in ReadMe)"
+                  super_required_names <- c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
+                  
+                  for (idx in idx_modified) {
+                    element_name <- element_names[idx]
+                    # Skip if super required (priority 1 already set)
+                    if (!(element_name %in% super_required_names)) {
+                      openxlsx::writeData(wb, "Data Definitions", instruction_text,
+                                         startRow = idx + 1, startCol = instructions_col_idx, colNames = FALSE)
                     }
                   }
                 }
-
-              # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
-             idx_modified <- which(row_modified & element_is_in_nda)
-             if (length(idx_modified) > 0 && length(valueCols) > 0) {
-               # Yellow highlight on ValueRange and Notes cells
-               openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = idx_modified + 1, cols = valueCols, gridExpand = TRUE)
-               # Additionally make the ValueRange cell text red for modified elements
-               vr_col_only <- which(colnames(fields_df) == "ValueRange")
-               if (length(vr_col_only) == 1) {
-                 openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_modified + 1, cols = vr_col_only, gridExpand = TRUE)
-               }
-               applied_yellow[idx_modified] <- TRUE
-             }
+              }
 
              # Yellow + red text on ValueRange for NDA elements whose exported ValueRange extends beyond NDA-allowed values
              if (length(valueCols) > 0) {
@@ -2114,17 +2192,12 @@ exportDataDefinition <- function(data_definition) {
                   applied_yellow[i] <- TRUE
                   nda_range_mismatch[i] <- TRUE
                   
-                  # Update ValueRange column to show comparison: "NDA_range | Proposed_range"
+                  # Write ONLY the proposed range to ValueRange column (not the comparison)
+                  # The comparison info is for curator reference and goes in Notes for Data Curator
                   vr_col <- which(colnames(fields_df) == "ValueRange")
                   if (length(vr_col) == 1) {
-                    our_range <- fields_df$ValueRange[i]
-                    nda_range <- if (!is.null(nda_meta$valueRange) && nzchar(nda_meta$valueRange)) {
-                      nda_meta$valueRange
-                    } else {
-                      "(no range defined)"
-                    }
-                    comparison_text <- sprintf("%s | %s", nda_range, our_range)
-                    openxlsx::writeData(wb, "Data Definitions", comparison_text, 
+                    # Write only our proposed range (already in fields_df$ValueRange[i])
+                    openxlsx::writeData(wb, "Data Definitions", fields_df$ValueRange[i], 
                                        startRow = i + 1, startCol = vr_col, colNames = FALSE)
                   }
                   
@@ -2282,6 +2355,16 @@ exportDataDefinition <- function(data_definition) {
             if (length(idx_not_in_nda) > 0) {
               openxlsx::addStyle(wb, "Data Definitions", redFont, rows = idx_not_in_nda + 1, cols = seq_len(ncol(fields_df)), gridExpand = TRUE)
               applied_red[idx_not_in_nda] <- TRUE
+              
+              # Add Instructions for red text fields (NEW structures only)
+              if (is_new_structure && exists("instructions_col_idx") && length(instructions_col_idx) == 1) {
+                instruction_text <- "If you need to add a new data element, populate Columns A-G and change text to RED."
+                
+                for (idx in idx_not_in_nda) {
+                  openxlsx::writeData(wb, "Data Definitions", instruction_text,
+                                     startRow = idx + 1, startCol = instructions_col_idx, colNames = FALSE)
+                }
+              }
             }
 
              # Add diagnostics worksheet summarizing route and highlighting decisions
