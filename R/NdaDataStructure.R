@@ -530,8 +530,16 @@ nda_structure_from_nda <- function(nda_element, selection_order = NULL, missing_
 #' @keywords internal
 #' @noRd
 nda_structure_from_data <- function(column_name, column_data, selection_order = NULL, description = NULL) {
-  # Use existing compute_field_metadata helper (from createNdaDataDefinition.R)
-  computed <- compute_field_metadata(column_name, column_data)
+  # Note: compute_field_metadata is defined inside createNdaDataDefinition function
+  # This factory function is currently unused but kept for potential future use
+  # For now, use simple defaults since this isn't called at runtime
+  computed <- list(
+    data_type = "String",
+    size = 255,
+    required = "Recommended",
+    description = "",
+    valueRange = ""
+  )
   
   # Create typed objects
   element_name <- ElementName$new(column_name)

@@ -2322,8 +2322,8 @@ exportDataDefinition <- function(data_definition) {
                           )
                         } else {
                           # 3+ values: "We added values 4, 5, and 6 to this data element"
-                          values_str <- paste(paste(head(added_codes, -1), collapse = ", "), 
-                                            "and", tail(added_codes, 1))
+                          values_str <- paste(paste(utils::head(added_codes, -1), collapse = ", "), 
+                                            "and", utils::tail(added_codes, 1))
                           modification_detail <- sprintf("We added values %s to this data element", values_str)
                           # Rich text: alternate between black and red for each code
                           curator_rich_text_parts <- list(
