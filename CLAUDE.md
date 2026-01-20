@@ -2,6 +2,57 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+## 🚨 CRITICAL RULES - READ FIRST
+
+### Rule 1: Git Operations - NEVER Push Without Permission
+
+**FORBIDDEN:**
+- ❌ `git push` (any branch, any remote)
+- ❌ `git push --force`
+- ❌ `git push origin <tag>`
+- ❌ ANY operation that sends commits to remote repository
+
+**REQUIRED WORKFLOW:**
+1. Make commits locally ✅
+2. Show user what was committed ✅
+3. **ASK:** "Would you like me to push to remote?" 
+4. **WAIT** for explicit "yes" or "push it"
+5. Only then execute `git push`
+
+**Example:**
+```
+AI: "Committed changes. Would you like me to push to origin/main?"
+[WAIT FOR USER]
+User: "yes"
+AI: [now pushes]
+```
+
+### Rule 2: Text Editor - vim ONLY
+
+**REQUIRED:**
+- ✅ If interactive editing needed: **vim ONLY**
+- ✅ CORRECT: "Edit with `vim file.txt`"
+
+**FORBIDDEN:**
+- ❌ NEVER suggest nano
+- ❌ NEVER suggest emacs
+- ❌ NEVER suggest any other editor
+
+**PREFERRED:**
+- Use programmatic tools (Edit tool, Write tool, sed, awk) when possible
+- But if terminal editor needed: **vim only**
+
+**Why These Rules Exist:**
+- Git push without permission can publish broken code to production
+- User exclusively uses vim and hates nano
+- User must control what goes to shared repository
+
+**ALWAYS ASK BEFORE PUSHING. NO EXCEPTIONS.**
+
+---
+
 ## Project Overview
 
 wizaRdry is an R package for NIH-funded computational psychiatry, neuroscience, and psychology research. It provides a comprehensive data analysis framework with built-in NIH Data Archive (NDA) integration. The package unifies access to multiple data sources (REDCap, MongoDB, Qualtrics, SQL/Oracle) and provides workflows for both data cleaning and NDA submission preparation.
