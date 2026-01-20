@@ -37,6 +37,20 @@ select_nda_fields <- function(validation_state,
   # Start with fields present in the data
   selected_fields <- names(df)
   
+  # STEP 1: Remove DCC fields if dcc=FALSE
+  # DCC fields should only be included when dcc=TRUE
+  if (!validation_state$dcc && length(validation_state$ndar_subject_additions) > 0) {
+    dcc_fields_in_selection <- intersect(selected_fields, validation_state$ndar_subject_additions)
+    if (length(dcc_fields_in_selection) > 0) {
+      selected_fields <- setdiff(selected_fields, validation_state$ndar_subject_additions)
+      if (verbose) {
+        message(sprintf("Excluding %d DCC field(s) from submission file (dcc=FALSE): %s", 
+                       length(dcc_fields_in_selection),
+                       paste(dcc_fields_in_selection, collapse=", ")))
+      }
+    }
+  }
+  
   # Define super-required ndar_subject01 fields (always needed)
   ndar_required <- c("subjectkey", "src_subject_id", "interview_date", 
                      "interview_age", "sex")
@@ -110,6 +124,29 @@ select_nda_fields <- function(validation_state,
         message("Skipping required fields. Note: These fields may be needed for NDA submission.")
       }
     }
+  }
+  
+  # STEP 2: Ensure all super required fields are included
+  # These are mandatory for NDA submission and must ALWAYS be present
+  missing_super_required <- setdiff(ndar_required, selected_fields)
+  if (length(missing_super_required) > 0) {
+    selected_fields <- c(selected_fields, missing_super_required)
+    if (verbose) {
+      message(sprintf("Adding %d missing super required field(s): %s", 
+                     length(missing_super_required),
+                     paste(missing_super_required, collapse=", ")))
+    }
+  }
+  
+  # STEP 3: Reorder fields - super required first (in order), then other fields
+  # This ensures consistent field ordering across all NDA submissions
+  super_required_present <- ndar_required[ndar_required %in% selected_fields]
+  other_fields <- setdiff(selected_fields, ndar_required)
+  selected_fields <- c(super_required_present, other_fields)
+  
+  if (verbose) {
+    message(sprintf("Field ordering: %d super required first, then %d other fields",
+                   length(super_required_present), length(other_fields)))
   }
   
   return(list(

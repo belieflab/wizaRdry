@@ -222,16 +222,21 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   # Otherwise, prompt user in interactive mode
   if (!is.null(selected_fields) && skip_prompts) {
     # Use pre-selected fields from create_nda_files()
+    # STEP 1: Add any missing fields from selected_fields to template
     fields_to_add <- setdiff(selected_fields, template_cols)
     if (length(fields_to_add) > 0) {
       for (field in fields_to_add) {
-        # Only add if field exists in structure
-        if (field %in% structure_field_names) {
-          template[[field]] <- NA
-        }
+        # Add field with NA values
+        # Note: structure_field_names check removed because we trust selected_fields
+        # which includes super required fields that may not be in structure yet
+        template[[field]] <- NA
       }
-      template_cols <- names(template)
     }
+    
+    # STEP 2: Filter template to ONLY include selected_fields (in the order specified)
+    # This removes any fields that were excluded (e.g., DCC fields when dcc=FALSE)
+    template <- template[, intersect(selected_fields, names(template)), drop = FALSE]
+    template_cols <- names(template)
   } else if (interactive() && length(ndar_required_in_structure) > 0 && !skip_prompts) {
     # Original interactive prompt logic (only when NOT using pre-selected fields)
     missing_required_in_structure <- setdiff(ndar_required_in_structure, template_cols)

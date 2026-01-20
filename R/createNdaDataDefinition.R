@@ -1173,6 +1173,119 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       is_modified_structure <- FALSE
       updated_value_range <- NULL
       modification_notes <- NULL
+      
+      # ENHANCEMENT: Allow REDCap choices to extend NDA value ranges
+      # This handles cases like gender_identity where:
+      #   - NDA defines 1::12
+      #   - REDCap defines 1::14 (includes additional options like "Two-Spirit")
+      # We want to use the WIDER range (REDCap) while keeping NDA metadata
+      # This ensures consistency regardless of dcc parameter
+      if (field_exists_in_data && 
+          !is.null(redcap_choices_map) && 
+          column_name %in% names(redcap_choices_map)) {
+        
+        redcap_choices <- redcap_choices_map[[column_name]]
+        if (!is.null(redcap_choices) && nzchar(redcap_choices)) {
+          # Parse REDCap choices to extract codes
+          parsed_redcap <- rc_parse_choices_codes_and_notes(redcap_choices)
+          
+          if (parsed_redcap$codes != "") {
+            # Get NDA value range
+            nda_value_range <- if ("valueRange" %in% names(nda_field)) {
+              nda_field$valueRange
+            } else {
+              ""
+            }
+            
+            # Get field type for appropriate handling
+            field_type <- if ("type" %in% names(nda_field)) nda_field$type else "String"
+            
+            # Only extend for Integer and String types (not Float - floats are floats)
+            if (field_type %in% c("Integer", "String")) {
+              # Expand both ranges to numeric vectors for comparison (Integer only)
+              if (field_type == "Integer") {
+                nda_vals <- expand_numeric_value_range(nda_value_range)
+                redcap_vals <- expand_numeric_value_range(parsed_redcap$codes)
+                
+                # If REDCap has values not in NDA, extend the range (never shrink)
+                if (!is.null(nda_vals) && !is.null(redcap_vals) && length(nda_vals) > 0) {
+                  new_vals <- setdiff(redcap_vals, nda_vals)
+                  
+                  if (length(new_vals) > 0) {
+                    # REDCap has additional codes - extend the range
+                    all_vals <- sort(unique(c(nda_vals, redcap_vals)))
+                    
+                    # Check if sequential for range notation (e.g., 1::14)
+                    # Otherwise use semicolon notation (e.g., 1::7;999)
+                    is_sequential <- length(all_vals) > 1 && all(diff(all_vals) == 1)
+                    if (is_sequential) {
+                      updated_value_range <- paste0(min(all_vals), "::", max(all_vals))
+                    } else {
+                      # Build range notation with gaps
+                      range_parts <- character(0)
+                      i <- 1
+                      while (i <= length(all_vals)) {
+                        start_val <- all_vals[i]
+                        end_val <- start_val
+                        
+                        # Find consecutive sequence
+                        while (i < length(all_vals) && all_vals[i + 1] == all_vals[i] + 1) {
+                          i <- i + 1
+                          end_val <- all_vals[i]
+                        }
+                        
+                        # Format as range or single value
+                        if (end_val - start_val >= 2) {
+                          range_parts <- c(range_parts, paste0(start_val, "::", end_val))
+                        } else if (end_val == start_val) {
+                          range_parts <- c(range_parts, as.character(start_val))
+                        } else {
+                          # Two consecutive values, list them separately
+                          range_parts <- c(range_parts, as.character(start_val), as.character(end_val))
+                        }
+                        i <- i + 1
+                      }
+                      updated_value_range <- paste(range_parts, collapse = ";")
+                    }
+                    
+                    # Mark as modified structure (non-super-required fields only)
+                    if (!(column_name %in% ndar_subject01_fields)) {
+                      is_modified_structure <- TRUE
+                      modification_notes <- sprintf(
+                        "Extended value range from NDA (%s) to include REDCap codes: added %s",
+                        nda_value_range,
+                        paste(new_vals, collapse = ", ")
+                      )
+                    }
+                    
+                    if (verbose) {
+                      message(sprintf(
+                        "Field '%s': Extended NDA range %s to %s based on REDCap choices",
+                        column_name, nda_value_range, updated_value_range
+                      ))
+                    }
+                  }
+                }
+              } else if (field_type == "String") {
+                # For String types, use REDCap choices if NDA range is empty or less comprehensive
+                if (nda_value_range == "" || nchar(parsed_redcap$codes) > nchar(nda_value_range)) {
+                  updated_value_range <- parsed_redcap$codes
+                  if (!(column_name %in% ndar_subject01_fields)) {
+                    is_modified_structure <- TRUE
+                    modification_notes <- "Extended value range with REDCap choices"
+                  }
+                  if (verbose) {
+                    message(sprintf(
+                      "Field '%s': Using REDCap choices for String field",
+                      column_name
+                    ))
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
 
       # IMPORTANT: ndar_subject01 variables can NEVER be modified
       if (column_name %in% ndar_subject01_fields) {
@@ -1343,7 +1456,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         element_name = column_name,
         data_type = nda_metadata_to_use$type %||% "String",
         size = nda_metadata_to_use$size,
-        required = nda_metadata_to_use$required %||% "No",
+        required = nda_metadata_to_use$required %||% "Recommended",
         element_description = fallback_desc,
         value_range = nda_metadata_to_use$valueRange %||% "",
         notes = nda_metadata_to_use$notes %||% "",
@@ -1353,6 +1466,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         missing_info = missing_info,
         validation_rules = validation_rules
       )
+      
+      # IMPORTANT: Super required fields must ALWAYS be marked as "Required"
+      # These are the 5 mandatory fields for all NDA submissions
+      if (column_name %in% SUPER_REQUIRED_FIELDS) {
+        field_struct$required <- RequirementLevel$new("Required")
+      }
       
       # Add modification notes if structure was modified
       if (is_modified_structure && !is.null(modification_notes) && nzchar(modification_notes)) {
@@ -1742,16 +1861,16 @@ exportDataDefinition <- function(data_definition) {
            })
 
            required_vals <- sapply(field_names, function(fname) {
-             tryCatch({
-               x <- data_definition$fields[[fname]]
-               if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
-                 as.character(x$nda_metadata$required %||% "No")
-               } else if (!is.null(x$required)) {
-                 ifelse(isTRUE(x$required), "Required", "No")
-               } else {
-                 "No"
-               }
-             }, error = function(e) "No")
+              tryCatch({
+                x <- data_definition$fields[[fname]]
+                if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+                  as.character(x$nda_metadata$required %||% "Recommended")
+                } else if (!is.null(x$required)) {
+                  ifelse(isTRUE(x$required), "Required", "Recommended")
+                } else {
+                  "Recommended"
+                }
+              }, error = function(e) "Recommended")
            })
 
            descriptions <- sapply(field_names, function(fname) {
@@ -1852,11 +1971,11 @@ exportDataDefinition <- function(data_definition) {
                }
              }
              reqFlag <- NULL
-             if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
-               reqFlag <- x$nda_metadata$required
-             } else if (!is.null(x$required)) {
-               reqFlag <- ifelse(isTRUE(x$required), "Required", "No")
-             }
+              if (!is.null(x$nda_metadata) && is.list(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
+                reqFlag <- x$nda_metadata$required
+              } else if (!is.null(x$required)) {
+                reqFlag <- ifelse(isTRUE(x$required), "Required", "Recommended")
+              }
              if (!is.null(reqFlag) && identical(as.character(reqFlag), "Required")) {
                parts <- c(parts, "Required by NDA")
              }

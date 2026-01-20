@@ -227,7 +227,8 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           }
           
           if (!verbose) {
-            message(sprintf("[DRAFT] ./tmp/%s_submission_draft.csv", measure_name))
+            field_count <- length(field_selection$selected_fields)
+            message(sprintf("[DRAFT] ./tmp/%s_submission_draft.csv (%d fields)", measure_name, field_count))
           } else {
             message("[DRAFT] Draft submission file created for testing")
           }
@@ -310,7 +311,8 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         }
         
         if (!verbose) {
-          message(sprintf("%s ./tmp/%s", submission_prefix, submission_filename))
+          field_count <- length(field_selection$selected_fields)
+          message(sprintf("%s ./tmp/%s (%d fields)", submission_prefix, submission_filename, field_count))
         } else {
           message("[OK] Submission file created successfully")
         }
