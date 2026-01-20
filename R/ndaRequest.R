@@ -1174,7 +1174,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
       
       message(sprintf("- Structure Type: %s", 
-                     if(validation_state$is_new_structure) "NEW" else "EXISTING"))
+                     if(validation_state$is_new_structure) "NEW" 
+                     else if(validation_state$is_modified_structure) "MODIFIED" 
+                     else "EXISTING"))
       
       if (!validation_state$is_new_structure && validation_state$is_valid) {
         message(sprintf("- Modified: %s", 

@@ -190,7 +190,7 @@ When a data structure already exists in the NDA data dictionary:
    - Returns validation results with `value_range_violations` tracked
 
 3. **File Creation** (`ndaRequest.R:1065-1232`):
-   - **Always creates**: Submission Template (`measure_template.csv`) via `createNdaSubmissionTemplate()`
+   - **Always creates**: Submission File (`measure_submission.csv`) via `createNdaSubmissionTemplate()`
      - CSV file with structure name in first line, headers in second line, data below
      - Ready for upload to NDA submission portal
    - **Conditionally creates**: Data Definition (`measure_data-definition.xlsx`) via `createNdaDataDefinition()`
@@ -200,7 +200,7 @@ When a data structure already exists in the NDA data dictionary:
      - Skipped for unmodified structures
      - Excel file with field metadata for registering structure changes with NDA
 
-4. **Output**: `tmp/measure_template.csv` (always), `tmp/measure_data-definition.xlsx` (if modified)
+4. **Output**: `tmp/measure_submission.csv` (always), `tmp/measure_data-definition.xlsx` (if modified)
 
 #### Pathway 2: New NDA Structure (Bypass Validation)
 When a data structure is NOT found in the NDA data dictionary:
@@ -243,7 +243,7 @@ The decision to create a data definition file is made in `ndaRequest.R:1132-1232
      - If violations exist (data values outside NDA-defined ranges) → `is_modified_structure = TRUE`
      - Example: NDA structure defines valueRange="1;2;3" but data contains "9999"
 
-- If unmodified → skip data definition (only submission template needed)
+- If unmodified → skip data definition (only submission file needed)
 
 **Key Functions**:
 - `addNdarSubjectElements()`: Fetches and adds ndar_subject01 required/recommended fields (`ndaRequest.R:1273`)
@@ -402,37 +402,60 @@ Does structure exist in NDA data dictionary?
 ├─ YES (Existing Structure - Pathway 1)
 │  │
 │  ├─ Run full ndaValidator()
-│  ├─ Create submission template (CSV)
+│  ├─ Create submission file (CSV)
 │  │
 │  └─ Is structure modified?
 │     │
 │     ├─ YES (new fields OR value range violations)
 │     │  └─ Create data definition (Excel)
-│     │     → Output: measure_template.csv + measure_data-definition.xlsx
+│     │     → Output: measure_submission.csv + measure_data-definition.xlsx
 │     │
 │     └─ NO (unmodified)
 │        └─ Skip data definition
-│           → Output: measure_template.csv only
+│           → Output: measure_submission.csv only
 │
 └─ NO (New Structure - Pathway 2)
    │
    ├─ Bypass validation (no structure to validate against)
-   ├─ Skip submission template (can't submit to non-existent structure)
+   ├─ Skip submission file (can't submit to non-existent structure)
    │
    └─ Create data definition (Excel)
       → Output: measure_data-definition.xlsx only
 ```
 
+**File Outputs (as of v0.6.2)**:
+- `*_submission.csv` - Final submission file ready for NDA upload
+- `*_submission_draft.csv` - Draft file (lenient mode with NEW/MODIFIED structures)
+- `*_definitions.xlsx` - Data definitions for DCC registration/approval
+
+**File Creation Logic:**
+```
+NEW structure:
+├─ strict=TRUE  → Skip submission file, create data definition
+└─ strict=FALSE → Create *_submission_draft.csv + data definition
+
+MODIFIED structure:
+├─ strict=TRUE  → Skip all files (validation failed)
+└─ strict=FALSE → Create *_submission_draft.csv + data definition
+
+EXISTING structure (unmodified):
+├─ strict=TRUE  → Skip all files (validation failed)
+└─ strict=FALSE → Create *_submission.csv, skip data definition
+```
+
 **When to use each output file**:
-- **Submission Template** (`*_template.csv`): Upload to NDA submission portal for existing structures
-- **Data Definition** (`*_data-definition.xlsx`):
+- **Submission File** (`*_submission.csv`): Upload to NDA submission portal for existing structures
+- **Draft Submission** (`*_submission_draft.csv`): Test file requiring DCC approval (NEW/MODIFIED)
+- **Data Definition** (`*_definitions.xlsx`):
   - For new structures: Submit to NDA to register the structure
   - For modified structures: Submit to NDA to update the structure definition
   - Use this to communicate new fields or expanded value ranges to NDA
 
 **Common scenarios**:
 
-1. **First-time structure submission**: Pathway 2 → Creates data definition only
-2. **Reusing existing NDA structure unchanged**: Pathway 1 → Creates submission template only
-3. **Adding fields to existing structure**: Pathway 1 with modifications → Creates both files
-4. **Data has codes not in NDA valueRange**: Pathway 1 with violations → Creates both files
+1. **First-time structure submission**: Pathway 2 → Creates data definition only (strict) or draft + definition (lenient)
+2. **Reusing existing NDA structure unchanged**: Pathway 1 → Creates submission file only
+3. **Adding fields to existing structure**: Pathway 1 with modifications → Creates draft + definition (lenient)
+4. **Data has codes not in NDA valueRange**: Pathway 1 with violations → Creates draft + definition (lenient)
+
+**BREAKING CHANGE (v0.6.2):** Renamed `*_template.csv` → `*_submission.csv` for clarity

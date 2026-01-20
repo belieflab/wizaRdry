@@ -237,6 +237,30 @@ File creation logic:
                        STEP 4B: Create data definition (requires approval)
 ```
 
+### NDA File Naming Conventions
+
+**Output Files:**
+- `*_submission.csv` - Final submission file ready for NDA upload
+- `*_submission_draft.csv` - Draft submission file (lenient mode with NEW/MODIFIED structures)
+- `*_definitions.xlsx` - Data definitions file for DCC registration/approval
+
+**Submission File Naming Logic:**
+```
+NEW structure:
+├─ strict=TRUE  → No submission file created (structure doesn't exist yet)
+└─ strict=FALSE → *_submission_draft.csv (for testing before registration)
+
+MODIFIED structure:
+├─ strict=TRUE  → No submission file created (validation failed)
+└─ strict=FALSE → *_submission_draft.csv (needs DCC approval for modifications)
+
+EXISTING structure:
+├─ strict=TRUE  → No submission file created (validation failed)
+└─ strict=FALSE → *_submission.csv (just fix data errors, no DCC approval needed)
+```
+
+**BREAKING CHANGE (v0.6.2):** Prior to v0.6.2, files were named `*_template.csv`. This was renamed to `*_submission.csv` for clarity, as these files are intended for direct submission to NDA, not as empty templates.
+
 ### NDA Field Definition Structure
 
 **NdaDataStructure R6 Class** (added Jan 2025):

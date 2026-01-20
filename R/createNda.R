@@ -104,7 +104,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE) { #set skip_prompt to TRU
   structure_name <- df_name
 
   # Create the file path
-  file_path <- file.path(tmp_path, paste0(structure_name, '_template.csv'))
+  file_path <- file.path(tmp_path, paste0(structure_name, '_submission.csv'))
 
   # Get the data frame
   if (is.character(df)) {

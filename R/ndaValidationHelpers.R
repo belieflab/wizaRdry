@@ -543,7 +543,9 @@ print_validation_summary <- function(state) {
   message("\n\nValidation Summary:")
   message(sprintf("- Status: %s", if(state$is_valid) "PASSED" else "FAILED"))
   message(sprintf("- Structure Type: %s", 
-                 if(state$is_new_structure) "NEW" else "EXISTING"))
+                 if(state$is_new_structure) "NEW" 
+                 else if(state$is_modified_structure) "MODIFIED" 
+                 else "EXISTING"))
   
   if (!state$is_new_structure) {
     message(sprintf("- Modified: %s", 

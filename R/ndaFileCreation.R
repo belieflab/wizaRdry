@@ -5,6 +5,38 @@
 #' based on ValidationState results.
 #'
 
+#' Get educational description for structure type
+#'
+#' @description
+#' Returns a user-friendly explanation of what each structure type means
+#' and what actions the researcher needs to take.
+#'
+#' @param structure_type Character - one of "NEW", "MODIFIED", or "EXISTING"
+#' @return Character string with educational description
+#' @noRd
+get_structure_description <- function(structure_type) {
+  descriptions <- list(
+    NEW = paste0(
+      "This data structure does not yet exist in NDA. The draft data definitions file\n",
+      "must be submitted to DCC and approved by NDA. When approved, you can create your\n",
+      "submission file."
+    ),
+    
+    EXISTING = paste0(
+      "Your data structure already exists in NDA and requires no modifications. You can\n",
+      "submit your submission file at any time."
+    ),
+    
+    MODIFIED = paste0(
+      "While your data structure already exists in NDA, you have made modifications to\n",
+      "value ranges and/or added new elements. Please submit the draft definitions file\n",
+      "to DCC. When approved by NDA, you can create your submission file."
+    )
+  )
+  
+  return(descriptions[[structure_type]])
+}
+
 #' Check if files should be created based on validation state
 #'
 #' @description
@@ -109,6 +141,19 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       message(sprintf("\n%s", step4_header))
     }
     
+    # Print educational description (non-verbose only)
+    if (!verbose) {
+      description <- get_structure_description(modification_type)
+      message(description)
+      message("")  # Blank line
+      
+      # Add lenient mode warning if validation failed
+      if (!strict && !validation_state$is_valid) {
+        message("[WARN] Running in lenient mode - creating DRAFT files despite validation errors")
+        message("")  # Blank line
+      }
+    }
+    
     # Show modification details for MODIFIED structures (non-verbose only)
     if (!verbose && needs_definition && !is_new) {
       message("")  # Blank line before changes
@@ -155,17 +200,56 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
     )
     
     if (is_new) {
-      # NEW structure: Only create data definition
+      # NEW structure: Handle submission file based on strict mode
+      
+      # STEP 4A: Submission Template
       if (!verbose) {
         message("\n=== Submission Template ===")
-        message("[SKIP] Structure doesn't exist in NDA yet (cannot create submission template)")
+      }
+      
+      if (!strict) {
+        # LENIENT MODE: Create DRAFT submission file
+        tryCatch({
+          # Create file
+          createNdaSubmissionTemplate(
+            measure_name,
+            skip_prompt = TRUE,
+            selected_fields = field_selection$selected_fields,
+            skip_prompts = TRUE,
+            verbose = verbose
+          )
+          
+          # Rename to _draft suffix
+          original_path <- sprintf("./tmp/%s_submission.csv", measure_name)
+          draft_path <- sprintf("./tmp/%s_submission_draft.csv", measure_name)
+          if (file.exists(original_path)) {
+            file.rename(original_path, draft_path)
+          }
+          
+          if (!verbose) {
+            message(sprintf("[DRAFT] ./tmp/%s_submission_draft.csv", measure_name))
+          } else {
+            message("[DRAFT] Draft submission file created for testing")
+          }
+        }, error = function(e) {
+          warning(sprintf("Error creating draft submission file: %s", e$message))
+        })
+      } else {
+        # STRICT MODE: Skip submission file
+        if (!verbose) {
+          message("[SKIP] Structure must be registered with NDA before creating submission file")
+        } else {
+          message("[SKIP] Skipping submission file (structure doesn't exist in NDA yet)")
+        }
+      }
+      
+      # STEP 4B: Data Definition (always created)
+      if (!verbose) {
         message("")
         message("=== Data Definition ===")
       } else {
         message("\n[NEW STRUCTURE]")
         message("[OK] Creating data definition (for structure registration)")
-        message("")  # Blank line
-        message("[SKIP] Skipping submission template (structure doesn't exist in NDA yet)")
       }
       
       tryCatch({
@@ -180,13 +264,31 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       })
       
     } else {
-      # EXISTING structure: Create submission template (and data definition if modified)
+      # EXISTING structure: Create submission file (and data definition if modified)
       
       # STEP 4A: Submission Template
       if (!verbose) {
         message("\n=== Submission Template ===")
       } else {
         message("\n[EXISTING STRUCTURE]")
+      }
+      
+      # Determine prefix and filename based on structure type and mode
+      if (!strict && needs_definition) {
+        # DRAFT mode: MODIFIED in lenient mode
+        submission_prefix <- "[DRAFT]"
+        submission_filename <- sprintf("%s_submission_draft.csv", measure_name)
+        should_rename_to_draft <- TRUE
+      } else if (!validation_state$is_valid) {
+        # WARN mode: EXISTING with validation errors
+        submission_prefix <- "[WARN]"
+        submission_filename <- sprintf("%s_submission.csv", measure_name)
+        should_rename_to_draft <- FALSE
+      } else {
+        # OK mode: Validation passed
+        submission_prefix <- "[OK]"
+        submission_filename <- sprintf("%s_submission.csv", measure_name)
+        should_rename_to_draft <- FALSE
       }
       
       tryCatch({
@@ -197,14 +299,23 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           skip_prompts = TRUE,   # Skip field selection prompts
           verbose = verbose
         )
+        
+        # Rename to draft if needed
+        if (should_rename_to_draft) {
+          original_path <- sprintf("./tmp/%s_submission.csv", measure_name)
+          draft_path <- sprintf("./tmp/%s_submission_draft.csv", measure_name)
+          if (file.exists(original_path)) {
+            file.rename(original_path, draft_path)
+          }
+        }
+        
         if (!verbose) {
-          validation_prefix <- if (!validation_state$is_valid) "[WARN] Submission Template created" else "[OK] Created"
-          message(sprintf("%s at: ./tmp/%s_template.csv", validation_prefix, measure_name))
+          message(sprintf("%s ./tmp/%s", submission_prefix, submission_filename))
         } else {
-          message("[OK] Submission template created successfully")
+          message("[OK] Submission file created successfully")
         }
       }, error = function(e) {
-        warning(sprintf("Error creating submission template: %s", e$message))
+        warning(sprintf("Error creating submission file: %s", e$message))
       })
       
       # STEP 4B: Data Definition (only if modified)

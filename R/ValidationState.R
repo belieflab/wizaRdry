@@ -247,7 +247,9 @@ ValidationState <- R6::R6Class("ValidationState",
       cat(sprintf("  API: %s\n", self$api))
       cat(sprintf("  Status: %s\n", if(self$is_valid) "VALID" else "INVALID"))
       cat(sprintf("  Structure Type: %s\n", 
-                  if(self$is_new_structure) "NEW" else "EXISTING"))
+                  if(self$is_new_structure) "NEW" 
+                  else if(self$is_modified_structure) "MODIFIED" 
+                  else "EXISTING"))
       
       if (!self$is_new_structure) {
         cat(sprintf("  Modified: %s\n", 
