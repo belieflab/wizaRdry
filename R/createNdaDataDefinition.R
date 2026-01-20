@@ -1,3 +1,43 @@
+# Helper function: clean REDCap labels (remove HTML tags)
+# Defined at package level for use across functions
+# @noRd
+rc_clean_label <- function(x) {
+  if (is.null(x) || is.na(x)) return("")
+  gsub("<br>", " ", x, fixed = TRUE)
+}
+
+# Helper function: parse REDCap choices -> numeric codes for ValueRange + mapping text for Notes
+# Defined at package level so it's available to both createNdaDataDefinition and exportDataDefinition
+# @noRd
+rc_parse_choices_codes_and_notes <- function(choices_string) {
+  if (is.null(choices_string) || is.na(choices_string) || choices_string == "") {
+    return(list(codes = "", notes = ""))
+  }
+  parts <- strsplit(choices_string, "\\|")[[1]]
+  parts <- trimws(parts)
+  codes <- character(0)
+  note_pairs <- character(0)
+  for (p in parts) {
+    if (p == "") next
+    kv <- strsplit(p, ",")[[1]]
+    if (length(kv) >= 2) {
+      code <- trimws(kv[1])
+      label <- trimws(paste(kv[-1], collapse = ","))
+      label <- rc_clean_label(label)
+      codes <- c(codes, code)
+      note_pairs <- c(note_pairs, paste0(code, "=", label))
+    } else {
+      # fallback: if no comma, treat as bare code
+      code <- trimws(kv[1])
+      codes <- c(codes, code)
+    }
+  }
+  list(
+    codes = if (length(codes)) paste(codes, collapse = "; ") else "",
+    notes = if (length(note_pairs)) paste(note_pairs, collapse = "; ") else ""
+  )
+}
+
 #' Create NDA Data Definition File
 #'
 #' @description
@@ -1096,11 +1136,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     )
   )
 
-  # Persist NDA element names, verbose flag, ndar_subject additions, and structure type for downstream export/formatting
+  # Persist NDA element names, verbose flag, ndar_subject additions, structure type, and REDCap choices for downstream export/formatting
   data_definition$metadata$nda_element_names <- names(nda_lookup)
   data_definition$metadata$verbose <- verbose
   data_definition$metadata$ndar_subject_additions <- ndar_subject_additions
   data_definition$metadata$is_new_structure <- validation_state$is_new_structure
+  data_definition$metadata$redcap_choices_map <- redcap_choices_map
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -1548,6 +1589,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   }, error = function(e) {
     warning("Data definition export failed: ", e$message, call. = FALSE)
     message("Note: This is unexpected. Please report this issue.")
+    message("Full error: ", toString(e))
+    message("Traceback:")
+    print(traceback())
   })
 
   return(data_definition)
@@ -1632,7 +1676,7 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 
 #' @noRd
 exportDataDefinition <- function(data_definition) {
-  # Extract verbose flag, ndar_subject_additions, and is_new_structure from data_definition if they exist
+  # Extract verbose flag, ndar_subject_additions, is_new_structure, and redcap_choices_map from data_definition if they exist
   verbose <- if (!is.null(data_definition$metadata$verbose)) data_definition$metadata$verbose else FALSE
   ndar_subject_additions <- if (!is.null(data_definition$metadata$ndar_subject_additions)) {
     data_definition$metadata$ndar_subject_additions
@@ -1643,6 +1687,11 @@ exportDataDefinition <- function(data_definition) {
     data_definition$metadata$is_new_structure
   } else {
     FALSE  # Default to MODIFIED structure behavior (9 columns, no Instructions)
+  }
+  redcap_choices_map <- if (!is.null(data_definition$metadata$redcap_choices_map)) {
+    data_definition$metadata$redcap_choices_map
+  } else {
+    NULL
   }
   
   # Create directory structure if it doesn't exist
@@ -2199,6 +2248,24 @@ exportDataDefinition <- function(data_definition) {
                     # Write only our proposed range (already in fields_df$ValueRange[i])
                     openxlsx::writeData(wb, "Data Definitions", fields_df$ValueRange[i], 
                                        startRow = i + 1, startCol = vr_col, colNames = FALSE)
+                  }
+                  
+                  # Pull REDCap choices for NDA fields with value range mismatches
+                  # This ensures extended fields have proper value labels (1=Female; 2=Male; etc.) in Notes
+                  if (exists("redcap_choices_map") && !is.null(redcap_choices_map) && 
+                      element_names[i] %in% names(redcap_choices_map)) {
+                    redcap_choices <- redcap_choices_map[[element_names[i]]]
+                    if (!is.null(redcap_choices) && nzchar(redcap_choices)) {
+                      parsed <- rc_parse_choices_codes_and_notes(redcap_choices)
+                      if (parsed$notes != "") {
+                        # Write value labels to Notes column
+                        notes_col <- which(colnames(fields_df) == "Notes")
+                        if (length(notes_col) == 1) {
+                          openxlsx::writeData(wb, "Data Definitions", parsed$notes,
+                                             startRow = i + 1, startCol = notes_col, colNames = FALSE)
+                        }
+                      }
+                    }
                   }
                   
                   # Update curator notes with specific modification details

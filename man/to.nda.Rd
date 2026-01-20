@@ -9,7 +9,8 @@ to.nda(
   path = ".",
   skip_prompt = TRUE,
   selected_fields = NULL,
-  skip_prompts = FALSE
+  skip_prompts = FALSE,
+  verbose = FALSE
 )
 
 to.nda(
@@ -17,7 +18,8 @@ to.nda(
   path = ".",
   skip_prompt = TRUE,
   selected_fields = NULL,
-  skip_prompts = FALSE
+  skip_prompts = FALSE,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -35,6 +37,8 @@ uses all fields from data frame. Used by create_nda_files() for centralized fiel
 
 \item{skip_prompts}{Logical. If TRUE, skip ALL interactive prompts (used when called from
 create_nda_files() with pre-selected fields). Default: FALSE.}
+
+\item{verbose}{Logical. If TRUE, show detailed progress messages. Default: FALSE.}
 }
 \value{
 Invisible TRUE if successful. Creates a CSV file at the specified path
