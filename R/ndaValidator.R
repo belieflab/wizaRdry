@@ -41,7 +41,7 @@ ndaValidator <- function(measure_name,
     }
     
     # Get wizaRdry environment from package environment
-    wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+    wizaRdry_env <- .pkg_env$.wizaRdry_env
     
     # Get dataframe from package environment
     df <- base::get(measure_name, envir = wizaRdry_env)
@@ -495,7 +495,7 @@ ndaValidator <- function(measure_name,
     
     # Try to get the dataframe for error state from package environment
     error_df <- if (exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
-      wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+      wizaRdry_env <- .pkg_env$.wizaRdry_env
       tryCatch(base::get(measure_name, envir = wizaRdry_env), error = function(e2) data.frame())
     } else {
       data.frame()

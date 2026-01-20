@@ -4,13 +4,14 @@
 \alias{DataEnvironment}
 \title{DataEnvironment R6 Class}
 \description{
-Manages dataframe storage across multiple R environments (globalenv, .wizaRdry_env, origin_env).
-Encapsulates the complex environment management pattern used throughout the validation workflow.
+Manages dataframe storage in package environment (.pkg_env$.wizaRdry_env) with optional
+convenience assignment to calling environment. CRAN-compliant environment management.
 }
 \details{
-This class provides a clean interface for getting and setting dataframes across the three
-environments used by wizaRdry: globalenv(), .wizaRdry_env, and origin_env (parent frame).
-This eliminates scattered base::assign() and base::get() calls throughout the codebase.
+This class provides a clean interface for getting and setting dataframes using the package
+environment (.pkg_env) as the authoritative source, with optional assignment to the calling
+environment for user convenience. This eliminates global environment pollution and follows
+R package best practices.
 }
 \keyword{internal}
 \section{Public fields}{
@@ -59,20 +60,20 @@ A new DataEnvironment object
 \if{html}{\out{<a id="method-DataEnvironment-get_df"></a>}}
 \if{latex}{\out{\hypertarget{method-DataEnvironment-get_df}{}}}
 \subsection{Method \code{get_df()}}{
-Get dataframe from the appropriate environment
+Get dataframe from package environment or calling environment
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataEnvironment$get_df()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
-The dataframe stored across environments
+The dataframe stored in package environment
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-DataEnvironment-set_df"></a>}}
 \if{latex}{\out{\hypertarget{method-DataEnvironment-set_df}{}}}
 \subsection{Method \code{set_df()}}{
-Set dataframe in ALL environments (globalenv, .wizaRdry_env, origin_env)
+Set dataframe in package environment with optional calling environment assignment
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataEnvironment$set_df(df)}\if{html}{\out{</div>}}
 }

@@ -41,7 +41,7 @@ DataEnvironment <- R6::R6Class("DataEnvironment",
       
       # Check package environment first (authoritative source)
       if (exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
-        wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+        wizaRdry_env <- .pkg_env$.wizaRdry_env
         if (exists(self$measure_name, envir = wizaRdry_env, inherits = FALSE)) {
           return(base::get(self$measure_name, envir = wizaRdry_env))
         }
@@ -71,7 +71,7 @@ DataEnvironment <- R6::R6Class("DataEnvironment",
       }
       
       # Get wizaRdry environment from package environment
-      wizaRdry_env <- base::get(".wizaRdry_env", envir = .pkg_env)
+      wizaRdry_env <- .pkg_env$.wizaRdry_env
       
       # Set in package environment (authoritative source)
       base::assign(self$measure_name, df, envir = wizaRdry_env)

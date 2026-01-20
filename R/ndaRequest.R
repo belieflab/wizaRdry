@@ -704,7 +704,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (DEBUG) message("[DEBUG] Creating .wizaRdry_env in package environment")
       assign(".wizaRdry_env", new.env(parent = emptyenv()), envir = .pkg_env)
     }
-    wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+    wizaRdry_env <- .pkg_env$.wizaRdry_env
 
     # Get the data frame
     if (DEBUG) message("[DEBUG] Attempting to get dataframe: ", measure)
