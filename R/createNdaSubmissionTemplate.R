@@ -80,7 +80,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
 
   # If skip_prompt is TRUE or user has previously set auto_nda_template to TRUE, bypass the prompt
   if (!skip_prompt | !user_prefs$auto_nda_template) {
-    response <- readline(prompt = sprintf("Would you like to create the NDA submission template for %s now? y/n ",
+    response <- readline(prompt = sprintf("Would you like to create the NDA submission file for %s now? y/n ",
                                           df_name))
 
     while (!tolower(response) %in% c("y", "n")) {
@@ -94,7 +94,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     }
 
     if (tolower(response) == "n") {
-      message("NDA submission template creation cancelled.")
+      message("NDA submission file creation cancelled.")
       invokeRestart("abort")  # This exits without the "Error:" prefix
     }
   }
@@ -109,7 +109,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   structure_name <- df_name
 
   # Create the file path
-  file_path <- file.path(tmp_path, paste0(structure_name, '_template.csv'))
+  file_path <- file.path(tmp_path, paste0(structure_name, '_submission.csv'))
 
   # Get the data frame
   if (is.character(df)) {
@@ -143,7 +143,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     }
   }
 
-  # Define fields to exclude from submission templates
+  # Define fields to exclude from submission files
   excluded_from_template <- c("state", "lost_to_followup", "lost_to_follow-up")
   
   # Super-required fields (always included): subjectkey, src_subject_id, interview_date, interview_age, sex
@@ -318,7 +318,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   
   # Report what was filtered
   if (length(excluded_cols) > 0) {
-    message(sprintf("Excluded %d fields from submission template: %s", 
+    message(sprintf("Excluded %d fields from submission file: %s", 
                     length(excluded_cols), paste(excluded_cols, collapse = ", ")))
   }
 

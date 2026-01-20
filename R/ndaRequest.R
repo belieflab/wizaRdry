@@ -1,4 +1,4 @@
-#' Generate validated NDA submission templates created in the ./nda directory
+#' Generate validated NDA submission files created in the ./nda directory
 #'
 #' This function processes requests for clean data sequentially for specified measures.
 #' It makes a request to the NIH NDA API for the named data structures
@@ -134,7 +134,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
         }
 
         if (tolower(response) == "n") {
-          message("NDA submission template script creation cancelled.")
+          message("NDA submission file script creation cancelled.")
           invokeRestart("abort")  # This exits without the "Error:" prefix
         }
       }
@@ -1096,14 +1096,13 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       create_nda_files(validation_state, strict = strict, verbose = verbose)
 
     } else {
-      # NEW STRUCTURE - Create ValidationState without NDA validation
+      # NEW STRUCTURE - Run validation with mock structure
       message(sprintf("\nNew structure '%s' (not found in NDA data dictionary)", measure))
-      message("Creating ValidationState for new structure with metadata only")
-
+      
       # Get dataframe
       df <- base::get0(measure)
       
-      # Create mock NDA structure
+      # Create mock NDA structure for validation
       mock_structure <- list(
         shortName = measure,
         dataElements = data.frame(
@@ -1116,15 +1115,25 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       )
       
       # Enhance with metadata if available
+      ndar_additions <- character(0)
       if (!is.null(required_field_metadata)) {
-        mock_structure <- mergeRequiredMetadata(mock_structure, required_field_metadata, recommended_field_metadata, verbose)
+        merge_result <- mergeRequiredMetadata(mock_structure, required_field_metadata, recommended_field_metadata, verbose)
+        mock_structure <- merge_result$structure
+        ndar_additions <- merge_result$ndar_additions
         message("Enhanced new structure with ndar_subject01 required and recommended field metadata")
       }
       
-      # Create ValidationState for new structure
-      validation_state <- ValidationState$new(measure, api, df, mock_structure)
+      # Run validation for NEW structure (includes STEP 2, STEP 3)
+      validation_state <- ndaValidator(measure, api, limited_dataset,
+                                       modified_structure = mock_structure,
+                                       verbose = verbose,
+                                       strict = strict,
+                                       dcc = dcc,
+                                       ndar_additions = ndar_additions,
+                                       is_new_structure = TRUE)
+      
+      # Mark as new structure
       validation_state$is_new_structure <- TRUE
-      validation_state$bypassed_validation <- TRUE
       
       # Store metadata
       if (!is.null(required_field_metadata)) {
@@ -1134,30 +1143,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         validation_state$recommended_metadata <- recommended_field_metadata
       }
       
-      # Remove DCC fields from dataframe if dcc = FALSE (NEW structures)
-      # For new structures, remove ALL DCC fields since there's no base structure to check
-      if (!dcc) {
-        dcc_fields_in_data <- intersect(names(df), DCC_FIELDS)
-        
-        if (length(dcc_fields_in_data) > 0) {
-          df <- df[, !names(df) %in% DCC_FIELDS, drop = FALSE]
-          
-          # Update both environments
-          base::assign(measure, df, envir = globalenv())
-          base::assign(measure, df, envir = .wizaRdry_env)
-          
-          # Update ValidationState dataframe
-          validation_state$set_df(df)
-          
-          if (verbose) {
-            message(sprintf("\n[DCC EXCLUDED] Removed %d DCC fields from dataframe (dcc=FALSE): %s",
-                           length(dcc_fields_in_data),
-                           paste(dcc_fields_in_data, collapse = ", ")))
-          }
-        }
-      }
-
-      # Create NDA files using simplified helper function
+      # Create NDA files
       create_nda_files(validation_state, strict = strict, verbose = verbose)
     }
 

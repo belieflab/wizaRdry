@@ -31,7 +31,8 @@ ndaValidator <- function(measure_name,
                              modified_structure = NULL,
                              strict = TRUE,
                              dcc = FALSE,
-                             ndar_additions = character()) {
+                             ndar_additions = character(),
+                             is_new_structure = FALSE) {
   
   tryCatch({
     # Initialize environment
@@ -71,10 +72,25 @@ ndaValidator <- function(measure_name,
     # Create ValidationState object
     state <- ValidationState$new(measure_name, api, df, nda_structure, dcc = dcc)
     
+    # Mark as new structure if parameter passed
+    if (is_new_structure) {
+      state$is_new_structure <- TRUE
+    }
+    
     # Store ndar_subject01 additions in ValidationState
     if (length(ndar_additions) > 0) {
       state$ndar_subject_additions <- ndar_additions
     }
+    
+    # Determine structure type label for messages (early for failure paths)
+    structure_type_label <- if (is_new_structure || state$is_new_structure) {
+      "New Data Structure"
+    } else if (length(ndar_additions) > 0) {
+      "Modified Data Structure"
+    } else {
+      "Existing Data Structure"
+    }
+    state$structure_type_label <- structure_type_label
     
     if (verbose) {
       message(sprintf("Structure type: %s", 
@@ -124,6 +140,7 @@ ndaValidator <- function(measure_name,
       } else {
         message("\n=== STEP 2: Validating Data Structure ===")
         message(sprintf("Validating against NDA structure '%s'...", measure_name))
+        message("")  # Blank line
       }
     }
     
@@ -196,10 +213,10 @@ ndaValidator <- function(measure_name,
           
           # Skip remaining phases
           message("\n=== STEP 3: De-identifying Data ===")
-          message("[SKIPPED - Validation failed]")
+          message("[ERROR] Validation failed - skipping de-identification")
           message("")
-          message("\n=== STEP 4: Generating NDA Files ===")
-          message("[SKIPPED - Validation failed]")
+          message(sprintf("\n=== STEP 4: %s ===", state$structure_type_label))
+          message("[ERROR] Validation failed - skipping file creation")
           message("")
         }
         
@@ -303,10 +320,10 @@ ndaValidator <- function(measure_name,
           
           # Skip remaining phases
           message("\n=== STEP 3: De-identifying Data ===")
-          message("[SKIPPED - DCC validation failed]")
+          message("[ERROR] DCC validation failed - skipping de-identification")
           message("")
-          message("\n=== STEP 4: Generating NDA Files ===")
-          message("[SKIPPED - DCC validation failed]")
+          message(sprintf("\n=== STEP 4: %s ===", state$structure_type_label))
+          message("[ERROR] DCC validation failed - skipping file creation")
           message("")
           
           # Return early with failed state
@@ -410,57 +427,49 @@ ndaValidator <- function(measure_name,
       message("\n--- PHASE 6: De-identification ---")
     }
     
-    # Date-shifting with HIPAA reference (always show message in non-verbose)
-    if ("interview_date" %in% names(df)) {
-      if (!verbose && !limited_dataset) {
-        message("Applying date-shifting to interview_date (per HIPAA Safe Harbor de-identification standard)...")
-      }
-      df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
-      if (!verbose && !limited_dataset) {
-        message("")  # Blank line before [OK]
-        message("[OK] Date-shifting complete")
-        message("")  # Blank line after [OK]
-      }
-    }
-    
-    # Age-capping with HIPAA reference (always show message in non-verbose)
-    if ("interview_age" %in% names(df)) {
-      if (!verbose && !limited_dataset) {
-        message("Applying age-capping to interview_age (threshold: 89 years per HIPAA Safe Harbor de-identification standard)...")
-      }
-      
-      age_result <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
-      
-      # Defensive check: ensure age_result is a list with df and stats
-      if (is.list(age_result) && "df" %in% names(age_result) && "stats" %in% names(age_result)) {
-        df <- age_result$df
-        age_stats <- age_result$stats
-        
-        # Show result based on statistics (always show in non-verbose, not just verbose)
-        if (!verbose && !limited_dataset) {
-          message("")  # Blank line before result
-          if (isTRUE(age_stats$all_na)) {
-            message("[OK] All values are NA - no age-capping needed")
-          } else if (!is.null(age_stats$values_capped) && age_stats$values_capped > 0) {
-            message(sprintf("[WARN] %d value%s exceeded threshold and %s capped to 1068 months (89 years)",
-                           age_stats$values_capped,
-                           if (age_stats$values_capped > 1) "s" else "",
-                           if (age_stats$values_capped > 1) "were" else "was"))
-          } else if (!is.null(age_stats$non_na_count) && age_stats$non_na_count > 0) {
-            message(sprintf("[OK] All %d values below threshold - no capping needed", age_stats$non_na_count))
-          } else {
-            message("[OK] No age-capping needed")
-          }
-          message("")  # Blank line after result
-        }
+    if (limited_dataset) {
+      # Limited dataset mode - skip de-identification
+      if (!verbose) {
+        message("[OK] Using limited dataset (de-identification already applied per your configuration)")
+        message("")  # Blank line
       } else {
-        # Fallback: age_result might be just a dataframe (old format)
-        if (is.data.frame(age_result)) {
+        message("[OK] Limited dataset mode - de-identification already applied")
+      }
+    } else {
+      # Normal mode - perform de-identification
+      
+      # Single intro message
+      if (!verbose) {
+        message("Applying HIPAA Safe Harbor de-identification to limited dataset")
+        message("")
+      }
+      
+      # Process date-shifting silently
+      if ("interview_date" %in% names(df)) {
+        df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
+      }
+      
+      # Process age-capping silently
+      if ("interview_age" %in% names(df)) {
+        age_result <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
+        
+        # Defensive check: ensure age_result is a list with df and stats
+        if (is.list(age_result) && "df" %in% names(age_result) && "stats" %in% names(age_result)) {
+          df <- age_result$df
+          age_stats <- age_result$stats
+        } else if (is.data.frame(age_result)) {
+          # Fallback: age_result might be just a dataframe (old format)
           df <- age_result
+          age_stats <- NULL
+        } else {
+          age_stats <- NULL
         }
-        if (!verbose && !limited_dataset) {
-          message("")
-          message("[OK] Age-capping complete")
+      }
+      
+      # Show completion messages together
+      if (!verbose) {
+        message("[OK] Date-shifting complete")
+        message("[OK] Age-capping complete")
           message("")
         }
       }
@@ -469,7 +478,12 @@ ndaValidator <- function(measure_name,
     state$set_df(df)
     
     if (limited_dataset == FALSE && verbose) {
-      message("\nDataset has been de-identified using date-shifting and age-capping.")
+        message("")  # Blank line after completion
+      }
+      
+      if (verbose) {
+        message("\nDataset has been de-identified using date-shifting and age-capping.")
+      }
     }
     
     # ============================================================================
