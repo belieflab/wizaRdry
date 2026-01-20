@@ -470,14 +470,6 @@ ndaValidator <- function(measure_name,
       if (!verbose) {
         message("[OK] Date-shifting complete")
         message("[OK] Age-capping complete")
-          message("")
-        }
-      }
-    }
-    
-    state$set_df(df)
-    
-    if (limited_dataset == FALSE && verbose) {
         message("")  # Blank line after completion
       }
       
@@ -485,6 +477,8 @@ ndaValidator <- function(measure_name,
         message("\nDataset has been de-identified using date-shifting and age-capping.")
       }
     }
+    
+    state$set_df(df)
     
     # ============================================================================
     # PHASE 7: Final Validation Summary
