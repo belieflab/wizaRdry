@@ -71,7 +71,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
   
   # Print STEP 4 header once (before validation gate)
   if (!verbose) {
-    message("\n=== STEP 4: Generating NDA Files ===")
+    message("\n=== STEP 4: Data Structure Reconciliation ===")
   }
   
   # Validation gate: Check if files should be created
@@ -153,10 +153,10 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
     if (is_new) {
       # NEW structure: Only create data definition
       if (!verbose) {
-        message("\n=== STEP 4A: Generating NDA Submission Template ===")
+        message("\n=== Submission Template ===")
         message("[SKIP] Structure doesn't exist in NDA yet (cannot create submission template)")
         message("")
-        message("=== STEP 4B: Generating NDA Data Definition ===")
+        message("=== Data Definition ===")
         message("[NEW STRUCTURE] Creating data definition for structure registration")
       } else {
         message("\n[NEW STRUCTURE]")
@@ -186,7 +186,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       
       # STEP 4A: Submission Template
       if (!verbose) {
-        message("\n=== STEP 4A: Generating NDA Submission Template ===")
+        message("\n=== Submission Template ===")
       } else {
         message("\n[EXISTING STRUCTURE]")
       }
@@ -196,10 +196,11 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           measure_name,
           skip_prompt = TRUE,  # Skip initial confirmation prompt
           selected_fields = field_selection$selected_fields,
-          skip_prompts = TRUE   # Skip field selection prompts
+          skip_prompts = TRUE,   # Skip field selection prompts
+          verbose = verbose
         )
         if (!verbose) {
-          message(sprintf("[OK] Template created at: ./tmp/%s_template.csv", measure_name))
+          message(sprintf("[OK] Created at: ./tmp/%s_template.csv", measure_name))
         } else {
           message("[OK] Submission template created successfully")
         }
@@ -211,7 +212,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       if (needs_definition) {
         if (!verbose) {
           message("")  # Blank line
-          message("=== STEP 4B: Generating NDA Data Definition ===")
+          message("=== Data Definition ===")
           message("[MODIFIED STRUCTURE] Creating data definition for NDA approval")
         } else {
           message("")  # Blank line
@@ -237,7 +238,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       } else {
         if (!verbose) {
           message("")  # Blank line
-          message("=== STEP 4B: Generating NDA Data Definition ===")
+          message("=== Data Definition ===")
           message("[SKIP] Structure unmodified (no data definition needed)")
         } else {
           message("")  # Blank line

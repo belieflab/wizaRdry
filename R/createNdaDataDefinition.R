@@ -22,6 +22,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     data_frame <- validation_state$get_df()
     nda_structure <- validation_state$nda_structure
     
+    # Extract ndar_subject_additions for DCC field tracking
+    ndar_subject_additions <- validation_state$ndar_subject_additions
+    if (is.null(ndar_subject_additions)) {
+      ndar_subject_additions <- character(0)
+    }
+    
     message(sprintf("\n[DATA DEFINITION] Creating for '%s'", measure_name))
     
     # Build reason message
@@ -42,6 +48,9 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   } else {
     # LEGACY PATH: submission_template is a list
     message("\n[DATA DEFINITION] Using legacy input format")
+    
+    # Initialize ndar_subject_additions as empty for legacy path
+    ndar_subject_additions <- character(0)
     
     # Try to get the data frame from the global environment if not provided
     if (is.null(data_frame)) {
@@ -1980,6 +1989,16 @@ exportDataDefinition <- function(data_definition) {
                #   2. Were NOT in the original fetched structure (in_local_nda = FALSE)
                # This highlights fields the user added from the NDA dictionary
                idx_new_from_nda <- which(element_is_in_nda & !in_local_nda)
+               
+               # ALSO mark DCC fields from ndar_subject01 as blue (added via dcc=TRUE)
+               # These fields are technically "in_local_nda" because they were merged into the structure,
+               # but they should still be highlighted as new additions requiring NDA approval
+               if (exists("ndar_subject_additions") && length(ndar_subject_additions) > 0) {
+                 idx_dcc_additions <- which(element_names %in% ndar_subject_additions)
+                 # Combine with existing new fields, removing duplicates
+                 idx_new_from_nda <- unique(c(idx_new_from_nda, idx_dcc_additions))
+               }
+               
                if (length(idx_new_from_nda) > 0) {
                  openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_new_from_nda + 1, cols = elementCol, gridExpand = TRUE)
                  applied_blue[idx_new_from_nda] <- TRUE
@@ -2000,7 +2019,7 @@ exportDataDefinition <- function(data_definition) {
                       openxlsx::writeData(wb, "Data Definitions", sprintf("Requesting to add %s as is", field_name), startRow = idx + 1, startCol = notes_col, colNames = FALSE)
                     }
                   }
-               }
+                }
 
               # Yellow: modified NDA elements -> highlight changed definition columns (ValueRange/Notes here)
              idx_modified <- which(row_modified & element_is_in_nda)

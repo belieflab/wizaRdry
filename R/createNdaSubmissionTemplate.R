@@ -16,6 +16,7 @@
 #'        uses all fields from data frame. Used by create_nda_files() for centralized field selection.
 #' @param skip_prompts Logical. If TRUE, skip ALL interactive prompts (used when called from
 #'        create_nda_files() with pre-selected fields). Default: FALSE.
+#' @param verbose Logical. If TRUE, show detailed progress messages. Default: FALSE.
 #'
 #' @return Invisible TRUE if successful. Creates a CSV file at the specified path
 #'         and prints a message with the file location.
@@ -49,7 +50,7 @@
 #' }
 #'
 #' @export
-to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, skip_prompts = FALSE) { #set skip_prompt to TRUE so users need to specify to see prompt after prefs are set
+to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, skip_prompts = FALSE, verbose = FALSE) { #set skip_prompt to TRUE so users need to specify to see prompt after prefs are set
   # Check for user preferences file
   user_prefs_file <- file.path(path, ".wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE, auto_clean = FALSE, auto_nda = FALSE, auto_nda_template = FALSE)
@@ -268,7 +269,9 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   # Get essential NDA fields dynamically from ndar_subject01 API
   # This ensures we always have the current required elements
   essential_nda_fields <- tryCatch({
-    message("Fetching current ndar_subject01 required elements from NDA API...")
+    if (verbose) {
+      message("Fetching current ndar_subject01 required elements from NDA API...")
+    }
     nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
     url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
     
@@ -281,7 +284,9 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
           required_metadata <- subject_structure$dataElements[subject_structure$dataElements$required == "Required", ]
           if (nrow(required_metadata) > 0) {
             field_names <- required_metadata$name
-            message(sprintf("Found %d required ndar_subject01 elements for template", length(field_names)))
+            if (verbose) {
+              message(sprintf("Found %d required ndar_subject01 elements for template", length(field_names)))
+            }
             field_names
           } else {
             stop("No required elements found")
@@ -354,8 +359,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE,
               quote = TRUE, sep = ",", na = "")
 
-  message(sprintf("\nSubmission Template created at: %s \n", file_path))
-
+  # Message removed - caller (ndaFileCreation.R) handles user messaging
   return(invisible(TRUE))
 }
 
