@@ -46,6 +46,8 @@ file should be created based on whether the structure is new or modified.
 
 \item{\code{new_fields}}{Character vector - fields in data not in NDA structure}
 
+\item{\code{ndar_subject_additions}}{Character vector - DCC fields added from ndar_subject01}
+
 \item{\code{renamed_fields}}{Character vector - fields that were renamed}
 
 \item{\code{dropped_fields}}{Character vector - fields that were dropped}

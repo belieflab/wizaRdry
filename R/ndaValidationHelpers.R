@@ -457,6 +457,12 @@ check_dcc_fields <- function(state, elements,
     for (i in seq_len(nrow(dcc_required_in_structure))) {
       field_name <- dcc_required_in_structure$name[i]
       
+      # Safety: Convert to character if it's a list
+      if (is.list(field_name)) {
+        field_name <- as.character(unlist(field_name))
+      }
+      field_name <- as.character(field_name)
+      
       if (field_name %in% names(df)) {
         field_data <- df[[field_name]]
         na_count <- sum(is.na(field_data))
@@ -487,6 +493,12 @@ check_dcc_fields <- function(state, elements,
     for (i in seq_len(nrow(dcc_recommended_in_structure))) {
       field_name <- dcc_recommended_in_structure$name[i]
       
+      # Safety: Convert to character if it's a list
+      if (is.list(field_name)) {
+        field_name <- as.character(unlist(field_name))
+      }
+      field_name <- as.character(field_name)
+      
       if (field_name %in% names(df)) {
         field_data <- df[[field_name]]
         
@@ -510,10 +522,11 @@ check_dcc_fields <- function(state, elements,
     }
   }
   
-  return(list(
+  result <- base::list(
     required_violations = required_violations,
     recommended_violations = recommended_violations
-  ))
+  )
+  return(result)
 }
 
 #' Print validation summary

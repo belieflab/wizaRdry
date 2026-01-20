@@ -1182,6 +1182,7 @@ Aliases <- R6::R6Class("Aliases",
 #' @field allowed_values Character vector - permitted values
 #' @field min_value Numeric - minimum allowed value
 #' @field max_value Numeric - maximum allowed value
+#' @field pattern Character - regex pattern for validation
 #' @field data_type Character - expected data type
 #' @field custom_rules List - custom validation functions
 #' 
@@ -1192,11 +1193,24 @@ ValidationRules <- R6::R6Class("ValidationRules",
     allowed_values = NULL,
     min_value = NULL,
     max_value = NULL,
+    pattern = NULL,
     data_type = NULL,
     custom_rules = NULL,
     
-    initialize = function() {
-      self$allowed_values <- character(0)
+    initialize = function(min_value = NULL, max_value = NULL, allowed_values = NULL, pattern = NULL, data_type = NULL) {
+      self$min_value <- min_value
+      self$max_value <- max_value
+      # Safety check: convert list to character vector if needed
+      self$allowed_values <- if (is.null(allowed_values)) {
+        character(0)
+      } else if (is.list(allowed_values)) {
+        # Handle case where list is passed instead of vector
+        unlist(allowed_values, use.names = FALSE)
+      } else {
+        allowed_values
+      }
+      self$pattern <- pattern
+      self$data_type <- data_type
       self$custom_rules <- list()
     },
     

@@ -1292,6 +1292,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
       }
 
       # Create NdaDataStructure from NDA metadata
+      # Pass all metadata during construction to enable proper R6 object conversion
       field_struct <- NdaDataStructure$new(
         element_name = column_name,
         data_type = nda_metadata_to_use$type %||% "String",
@@ -1302,14 +1303,15 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         notes = nda_metadata_to_use$notes %||% "",
         aliases = nda_metadata_to_use$aliases %||% "",
         selection_order = i,
-        source = source
+        source = if(is_modified_structure) "nda_modified" else source,
+        missing_info = missing_info,
+        validation_rules = validation_rules
       )
       
-      # Set additional metadata
-      field_struct$missing_info <- missing_info
-      field_struct$is_modified <- is_modified_structure
-      field_struct$modification_notes <- modification_notes
-      field_struct$validation_rules <- validation_rules
+      # Add modification notes if structure was modified
+      if (is_modified_structure && !is.null(modification_notes) && nzchar(modification_notes)) {
+        field_struct$source_metadata$add_modification(modification_notes)
+      }
       
       # Store as list for backward compatibility with export code
       data_definition$fields[[column_name]] <- field_struct$to_list()
@@ -1433,6 +1435,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         c(data_definition$metadata$validation_summary$warnings, warning_msg)
 
       # Create NdaDataStructure from computed metadata
+      # Pass all metadata during construction to enable proper R6 object conversion
       field_struct <- NdaDataStructure$new(
         element_name = column_name,
         data_type = computed_metadata$data_type,
@@ -1443,16 +1446,14 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         notes = computed_metadata$notes %||% "",
         aliases = computed_metadata$aliases %||% "",
         selection_order = i,
-        source = if (field_exists_in_data) "computed_from_data" else "template_only"
-      )
-      
-      # Set additional metadata
-      field_struct$missing_info <- computed_metadata$missing_info
-      field_struct$validation_rules <- list(
-        min_value = NULL,
-        max_value = NULL,
-        allowed_values = computed_metadata$valueRange,
-        pattern = NULL
+        source = if (field_exists_in_data) "computed_from_data" else "template_only",
+        missing_info = computed_metadata$missing_info,
+        validation_rules = list(
+          min_value = NULL,
+          max_value = NULL,
+          allowed_values = computed_metadata$valueRange,
+          pattern = NULL
+        )
       )
       
       # Store as list for backward compatibility

@@ -328,70 +328,78 @@ ndaValidator <- function(measure_name,
     # ============================================================================
     # PHASE 4: Value Range Validation
     # ============================================================================
-    if (verbose) message("\n--- PHASE 4: Value Range Validation ---")
-    
-    # This is the critical function that properly tracks violations
-    violations <- check_value_range_violations(state, elements, verbose)
-    
-    # Show value range summary (violations only, unless verbose)
-    if (!verbose) {
-      total_fields <- length(intersect(names(state$get_df()), elements$name))
+    tryCatch({
+      if (verbose) message("\n--- PHASE 4: Value Range Validation ---")
       
-      if (length(violations) == 0) {
-        message(sprintf("Checking %d fields for NDA compliance...", total_fields))
-        message("")  # Blank line before [OK]
-        message(sprintf("[OK] All %d fields validated successfully (0 violations)", total_fields))
-        message("")  # Blank line after [OK]
-      } else {
-        message(sprintf("Checking %d fields for NDA compliance...", total_fields))
-        message("[WARN] Value range violations found:\n")
+      # This is the critical function that properly tracks violations
+      violations <- check_value_range_violations(state, elements, verbose)
+      
+      # Show value range summary (violations only, unless verbose)
+      if (!verbose) {
+        total_fields <- length(intersect(names(state$get_df()), elements$name))
         
-        for (field_name in names(violations)) {
-          violation <- violations[[field_name]]
-          expected_str <- if (is.null(violation$expected_range)) {
-            "no range defined"
-          } else {
-            violation$expected_range
+        if (length(violations) == 0) {
+          message(sprintf("Checking %d fields for NDA compliance...", total_fields))
+          message("")  # Blank line before [OK]
+          message(sprintf("[OK] All %d fields validated successfully (0 violations)", total_fields))
+          message("")  # Blank line after [OK]
+        } else {
+          message(sprintf("Checking %d fields for NDA compliance...", total_fields))
+          message("[WARN] Value range violations found:\n")
+          
+          for (field_name in names(violations)) {
+            violation <- violations[[field_name]]
+            expected_str <- if (is.null(violation$expected_range)) {
+              "no range defined"
+            } else {
+              violation$expected_range
+            }
+            
+            violating_vals <- violation$violating_values
+            message(sprintf("  Field: %s", field_name))
+            message(sprintf("  Expected range: %s", expected_str))
+            message(sprintf("  Violating values found: %s (%d occurrence%s)", 
+                           paste(violating_vals, collapse = ", "),
+                           length(violating_vals),
+                           if (length(violating_vals) > 1) "s" else ""))
+            message("")
           }
           
-          violating_vals <- violation$violating_values
-          message(sprintf("  Field: %s", field_name))
-          message(sprintf("  Expected range: %s", expected_str))
-          message(sprintf("  Violating values found: %s (%d occurrence%s)", 
-                         paste(violating_vals, collapse = ", "),
-                         length(violating_vals),
-                         if (length(violating_vals) > 1) "s" else ""))
-          message("")
+          message("")  # Blank line before final summary
+          message(sprintf("[WARN] Validation completed with %d violation%s",
+                         length(violations),
+                         if (length(violations) > 1) "s" else ""))
+          message("")  # Blank line after summary
         }
-        
-        message("")  # Blank line before final summary
-        message(sprintf("[WARN] Validation completed with %d violation%s",
-                       length(violations),
-                       if (length(violations) > 1) "s" else ""))
-        message("")  # Blank line after summary
       }
-    }
-    
-    if (length(violations) > 0 && verbose) {
-      message(sprintf("\nDetected %d field(s) with value range issues", length(violations)))
-      message("These will trigger data definition file creation")
-    }
+      
+      if (length(violations) > 0 && verbose) {
+        message(sprintf("\nDetected %d field(s) with value range issues", length(violations)))
+        message("These will trigger data definition file creation")
+      }
+    }, error = function(e) {
+      stop(sprintf("Error in PHASE 4 (Value Range Validation): %s", e$message))
+    })
     
     # ============================================================================
     # PHASE 5: New Field Detection
     # ============================================================================
-    if (verbose) message("\n--- PHASE 5: New Field Detection ---")
-    
-    state$new_fields <- detect_new_fields(state$get_df(), elements)
-    
-    if (length(state$new_fields) > 0) {
-      state$is_modified_structure <- TRUE
-      if (verbose) {
-        message(sprintf("\nDetected %d new field(s) not in NDA structure:", 
-                       length(state$new_fields)))
-        message(sprintf("  %s", paste(state$new_fields, collapse = ", ")))
+    tryCatch({
+      if (verbose) message("\n--- PHASE 5: New Field Detection ---")
+      
+      state$new_fields <- detect_new_fields(state$get_df(), elements)
+      
+      if (length(state$new_fields) > 0) {
+        state$is_modified_structure <- TRUE
+        if (verbose) {
+          message(sprintf("\nDetected %d new field(s) not in NDA structure:", 
+                         length(state$new_fields)))
+          message(sprintf("  %s", paste(state$new_fields, collapse = ", ")))
+        }
       }
-    }
+    }, error = function(e) {
+      stop(sprintf("Error in PHASE 5 (New Field Detection): %s", e$message))
+    })
     
     # ============================================================================
     # PHASE 6: De-identification

@@ -148,6 +148,30 @@ ValidationState <- R6::R6Class("ValidationState",
     },
     
     #' @description
+    #' Add violations of a specific type (e.g., DCC violations)
+    #' @param type Character - type of violations ("dcc_required", "dcc_recommended", etc.)
+    #' @param violations List - violations to add
+    #' @return Self (invisibly) for method chaining
+    add_violations = function(type, violations) {
+      # Store violations by type (not currently used in reporting but available for future use)
+      # For now, just track that we have violations
+      if (length(violations) > 0) {
+        # Could store them in a typed list if needed:
+        # self$typed_violations[[type]] <- violations
+      }
+      invisible(self)
+    },
+    
+    #' @description
+    #' Set validation status
+    #' @param valid Logical - TRUE if validation passed, FALSE otherwise
+    #' @return Self (invisibly) for method chaining
+    set_valid = function(valid) {
+      self$is_valid <- valid
+      invisible(self)
+    },
+    
+    #' @description
     #' Check if structure has modifications requiring data definition
     #' @return Logical
     has_modifications = function() {
