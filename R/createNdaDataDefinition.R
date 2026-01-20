@@ -38,6 +38,36 @@ rc_parse_choices_codes_and_notes <- function(choices_string) {
   )
 }
 
+# Helper function: expand numeric value range string to vector of integers
+# Converts NDA value range notation (e.g., "1::14", "1;2;3", "1::7;999") into numeric vector
+# Used for comparing NDA ranges with REDCap choices and data values
+# @noRd
+expand_numeric_value_range <- function(val_range_str) {
+  if (is.null(val_range_str) || identical(val_range_str, "") || is.na(val_range_str)) return(NULL)
+  parts <- trimws(strsplit(as.character(val_range_str), ";")[[1]])
+  parts <- parts[nzchar(parts)]
+  if (length(parts) == 0) return(NULL)
+  out_vals <- integer(0)
+  for (p in parts) {
+    if (grepl("::", p, fixed = TRUE)) {
+      # Handle range notation (e.g., "1::14")
+      bounds <- suppressWarnings(as.numeric(strsplit(p, "::", fixed = TRUE)[[1]]))
+      if (length(bounds) == 2 && !any(is.na(bounds))) {
+        a <- floor(bounds[1])
+        b <- floor(bounds[2])
+        if (b >= a && (b - a) <= 10000) { # safety bound to prevent huge expansions
+          out_vals <- c(out_vals, seq(a, b))
+        }
+      }
+    } else {
+      # Handle individual values (e.g., "999")
+      num <- suppressWarnings(as.numeric(p))
+      if (!is.na(num)) out_vals <- c(out_vals, floor(num))
+    }
+  }
+  unique(out_vals)
+}
+
 #' Create NDA Data Definition File
 #'
 #' @description
@@ -1621,6 +1651,12 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
         )
       )
       
+      # IMPORTANT: Super required fields must ALWAYS be marked as "Required"
+      # These are the 5 mandatory fields for all NDA submissions
+      if (column_name %in% SUPER_REQUIRED_FIELDS) {
+        field_struct$required <- RequirementLevel$new("Required")
+      }
+      
       # Store as list for backward compatibility
       data_definition$fields[[column_name]] <- field_struct$to_list()
 
@@ -1862,6 +1898,11 @@ exportDataDefinition <- function(data_definition) {
 
            required_vals <- sapply(field_names, function(fname) {
               tryCatch({
+                # IMPORTANT: Super required fields must ALWAYS be "Required"
+                if (fname %in% SUPER_REQUIRED_FIELDS) {
+                  return("Required")
+                }
+                
                 x <- data_definition$fields[[fname]]
                 if (!is.null(x$nda_metadata) && "required" %in% names(x$nda_metadata)) {
                   as.character(x$nda_metadata$required %||% "Recommended")
@@ -2157,31 +2198,8 @@ exportDataDefinition <- function(data_definition) {
                out
              }
 
-             # Helper to expand numeric valueRange string into a set of allowed integer values
-             expand_numeric_value_range <- function(val_range_str) {
-               if (is.null(val_range_str) || identical(val_range_str, "") || is.na(val_range_str)) return(NULL)
-               parts <- trimws(strsplit(as.character(val_range_str), ";")[[1]])
-               parts <- parts[nzchar(parts)]
-               if (length(parts) == 0) return(NULL)
-               out_vals <- integer(0)
-               for (p in parts) {
-                 if (grepl("::", p, fixed = TRUE)) {
-                   bounds <- suppressWarnings(as.numeric(strsplit(p, "::", fixed = TRUE)[[1]]))
-                   if (length(bounds) == 2 && !any(is.na(bounds))) {
-                     a <- floor(bounds[1]); b <- floor(bounds[2])
-                     if (b >= a && (b - a) <= 10000) { # safety bound
-                       out_vals <- c(out_vals, seq(a, b))
-                     }
-                   }
-                 } else {
-                   num <- suppressWarnings(as.numeric(p))
-                   if (!is.na(num)) out_vals <- c(out_vals, floor(num))
-                 }
-               }
-               unique(out_vals)
-             }
-
-             # Determine which rows are modified (our proposal changes)
+              # Determine which rows are modified (our proposal changes)
+              # Note: expand_numeric_value_range() is now defined at package level
              row_modified <- vapply(field_names, function(fname) {
                x <- data_definition$fields[[fname]]
                isTRUE(x$is_modified) || identical(as.character(x$source %||% ""), "nda_modified")
