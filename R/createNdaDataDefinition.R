@@ -1096,9 +1096,10 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     )
   )
 
-  # Persist NDA element names and verbose flag for downstream export/formatting
+  # Persist NDA element names, verbose flag, and ndar_subject additions for downstream export/formatting
   data_definition$metadata$nda_element_names <- names(nda_lookup)
   data_definition$metadata$verbose <- verbose
+  data_definition$metadata$ndar_subject_additions <- ndar_subject_additions
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -1630,8 +1631,13 @@ validateDataDefinition <- function(data_definition, strict_validation = FALSE) {
 
 #' @noRd
 exportDataDefinition <- function(data_definition) {
-  # Extract verbose flag from data_definition if it exists
+  # Extract verbose flag and ndar_subject_additions from data_definition if they exist
   verbose <- if (!is.null(data_definition$metadata$verbose)) data_definition$metadata$verbose else FALSE
+  ndar_subject_additions <- if (!is.null(data_definition$metadata$ndar_subject_additions)) {
+    data_definition$metadata$ndar_subject_additions
+  } else {
+    character(0)
+  }
   
   # Create directory structure if it doesn't exist
   tmp_path <- file.path(".", "tmp")
@@ -2059,14 +2065,19 @@ exportDataDefinition <- function(data_definition) {
                     }
                   }
 
-                  # Apply yellow fill to ValueRange and Notes cells to indicate change
+                  # Apply yellow fill to ValueRange, Notes, and Notes for Data Curator cells to indicate change
                   vr_col <- which(colnames(fields_df) == "ValueRange")
                   notes_col <- which(colnames(fields_df) == "Notes")
+                  curator_notes_col <- which(colnames(fields_df) == "Notes for Data Curator")
+                  
                   if (length(vr_col) == 1) {
                     openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = vr_col, gridExpand = TRUE)
                   }
                   if (length(notes_col) == 1) {
                     openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = notes_col, gridExpand = TRUE)
+                  }
+                  if (length(curator_notes_col) == 1) {
+                    openxlsx::addStyle(wb, "Data Definitions", yellowFill, rows = i + 1, cols = curator_notes_col, gridExpand = TRUE)
                   }
 
                   # Build rich-text instructions to apply later with openxlsx2
