@@ -699,11 +699,12 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     if (DEBUG) message("[DEBUG] Sourcing script file: ", file_path)
     base::source(file_path)
 
-    # Initialize environments...
-    if (!exists(".wizaRdry_env")) {
-      if (DEBUG) message("[DEBUG] Creating .wizaRdry_env")
-      .wizaRdry_env <- new.env(parent = globalenv())
+    # Initialize package environment for NDA workflow (CRAN compliant)
+    if (!exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
+      if (DEBUG) message("[DEBUG] Creating .wizaRdry_env in package environment")
+      assign(".wizaRdry_env", new.env(parent = emptyenv()), envir = .pkg_env)
     }
+    wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
 
     # Get the data frame
     if (DEBUG) message("[DEBUG] Attempting to get dataframe: ", measure)
@@ -723,9 +724,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       required_field_metadata <- enhancement_result$required_metadata
       recommended_field_metadata <- enhancement_result$recommended_metadata  # NEW
 
-      # Update environments
-      base::assign(measure, df, envir = globalenv())
-      base::assign(measure, df, envir = .wizaRdry_env)
+      # Store in package environment (authoritative)
+      base::assign(measure, df, envir = wizaRdry_env)
+      
+      # Also assign to calling environment for user convenience
+      tryCatch({
+        calling_env <- parent.frame()
+        base::assign(measure, df, envir = calling_env)
+      }, error = function(e) {
+        # Calling environment not accessible - package env storage is sufficient
+      })
 
       if (DEBUG) message("[DEBUG] Enhanced dataframe with required and recommended elements")
     }
@@ -735,12 +743,12 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
       # Re-get the data to ensure we have the latest version
       if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
-      if (exists(measure, envir = globalenv())) {
-        df <- base::get(measure, envir = globalenv())
-        if (DEBUG) message("[DEBUG] Got from globalenv()")
-      } else if (exists(measure, envir = .wizaRdry_env)) {
-        df <- base::get(measure, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Got from .wizaRdry_env")
+      if (exists(measure, envir = origin_env)) {
+        df <- base::get(measure, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Got from package environment")
+      } else if (exists(measure, envir = wizaRdry_env)) {
+        df <- base::get(measure, envir = wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Got from package environment")
       } else if (exists(measure, envir = origin_env)) {
         df <- base::get(measure, envir = origin_env)
         if (DEBUG) message("[DEBUG] Got from origin_env")
@@ -778,26 +786,22 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
 
       # Update in globalenv
-      base::assign(measure, df_new, envir = globalenv())
-      if (DEBUG) message("[DEBUG] Assigned to globalenv()")
+      if (DEBUG) message("[DEBUG] Assigned to package environment")
 
       # Update in origin_env
       base::assign(measure, df_new, envir = origin_env)
       if (DEBUG) message("[DEBUG] Assigned to origin_env")
 
-      # Update in .wizaRdry_env if it exists
-      if (exists(".wizaRdry_env")) {
-        base::assign(measure, df_new, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
-      }
+        base::assign(measure, df_new, envir = wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Assigned to package environment")
 
       # Update our local df variable for continuing the function
       df <- df_new
 
       # Verify the changes took effect
       if (DEBUG) {
-        if (exists(measure, envir = globalenv())) {
-          df_check <- base::get(measure, envir = globalenv())
+        if (exists(measure, envir = origin_env)) {
+          df_check <- base::get(measure, envir = origin_env)
           message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
         }
       }
@@ -812,12 +816,12 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
       # Re-get the data to ensure we have the latest version
       if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
-      if (exists(measure, envir = globalenv())) {
-        df <- base::get(measure, envir = globalenv())
-        if (DEBUG) message("[DEBUG] Got from globalenv()")
-      } else if (exists(measure, envir = .wizaRdry_env)) {
-        df <- base::get(measure, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Got from .wizaRdry_env")
+      if (exists(measure, envir = origin_env)) {
+        df <- base::get(measure, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Got from package environment")
+      } else if (exists(measure, envir = wizaRdry_env)) {
+        df <- base::get(measure, envir = wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Got from package environment")
       } else if (exists(measure, envir = origin_env)) {
         df <- base::get(measure, envir = origin_env)
         if (DEBUG) message("[DEBUG] Got from origin_env")
@@ -855,26 +859,22 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
 
       # Update in globalenv
-      base::assign(measure, df_new, envir = globalenv())
-      if (DEBUG) message("[DEBUG] Assigned to globalenv()")
+      if (DEBUG) message("[DEBUG] Assigned to package environment")
 
       # Update in origin_env
       base::assign(measure, df_new, envir = origin_env)
       if (DEBUG) message("[DEBUG] Assigned to origin_env")
 
-      # Update in .wizaRdry_env if it exists
-      if (exists(".wizaRdry_env")) {
-        base::assign(measure, df_new, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
-      }
+        base::assign(measure, df_new, envir = wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Assigned to package environment")
 
       # Update our local df variable for continuing the function
       df <- df_new
 
       # Verify the changes took effect
       if (DEBUG) {
-        if (exists(measure, envir = globalenv())) {
-          df_check <- base::get(measure, envir = globalenv())
+        if (exists(measure, envir = origin_env)) {
+          df_check <- base::get(measure, envir = origin_env)
           message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
         }
       }
@@ -885,12 +885,12 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
       # Re-get the data to ensure we have the latest version
       if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
-      if (exists(measure, envir = globalenv())) {
-        df <- base::get(measure, envir = globalenv())
-        if (DEBUG) message("[DEBUG] Got from globalenv()")
-      } else if (exists(measure, envir = .wizaRdry_env)) {
-        df <- base::get(measure, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Got from .wizaRdry_env")
+      if (exists(measure, envir = origin_env)) {
+        df <- base::get(measure, envir = origin_env)
+        if (DEBUG) message("[DEBUG] Got from package environment")
+      } else if (exists(measure, envir = wizaRdry_env)) {
+        df <- base::get(measure, envir = wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Got from package environment")
       } else if (exists(measure, envir = origin_env)) {
         df <- base::get(measure, envir = origin_env)
         if (DEBUG) message("[DEBUG] Got from origin_env")
@@ -924,26 +924,22 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
 
       # Update in globalenv
-      base::assign(measure, df_new, envir = globalenv())
-      if (DEBUG) message("[DEBUG] Assigned to globalenv()")
+      if (DEBUG) message("[DEBUG] Assigned to package environment")
 
       # Update in origin_env
       base::assign(measure, df_new, envir = origin_env)
       if (DEBUG) message("[DEBUG] Assigned to origin_env")
 
-      # Update in .wizaRdry_env if it exists
-      if (exists(".wizaRdry_env")) {
-        base::assign(measure, df_new, envir = .wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Assigned to .wizaRdry_env")
-      }
+        base::assign(measure, df_new, envir = wizaRdry_env)
+        if (DEBUG) message("[DEBUG] Assigned to package environment")
 
       # Update our local df variable for continuing the function
       df <- df_new
 
       # Verify the changes took effect
       if (DEBUG) {
-        if (exists(measure, envir = globalenv())) {
-          df_check <- base::get(measure, envir = globalenv())
+        if (exists(measure, envir = origin_env)) {
+          df_check <- base::get(measure, envir = origin_env)
           message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
         }
       }
@@ -961,11 +957,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (length(idx) > 0) {
         df$race[idx] <- "Hawaiian or Pacific Islander"
         # Propagate updates to environments used downstream
-        base::assign(measure, df, envir = globalenv())
         base::assign(measure, df, envir = origin_env)
-        if (exists(".wizaRdry_env")) {
-          base::assign(measure, df, envir = .wizaRdry_env)
-        }
+          base::assign(measure, df, envir = wizaRdry_env)
         message(sprintf("Normalized %d 'race' value(s) to 'Hawaiian or Pacific Islander'", length(idx)))
       }
     }
@@ -1078,8 +1071,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           df <- df[, !names(df) %in% dcc_fields_to_remove, drop = FALSE]
           
           # Update both environments
-          base::assign(measure, df, envir = globalenv())
-          base::assign(measure, df, envir = .wizaRdry_env)
+          base::assign(measure, df, envir = wizaRdry_env)
           
           # Update ValidationState dataframe
           validation_state$set_df(df)
@@ -1143,8 +1135,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
           df <- df[, !names(df) %in% DCC_FIELDS, drop = FALSE]
           
           # Update both environments
-          base::assign(measure, df, envir = globalenv())
-          base::assign(measure, df, envir = .wizaRdry_env)
+          base::assign(measure, df, envir = wizaRdry_env)
           
           # Update ValidationState dataframe
           validation_state$set_df(df)

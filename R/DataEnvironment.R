@@ -1,13 +1,14 @@
 #' DataEnvironment R6 Class
 #'
 #' @description
-#' Manages dataframe storage across multiple R environments (globalenv, .wizaRdry_env, origin_env).
-#' Encapsulates the complex environment management pattern used throughout the validation workflow.
+#' Manages dataframe storage in package environment (.pkg_env$.wizaRdry_env) with optional
+#' convenience assignment to calling environment. CRAN-compliant environment management.
 #'
 #' @details
-#' This class provides a clean interface for getting and setting dataframes across the three
-#' environments used by wizaRdry: globalenv(), .wizaRdry_env, and origin_env (parent frame).
-#' This eliminates scattered base::assign() and base::get() calls throughout the codebase.
+#' This class provides a clean interface for getting and setting dataframes using the package
+#' environment (.pkg_env) as the authoritative source, with optional assignment to the calling
+#' environment for user convenience. This eliminates global environment pollution and follows
+#' R package best practices.
 #'
 #' @keywords internal
 DataEnvironment <- R6::R6Class("DataEnvironment",
@@ -33,28 +34,30 @@ DataEnvironment <- R6::R6Class("DataEnvironment",
     },
     
     #' @description
-    #' Get dataframe from the appropriate environment
-    #' @return The dataframe stored across environments
+    #' Get dataframe from package environment or calling environment
+    #' @return The dataframe stored in package environment
     get_df = function() {
-      # Check environments in priority order: globalenv, .wizaRdry_env, origin_env
-      if (exists(self$measure_name, envir = globalenv(), inherits = FALSE)) {
-        return(base::get(self$measure_name, envir = globalenv()))
-      } else if (exists(".wizaRdry_env", envir = globalenv()) && 
-                 exists(self$measure_name, envir = .wizaRdry_env, inherits = FALSE)) {
-        return(base::get(self$measure_name, envir = .wizaRdry_env))
-      } else {
-        # Try to find in calling environment
-        calling_env <- parent.frame(2)
-        if (exists(self$measure_name, envir = calling_env, inherits = FALSE)) {
-          return(base::get(self$measure_name, envir = calling_env))
+      # Priority order: .pkg_env$.wizaRdry_env (authoritative), then calling environment
+      
+      # Check package environment first (authoritative source)
+      if (exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
+        wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+        if (exists(self$measure_name, envir = wizaRdry_env, inherits = FALSE)) {
+          return(base::get(self$measure_name, envir = wizaRdry_env))
         }
       }
       
-      stop(sprintf("Dataframe '%s' not found in any environment", self$measure_name))
+      # Fallback: Try calling environment (for user convenience)
+      calling_env <- parent.frame(2)
+      if (exists(self$measure_name, envir = calling_env, inherits = FALSE)) {
+        return(base::get(self$measure_name, envir = calling_env))
+      }
+      
+      stop(sprintf("Dataframe '%s' not found in package environment or calling environment", self$measure_name))
     },
     
     #' @description
-    #' Set dataframe in ALL environments (globalenv, .wizaRdry_env, origin_env)
+    #' Set dataframe in package environment with optional calling environment assignment
     #' @param df Data frame to set
     #' @return Self (invisibly) for method chaining
     set_df = function(df) {
@@ -62,27 +65,23 @@ DataEnvironment <- R6::R6Class("DataEnvironment",
         stop("df must be a valid data.frame")
       }
       
-      # Ensure .wizaRdry_env exists in globalenv
-      # NOTE: This assignment to globalenv is intentional for cross-function data sharing
-      # in the NDA validation workflow and maintains backward compatibility with legacy code
-      if (!exists(".wizaRdry_env", envir = globalenv())) {
-        .wizaRdry_env <- new.env(parent = globalenv())
-        assign(".wizaRdry_env", .wizaRdry_env, envir = globalenv())
+      # Ensure .wizaRdry_env exists in package environment (CRAN compliant)
+      if (!exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
+        assign(".wizaRdry_env", new.env(parent = emptyenv()), envir = .pkg_env)
       }
       
-      # Set in globalenv
-      base::assign(self$measure_name, df, envir = globalenv())
+      # Get wizaRdry environment from package environment
+      wizaRdry_env <- base::get(".wizaRdry_env", envir = .pkg_env)
       
-      # Set in .wizaRdry_env
-      wizaRdry_env <- base::get(".wizaRdry_env", envir = globalenv())
+      # Set in package environment (authoritative source)
       base::assign(self$measure_name, df, envir = wizaRdry_env)
       
-      # Try to set in calling environment (origin_env)
+      # Also set in calling environment for user convenience (HYBRID approach)
       tryCatch({
         calling_env <- parent.frame(2)
         base::assign(self$measure_name, df, envir = calling_env)
       }, error = function(e) {
-        # Calling env not accessible - this is OK, we have globalenv and wizaRdry_env
+        # Calling env not accessible - this is OK, we have package env
       })
       
       invisible(self)

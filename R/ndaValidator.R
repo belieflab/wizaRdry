@@ -34,16 +34,17 @@ ndaValidator <- function(measure_name,
                              ndar_additions = character()) {
   
   tryCatch({
-    # Initialize environment
-    # NOTE: This assignment to globalenv is intentional for cross-function data sharing
-    # in the NDA validation workflow and maintains backward compatibility with legacy code
-    if (!exists(".wizaRdry_env", envir = globalenv())) {
-      .wizaRdry_env <- new.env(parent = parent.frame())
-      assign(".wizaRdry_env", .wizaRdry_env, envir = globalenv())
+    # Initialize environment in package namespace (CRAN compliant)
+    # NOTE: Uses .pkg_env for cross-function data sharing instead of globalenv
+    if (!exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
+      assign(".wizaRdry_env", new.env(parent = emptyenv()), envir = .pkg_env)
     }
     
-    # Get dataframe
-    df <- base::get(measure_name, envir = .wizaRdry_env)
+    # Get wizaRdry environment from package environment
+    wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+    
+    # Get dataframe from package environment
+    df <- base::get(measure_name, envir = wizaRdry_env)
     if (is.null(df) || !is.data.frame(df)) {
       stop(sprintf("Dataframe '%s' not found or is not a data.frame", measure_name))
     }
@@ -492,8 +493,13 @@ ndaValidator <- function(measure_name,
       message(paste(capture.output(traceback()), collapse="\n"))
     }
     
-    # Try to get the dataframe for error state
-    error_df <- tryCatch(base::get(measure_name, envir = .wizaRdry_env), error = function(e2) data.frame())
+    # Try to get the dataframe for error state from package environment
+    error_df <- if (exists(".wizaRdry_env", envir = .pkg_env, inherits = FALSE)) {
+      wizaRdry_env <- get(".wizaRdry_env", envir = .pkg_env)
+      tryCatch(base::get(measure_name, envir = wizaRdry_env), error = function(e2) data.frame())
+    } else {
+      data.frame()
+    }
     
     # Use the modified_structure if provided (existing structures), otherwise NULL (new structures)
     error_nda_structure <- if (!is.null(modified_structure)) modified_structure else NULL
