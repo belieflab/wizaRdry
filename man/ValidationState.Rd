@@ -73,6 +73,8 @@ file should be created based on whether the structure is new or modified.
 \item \href{#method-ValidationState-get_df}{\code{ValidationState$get_df()}}
 \item \href{#method-ValidationState-set_df}{\code{ValidationState$set_df()}}
 \item \href{#method-ValidationState-add_value_range_violation}{\code{ValidationState$add_value_range_violation()}}
+\item \href{#method-ValidationState-add_violations}{\code{ValidationState$add_violations()}}
+\item \href{#method-ValidationState-set_valid}{\code{ValidationState$set_valid()}}
 \item \href{#method-ValidationState-has_modifications}{\code{ValidationState$has_modifications()}}
 \item \href{#method-ValidationState-needs_data_definition}{\code{ValidationState$needs_data_definition()}}
 \item \href{#method-ValidationState-get_modification_reason}{\code{ValidationState$get_modification_reason()}}
@@ -159,6 +161,48 @@ Add a value range violation
 \item{\code{expected}}{Expected value range (NULL if no range defined)}
 
 \item{\code{actual}}{Vector of violating values}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Self (invisibly) for method chaining
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ValidationState-add_violations"></a>}}
+\if{latex}{\out{\hypertarget{method-ValidationState-add_violations}{}}}
+\subsection{Method \code{add_violations()}}{
+Add violations of a specific type (e.g., DCC violations)
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ValidationState$add_violations(type, violations)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Character - type of violations ("dcc_required", "dcc_recommended", etc.)}
+
+\item{\code{violations}}{List - violations to add}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Self (invisibly) for method chaining
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ValidationState-set_valid"></a>}}
+\if{latex}{\out{\hypertarget{method-ValidationState-set_valid}{}}}
+\subsection{Method \code{set_valid()}}{
+Set validation status
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ValidationState$set_valid(valid)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{valid}}{Logical - TRUE if validation passed, FALSE otherwise}
 }
 \if{html}{\out{</div>}}
 }

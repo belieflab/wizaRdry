@@ -387,7 +387,7 @@ ndaValidator <- function(measure_name,
     tryCatch({
       if (verbose) message("\n--- PHASE 5: New Field Detection ---")
       
-      state$new_fields <- detect_new_fields(state$get_df(), elements)
+      state$new_fields <- detect_new_fields(state$get_df(), elements, dcc = state$dcc)
       
       if (length(state$new_fields) > 0) {
         state$is_modified_structure <- TRUE

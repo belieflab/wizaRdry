@@ -166,7 +166,7 @@ get_unique_values <- function(field_values) {
 #' @param elements NDA structure dataElements
 #' @return Character vector of new field names
 #' @noRd
-detect_new_fields <- function(df, elements) {
+detect_new_fields <- function(df, elements, dcc = FALSE) {
   df_cols <- names(df)
   structure_cols <- elements$name
   
@@ -182,6 +182,13 @@ detect_new_fields <- function(df, elements) {
   # Exclude super-required fields (added by addNdarSubjectElements)
   super_required <- SUPER_REQUIRED_FIELDS
   new_fields <- setdiff(new_fields, super_required)
+  
+  # Exclude DCC fields when dcc=FALSE
+  # These fields may exist in the user's data but aren't being submitted to NDA
+  # when dcc=FALSE, so they shouldn't trigger "MODIFIED" structure status
+  if (!dcc) {
+    new_fields <- setdiff(new_fields, DCC_FIELDS)
+  }
   
   return(new_fields)
 }
