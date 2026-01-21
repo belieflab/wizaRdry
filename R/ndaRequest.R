@@ -724,91 +724,54 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       required_field_metadata <- enhancement_result$required_metadata
       recommended_field_metadata <- enhancement_result$recommended_metadata  # NEW
 
-      # Store in package environment (authoritative)
+      # REMOVE STANDARD OUTPUT FIELDS while preserving categorical variables
+      # This must happen BEFORE any NDA processing to ensure these fields
+      # never make it into submission templates or data definitions
+      std_output <- StandardOutput$new()
+      cat_vars <- CategoricalVariables$new()
+      
+      df <- std_output$remove_from_df(
+        df = df,
+        api = api,
+        measure_name = measure,
+        categorical_vars = cat_vars,
+        verbose = verbose
+      )
+
+      # Store cleaned dataframe in all relevant environments
+      # This ensures the cleaned version is used by all subsequent operations
+      
+      # 1. Package environment (authoritative source)
       base::assign(measure, df, envir = wizaRdry_env)
       
-      # Also assign to calling environment for user convenience
+      # 2. Global environment (where user data typically lives)
+      base::assign(measure, df, envir = .GlobalEnv)
+      
+      # 3. Origin environment (if accessible)
+      tryCatch({
+        base::assign(measure, df, envir = origin_env)
+      }, error = function(e) {
+        # Origin environment not accessible
+      })
+      
+      # 4. Calling environment for user convenience
       tryCatch({
         calling_env <- parent.frame()
         base::assign(measure, df, envir = calling_env)
       }, error = function(e) {
-        # Calling environment not accessible - package env storage is sufficient
+        # Calling environment not accessible
       })
 
       if (DEBUG) message("[DEBUG] Enhanced dataframe with required and recommended elements")
     }
 
+    # Qualtrics-specific cleanup now handled by StandardOutput class above
+    # (Old hardcoded Qualtrics column removal removed - now uses StandardOutput uniformly for all APIs)
+    
     if (api == "qualtrics") {
       if (DEBUG) message("[DEBUG] Processing as Qualtrics data")
-
-      # Re-get the data to ensure we have the latest version
-      if (DEBUG) message("[DEBUG] Re-getting dataframe from environment")
-      if (exists(measure, envir = origin_env)) {
-        df <- base::get(measure, envir = origin_env)
-        if (DEBUG) message("[DEBUG] Got from package environment")
-      } else if (exists(measure, envir = wizaRdry_env)) {
-        df <- base::get(measure, envir = wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Got from package environment")
-      } else if (exists(measure, envir = origin_env)) {
-        df <- base::get(measure, envir = origin_env)
-        if (DEBUG) message("[DEBUG] Got from origin_env")
-      } else {
-        if (DEBUG) message("[DEBUG] ERROR: Can't find dataframe in any environment")
-        stop(paste("Object", measure, "not found in any environment"))
-      }
-
-      # Remove specified qualtrics columns
-      cols_to_remove <- c("StartDate", "EndDate", "Status", "Progress", "Duration (in seconds)",
-                          "Finished", "RecordedDate", "ResponseId", "DistributionChannel",
-                          "UserLanguage", "candidateId", "studyId", "measure", "ATTN", "ATTN_1", "SC0",
-                          "IPAddress", "RecipientLastName", "RecipientFirstName", "RecipientEmail",
-                          "ExternalReference", "LocationLatitude", "LocationLongitude")
-
-      if (DEBUG) {
-        message("[DEBUG] Current columns: ", paste(names(df), collapse=", "))
-        intersection <- intersect(names(df), cols_to_remove)
-        message("[DEBUG] Columns to remove (", length(intersection), "): ", paste(intersection, collapse=", "))
-      }
-
-      # Remove the columns - different approach
-      cols_to_keep <- setdiff(names(df), cols_to_remove)
-      if (DEBUG) message("[DEBUG] Columns to keep (", length(cols_to_keep), "): ", paste(head(cols_to_keep, 10), collapse=", "), "...")
-
-      # Create a new dataframe with only the columns to keep
-      df_new <- df[, cols_to_keep, drop = FALSE]
-
-      if (DEBUG) {
-        message("[DEBUG] After removal: ", ncol(df_new), " columns remain")
-        message("[DEBUG] New columns: ", paste(names(df_new), collapse=", "))
-      }
-
-      # Reassign the filtered dataframe to BOTH environments
-      if (DEBUG) message("[DEBUG] Assigning filtered dataframe back to environments")
-
-      # Update in globalenv
-      if (DEBUG) message("[DEBUG] Assigned to package environment")
-
-      # Update in origin_env
-      base::assign(measure, df_new, envir = origin_env)
-      if (DEBUG) message("[DEBUG] Assigned to origin_env")
-
-        base::assign(measure, df_new, envir = wizaRdry_env)
-        if (DEBUG) message("[DEBUG] Assigned to package environment")
-
-      # Update our local df variable for continuing the function
-      df <- df_new
-
-      # Verify the changes took effect
-      if (DEBUG) {
-        if (exists(measure, envir = origin_env)) {
-          df_check <- base::get(measure, envir = origin_env)
-          message("[DEBUG] Verification - globalenv columns: ", paste(head(names(df_check), 5), collapse=", "), "...")
-        }
-      }
-
       if (DEBUG) message("[DEBUG] Calling ndaCheckQualtricsDuplicates")
       ndaCheckQualtricsDuplicates(measure, "qualtrics")
-
     }
 
     if (api == "redcap") {
@@ -1071,17 +1034,25 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       
       # Remove DCC fields from dataframe if dcc = FALSE
       # Only remove DCC fields that are NOT in the base NDA structure
+      # EXCEPT preserve categorical variables (phenotype, visit, week)
       if (!dcc && !is.null(nda_structure) && "dataElements" %in% names(nda_structure)) {
         base_structure_fields <- nda_structure$dataElements$name
+        
+        # Get categorical variables
+        cat_vars <- CategoricalVariables$new()
+        categorical_fields <- cat_vars$get_all()
+        
         dcc_fields_in_data <- intersect(names(df), DCC_FIELDS)
-        # Only remove DCC fields that are NOT part of the base structure
+        # Only remove DCC fields that are NOT part of the base structure AND NOT categorical
         dcc_fields_to_remove <- setdiff(dcc_fields_in_data, base_structure_fields)
+        dcc_fields_to_remove <- setdiff(dcc_fields_to_remove, categorical_fields)
         
         if (length(dcc_fields_to_remove) > 0) {
           df <- df[, !names(df) %in% dcc_fields_to_remove, drop = FALSE]
           
           # Update both environments
           base::assign(measure, df, envir = wizaRdry_env)
+          base::assign(measure, df, envir = .GlobalEnv)
           
           # Update ValidationState dataframe
           validation_state$set_df(df)
@@ -1090,6 +1061,15 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             message(sprintf("\n[DCC EXCLUDED] Removed %d DCC fields from dataframe (dcc=FALSE): %s",
                            length(dcc_fields_to_remove),
                            paste(dcc_fields_to_remove, collapse = ", ")))
+            
+            # Show preserved categorical DCC fields
+            preserved_categorical <- intersect(DCC_FIELDS, categorical_fields)
+            preserved_in_data <- intersect(names(df), preserved_categorical)
+            if (length(preserved_in_data) > 0) {
+              message(sprintf("[DCC PRESERVED] Kept %d categorical DCC field(s): %s",
+                             length(preserved_in_data),
+                             paste(preserved_in_data, collapse = ", ")))
+            }
           }
         }
       }
@@ -1138,14 +1118,22 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       
       # Remove DCC fields from dataframe if dcc = FALSE (NEW structures)
       # For new structures, remove ALL DCC fields since there's no base structure to check
+      # EXCEPT preserve categorical variables (phenotype, visit, week)
       if (!dcc) {
-        dcc_fields_in_data <- intersect(names(df), DCC_FIELDS)
+        # Get categorical variables
+        cat_vars <- CategoricalVariables$new()
+        categorical_fields <- cat_vars$get_all()
+        
+        # DCC fields to remove: DCC_FIELDS minus categorical variables
+        dcc_fields_to_remove <- setdiff(DCC_FIELDS, categorical_fields)
+        dcc_fields_in_data <- intersect(names(df), dcc_fields_to_remove)
         
         if (length(dcc_fields_in_data) > 0) {
-          df <- df[, !names(df) %in% DCC_FIELDS, drop = FALSE]
+          df <- df[, !names(df) %in% dcc_fields_to_remove, drop = FALSE]
           
           # Update both environments
           base::assign(measure, df, envir = wizaRdry_env)
+          base::assign(measure, df, envir = .GlobalEnv)
           
           # Update ValidationState dataframe
           validation_state$set_df(df)
@@ -1154,6 +1142,15 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
             message(sprintf("\n[DCC EXCLUDED] Removed %d DCC fields from dataframe (dcc=FALSE): %s",
                            length(dcc_fields_in_data),
                            paste(dcc_fields_in_data, collapse = ", ")))
+            
+            # Show preserved categorical DCC fields
+            preserved_categorical <- intersect(DCC_FIELDS, categorical_fields)
+            preserved_in_data <- intersect(names(df), preserved_categorical)
+            if (length(preserved_in_data) > 0) {
+              message(sprintf("[DCC PRESERVED] Kept %d categorical DCC field(s): %s",
+                             length(preserved_in_data),
+                             paste(preserved_in_data, collapse = ", ")))
+            }
           }
         }
       }

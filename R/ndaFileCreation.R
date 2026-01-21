@@ -394,8 +394,7 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         structure_fields <- nda_structure$dataElements$name
         df_fields <- names(df)
         new_fields <- setdiff(df_fields, structure_fields)
-        # Exclude special fields
-        new_fields <- new_fields[!grepl("_complete$", new_fields)]
+        # _complete fields already removed by StandardOutput in ndaRequest.R
         super_required <- SUPER_REQUIRED_FIELDS
         new_fields <- setdiff(new_fields, super_required)
         has_new_fields <- length(new_fields) > 0

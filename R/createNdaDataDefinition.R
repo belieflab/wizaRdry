@@ -1173,9 +1173,8 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     column_name <- ordered_columns[i]
     # Skip internal/excluded fields unconditionally
     if (column_name %in% excluded_from_change) next
-    # Skip REDCap completion fields (ending with "_complete")
-    if (grepl("_complete$", column_name)) next
-
+    # _complete fields already removed by StandardOutput in ndaRequest.R
+    
     # Check if column exists in NDA structure
     if (column_name %in% names(nda_lookup)) {
       # Field found in NDA structure
@@ -1865,8 +1864,7 @@ exportDataDefinition <- function(data_definition) {
              field_names <- as.character(field_names)
            }
             field_names <- setdiff(field_names, excluded_internal)
-             # Also exclude REDCap completion fields (ending with "_complete")
-             field_names <- field_names[!grepl("_complete$", field_names)]
+             # _complete fields already removed by StandardOutput in ndaRequest.R
              if (length(field_names) == 0) {
                warning("No fields to export")
                return(invisible(NULL))
