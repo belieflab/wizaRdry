@@ -1051,6 +1051,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (!is.null(recommended_field_metadata)) {
         validation_state$recommended_metadata <- recommended_field_metadata
       }
+      
+      # Store complete ndar_subject01 field list for consistent Excel formatting
+      # This ensures fields from ndar_subject01 are formatted identically regardless of dcc parameter
+      if (!is.null(result$ndar_subject01_all_fields)) {
+        validation_state$ndar_subject01_all_fields <- result$ndar_subject01_all_fields
+        if (verbose) {
+          message(sprintf("[CACHE] Stored %d ndar_subject01 fields in validation_state for Excel formatting",
+                         length(result$ndar_subject01_all_fields)))
+        }
+      }
 
       # Update local df variable (DataEnvironment already handled the environments)
       df <- validation_state$get_df()
@@ -1441,6 +1451,17 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE, dcc = FALSE) {
           # Force dataElements to base data.frame to avoid tibble evaluation issues
           if (inherits(subject_structure$dataElements, c("tbl_df", "tbl", "data.table"))) {
             subject_structure$dataElements <- as.data.frame(subject_structure$dataElements, stringsAsFactors = FALSE)
+          }
+          
+          # Store complete ndar_subject01 structure and field list for consistent formatting
+          # This ensures fields that exist in ndar_subject01 are formatted the same
+          # regardless of dcc parameter (fixes formatting inconsistency bug)
+          result$ndar_subject01_structure <- subject_structure
+          result$ndar_subject01_all_fields <- subject_structure$dataElements$name
+          
+          if (verbose) {
+            message(sprintf("[CACHE] Stored %d ndar_subject01 field names for formatting consistency",
+                           length(result$ndar_subject01_all_fields)))
           }
           
           # Get the 5 super required fields that are mandatory for all NDA submissions

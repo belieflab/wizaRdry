@@ -1166,6 +1166,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
   data_definition$metadata$ndar_subject_additions <- ndar_subject_additions
   data_definition$metadata$is_new_structure <- validation_state$is_new_structure
   data_definition$metadata$redcap_choices_map <- redcap_choices_map
+  data_definition$metadata$ndar_subject01_all_fields <- validation_state$ndar_subject01_all_fields %||% character(0)
 
   # Process each selected column in the new order
   for (i in seq_along(ordered_columns)) {
@@ -1863,15 +1864,30 @@ exportDataDefinition <- function(data_definition) {
            if (!is.character(field_names)) {
              field_names <- as.character(field_names)
            }
-           field_names <- setdiff(field_names, excluded_internal)
-            # Also exclude REDCap completion fields (ending with "_complete")
-            field_names <- field_names[!grepl("_complete$", field_names)]
-            if (length(field_names) == 0) {
-              warning("No fields to export")
-              return(invisible(NULL))
-            }
+            field_names <- setdiff(field_names, excluded_internal)
+             # Also exclude REDCap completion fields (ending with "_complete")
+             field_names <- field_names[!grepl("_complete$", field_names)]
+             if (length(field_names) == 0) {
+               warning("No fields to export")
+               return(invisible(NULL))
+             }
 
-            element_names <- field_names
+             # CRITICAL FIX: Reorder fields to ensure super required fields appear FIRST
+             # This fixes the bug where interview_date and interview_age appeared at the bottom
+             # Order should always be: subjectkey, src_subject_id, interview_date, interview_age, sex
+             # Then all other fields in their original order
+             
+             # FORCE super required fields to the top (ALWAYS)
+             super_required_present <- SUPER_REQUIRED_FIELDS[SUPER_REQUIRED_FIELDS %in% field_names]
+             other_fields <- setdiff(field_names, SUPER_REQUIRED_FIELDS)
+             field_names <- c(super_required_present, other_fields)
+             
+             if (verbose) {
+               message(sprintf("[EXCEL] Field ordering: %d super required first, then %d others",
+                              length(super_required_present), length(other_fields)))
+             }
+
+             element_names <- field_names
 
             data_types <- sapply(field_names, function(fname) {
               tryCatch({
@@ -2142,6 +2158,7 @@ exportDataDefinition <- function(data_definition) {
             if (is.null(nda_element_names) || !is.character(nda_element_names)) {
               nda_element_names <- character(0)
             }
+            
             in_local_nda <- element_names %in% nda_element_names
 
              # Cached API checker to minimize network calls
@@ -2167,15 +2184,51 @@ exportDataDefinition <- function(data_definition) {
                exists_flag
              }
 
-             api_check_needed <- which(!in_local_nda)
-             api_exists <- rep(FALSE, length(element_names))
-             if (length(api_check_needed) > 0) {
-               for (idx in api_check_needed) {
-                 api_exists[idx] <- nda_element_exists_api(element_names[idx])
-               }
-             }
+              # CRITICAL FIX: Check against complete ndar_subject01 field list
+              # This ensures consistent formatting regardless of dcc parameter
+              # Previously, fields only got marked as "from NDA" if dcc=TRUE (merged)
+              # Now we check ALL fields against the complete ndar_subject01 list
+              
+              # Get cached ndar_subject01 field list from data_definition metadata
+              ndar_subject01_all_fields <- if (!is.null(data_definition$metadata$ndar_subject01_all_fields)) {
+                data_definition$metadata$ndar_subject01_all_fields
+              } else {
+                character(0)
+              }
+              
+              # Fallback: if not available from metadata, use known fields
+              if (length(ndar_subject01_all_fields) == 0) {
+                # Include super required + DCC fields + other known ndar_subject01 fields
+                ndar_subject01_all_fields <- c(
+                  SUPER_REQUIRED_FIELDS,
+                  DCC_FIELDS,
+                  "country_origin", "gender_identity", "demo_sex_tgender", "visit",
+                  "handedness", "comments_misc", "guid", "interview_language"
+                  # Add other common fields that exist in ndar_subject01
+                )
+              }
+              
+              # Check if field exists in ndar_subject01 (fast lookup, no API calls)
+              in_ndar_subject01 <- element_names %in% ndar_subject01_all_fields
+              
+              # Also check via API for fields not in local structure or ndar_subject01 cache
+              api_check_needed <- which(!in_local_nda & !in_ndar_subject01)
+              api_exists <- rep(FALSE, length(element_names))
+              if (length(api_check_needed) > 0) {
+                for (idx in api_check_needed) {
+                  api_exists[idx] <- nda_element_exists_api(element_names[idx])
+                }
+              }
 
-             element_is_in_nda <- in_local_nda | api_exists
+              # Field is "in NDA" if it's in local structure OR ndar_subject01 OR via API
+              element_is_in_nda <- in_local_nda | in_ndar_subject01 | api_exists
+              
+              if (verbose && sum(in_ndar_subject01) > 0) {
+                ndar_subject_fields <- element_names[in_ndar_subject01]
+                message(sprintf("[EXCEL] Detected %d field(s) from ndar_subject01: %s",
+                               length(ndar_subject_fields),
+                               paste(head(ndar_subject_fields, 5), collapse=", ")))
+              }
 
              # Fetch NDA element metadata for allowed range comparison (cached)
              .nda_meta_cache <- new.env(parent = emptyenv())
@@ -2215,21 +2268,16 @@ exportDataDefinition <- function(data_definition) {
              applied_red <- rep(FALSE, length(field_names))
              nda_range_mismatch <- rep(FALSE, length(field_names))
 
-              # Blue: NEW fields from NDA that weren't in the original structure
-               # These are fields that:
-               #   1. Exist in NDA globally (element_is_in_nda = TRUE)
-               #   2. Were NOT in the original fetched structure (in_local_nda = FALSE)
-               # This highlights fields the user added from the NDA dictionary
-               idx_new_from_nda <- which(element_is_in_nda & !in_local_nda)
-               
-               # ALSO mark DCC fields from ndar_subject01 as blue (added via dcc=TRUE)
-               # These fields are technically "in_local_nda" because they were merged into the structure,
-               # but they should still be highlighted as new additions requiring NDA approval
-               if (exists("ndar_subject_additions") && length(ndar_subject_additions) > 0) {
-                 idx_dcc_additions <- which(element_names %in% ndar_subject_additions)
-                 # Combine with existing new fields, removing duplicates
-                 idx_new_from_nda <- unique(c(idx_new_from_nda, idx_dcc_additions))
-               }
+               # Blue: NEW fields from NDA that weren't in the original structure
+                 # These are fields that:
+                 #   1. Exist in NDA globally (element_is_in_nda = TRUE) AND not in original structure (!in_local_nda)
+                 #   2. OR from ndar_subject01 BUT NOT super required fields
+                 # Super required fields (subjectkey, src_subject_id, interview_date, interview_age, sex):
+                 #   - Appear NORMAL (no blue highlighting)
+                 #   - Keep full metadata (DataType, Required="Required", ValueRange)
+                 # Other ndar_subject01 fields get blue highlighting + metadata cleared
+                 idx_new_from_nda <- which((element_is_in_nda & !in_local_nda) | 
+                                           (in_ndar_subject01 & !(element_names %in% SUPER_REQUIRED_FIELDS)))
                
                if (length(idx_new_from_nda) > 0) {
                  openxlsx::addStyle(wb, "Data Definitions", blueFill, rows = idx_new_from_nda + 1, cols = elementCol, gridExpand = TRUE)

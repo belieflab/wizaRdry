@@ -48,6 +48,9 @@ file should be created based on whether the structure is new or modified.
 
 \item{\code{ndar_subject_additions}}{Character vector - DCC fields added from ndar_subject01}
 
+\item{\code{ndar_subject01_all_fields}}{Character vector - ALL field names from ndar_subject01 (~150 fields)
+Used for consistent formatting in Excel exports regardless of dcc parameter}
+
 \item{\code{renamed_fields}}{Character vector - fields that were renamed}
 
 \item{\code{dropped_fields}}{Character vector - fields that were dropped}

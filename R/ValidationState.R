@@ -53,6 +53,10 @@ ValidationState <- R6::R6Class("ValidationState",
     #' @field ndar_subject_additions Character vector - DCC fields added from ndar_subject01
     ndar_subject_additions = character(),
     
+    #' @field ndar_subject01_all_fields Character vector - ALL field names from ndar_subject01 (~150 fields)
+    #' Used for consistent formatting in Excel exports regardless of dcc parameter
+    ndar_subject01_all_fields = character(),
+    
     #' @field renamed_fields Character vector - fields that were renamed
     renamed_fields = character(),
     
