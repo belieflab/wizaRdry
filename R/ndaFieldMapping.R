@@ -410,6 +410,29 @@ check_value_range_compatibility <- function(source_range, target_range, source_f
   ))
 }
 
+#' Get Matrix Group Name for REDCap Field
+#' @param field_name Character - field to check
+#' @param api Character - API type
+#' @param measure_name Character - for REDCap dictionary lookup
+#' @return Character - matrix group name or empty string
+#' @noRd
+get_matrix_group_name <- function(field_name, api, measure_name) {
+  if (tolower(api) != "redcap") return("")
+  
+  redcap_dict <- tryCatch({
+    redcap.dict(measure_name)
+  }, error = function(e) NULL)
+  
+  if (is.null(redcap_dict) || !field_name %in% redcap_dict$field_name) {
+    return("")
+  }
+  
+  matrix_group <- redcap_dict$matrix_group_name[redcap_dict$field_name == field_name]
+  if (is.na(matrix_group)) return("")
+  
+  return(as.character(matrix_group))
+}
+
 #' Fetch NDA structure from API
 #'
 #' @param structure_name Structure short name
