@@ -1017,11 +1017,11 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       
       # Store complete ndar_subject01 field list for consistent Excel formatting
       # This ensures fields from ndar_subject01 are formatted identically regardless of dcc parameter
-      if (!is.null(result$ndar_subject01_all_fields)) {
-        validation_state$ndar_subject01_all_fields <- result$ndar_subject01_all_fields
+      if (!is.null(enhancement_result$ndar_subject01_all_fields)) {
+        validation_state$ndar_subject01_all_fields <- enhancement_result$ndar_subject01_all_fields
         if (verbose) {
           message(sprintf("[CACHE] Stored %d ndar_subject01 fields in validation_state for Excel formatting",
-                         length(result$ndar_subject01_all_fields)))
+                         length(enhancement_result$ndar_subject01_all_fields)))
         }
       }
 
