@@ -116,6 +116,73 @@ ndaValidator <- function(measure_name,
     }
     
     # ============================================================================
+    # PHASE 2.5: Interactive Field Mapping (MODIFIED Structures Only)
+    # ============================================================================
+    # Handle unexpected fields (fields in data but not in NDA structure)
+    # This only applies to EXISTING structures, not NEW structures
+    if (!state$is_new_structure) {
+      unexpected_count <- length(setdiff(names(df), elements$name))
+      
+      if (unexpected_count > 0) {
+        if (verbose) {
+          message(sprintf("\n--- PHASE 2.5: Interactive Field Mapping ---"))
+          message(sprintf("Found %d unexpected field(s) not in NDA structure", unexpected_count))
+        }
+        
+        # Process unexpected fields interactively
+        mapping_result <- process_unexpected_fields(
+          df = df,
+          elements = elements,
+          structure_name = measure_name,
+          measure_name = measure_name,
+          api = api,
+          verbose = verbose,
+          auto_drop_unknown = auto_drop_unknown,
+          interactive_mode = interactive_mode
+        )
+        
+        # Update dataframe
+        df <- mapping_result$df
+        state$set_df(df)
+        
+        # Drop fields marked for removal
+        if (length(mapping_result$columns_to_drop) > 0) {
+          df <- df[, !names(df) %in% mapping_result$columns_to_drop, drop = FALSE]
+          state$set_df(df)
+          if (verbose) {
+            message(sprintf("Dropped %d field(s) from dataframe", 
+                           length(mapping_result$columns_to_drop)))
+          }
+        }
+        
+        # Mark as modified structure if any changes were made
+        if (length(mapping_result$renamed_fields) > 0 || length(mapping_result$columns_to_drop) > 0) {
+          state$is_modified_structure <- TRUE
+        }
+        
+        # Update cleaning script with auto-generated field operations
+        if (length(mapping_result$renames) > 0 || length(mapping_result$columns_to_drop) > 0) {
+          # Construct script path based on API type
+          script_dir <- file.path(".", "nda", tolower(api))
+          script_path <- file.path(script_dir, paste0(measure_name, ".R"))
+          
+          if (file.exists(script_path)) {
+            update_cleaning_script(
+              script_path = script_path,
+              measure_name = measure_name,
+              renames = mapping_result$renames,
+              drops = mapping_result$columns_to_drop,
+              verbose = verbose
+            )
+          } else if (verbose) {
+            message(sprintf("[SCRIPT UPDATE] Cleaning script not found: %s", script_path))
+            message("[SCRIPT UPDATE] Field operations will not persist to next run")
+          }
+        }
+      }
+    }
+    
+    # ============================================================================
     # PHASE 3: Required Field Data Validation
     # ============================================================================
     
