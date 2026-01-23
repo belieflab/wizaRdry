@@ -1,16 +1,3 @@
-#' Interactive Field Renaming and Mapping
-#'
-#' @description
-#' Modular system for handling unexpected fields in MODIFIED NDA structures.
-#' Provides interactive prompts for renaming, keeping, or dropping fields that
-#' exist in the data but not in the NDA structure definition.
-#' 
-#' This module was refactored from the original find_and_rename_fields() function
-#' to provide better separation of concerns and testability.
-#'
-#' @keywords internal
-#' @noRd
-
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
