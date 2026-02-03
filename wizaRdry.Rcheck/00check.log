@@ -1,0 +1,462 @@
+* using log directory ‘/Users/Joshua/wizaRdry/wizaRdry.Rcheck’
+* using R version 4.4.2 (2024-10-31)
+* using platform: aarch64-apple-darwin20
+* R was compiled by
+    Apple clang version 14.0.0 (clang-1400.0.29.202)
+    GNU Fortran (GCC) 12.2.0
+* running under: macOS Sequoia 15.6.1
+* using session charset: UTF-8
+* using option ‘--as-cran’
+* checking for file ‘wizaRdry/DESCRIPTION’ ... OK
+* this is package ‘wizaRdry’ version ‘0.6.4’
+* package encoding: UTF-8
+* checking CRAN incoming feasibility ... [3s/17s] Note_to_CRAN_maintainers
+Maintainer: ‘Joshua G. Kenney <joshua.kenney@yale.edu>’
+* checking package namespace information ... OK
+* checking package dependencies ... NOTE
+Imports includes 24 non-default packages.
+Importing from so many packages makes the package vulnerable to any of
+them becoming unavailable.  Move as many as possible to Suggests and
+use conditionally.
+* checking if this is a source package ... OK
+* checking if there is a namespace ... OK
+* checking for executable files ... OK
+* checking for hidden files and directories ... OK
+* checking for portable file names ... OK
+* checking for sufficient/correct file permissions ... OK
+* checking whether package ‘wizaRdry’ can be installed ... OK
+* checking installed package size ... OK
+* checking package directory ... OK
+* checking for future file timestamps ... OK
+* checking DESCRIPTION meta-information ... OK
+* checking top-level files ... NOTE
+Files ‘README.md’ or ‘NEWS.md’ cannot be checked without ‘pandoc’ being installed.
+* checking for left-over files ... OK
+* checking index information ... OK
+* checking package subdirectories ... OK
+* checking code files for non-ASCII characters ... OK
+* checking R files for syntax errors ... OK
+* checking whether the package can be loaded ... OK
+* checking whether the package can be loaded with stated dependencies ... OK
+* checking whether the package can be unloaded cleanly ... OK
+* checking whether the namespace can be loaded with stated dependencies ... OK
+* checking whether the namespace can be unloaded cleanly ... OK
+* checking loading without being on the library search path ... OK
+* checking whether startup messages can be suppressed ... OK
+* checking use of S3 registration ... OK
+* checking dependencies in R code ... OK
+* checking S3 generic/method consistency ... OK
+* checking replacement functions ... OK
+* checking foreign function calls ... OK
+* checking R code for possible problems ... OK
+* checking Rd files ... OK
+* checking Rd metadata ... OK
+* checking Rd line widths ... OK
+* checking Rd cross-references ... OK
+* checking for missing documentation entries ... OK
+* checking for code/documentation mismatches ... OK
+* checking Rd \usage sections ... OK
+* checking Rd contents ... OK
+* checking for unstated dependencies in examples ... OK
+* checking examples ... OK
+* checking PDF version of manual ... OK
+* checking HTML version of manual ... NOTE
+Found the following HTML validation problems:
+DataEnvironment.html:15:44 (DataEnvironment.Rd:5): Error: <main> is not recognized!
+DataEnvironment.html:15:44 (DataEnvironment.Rd:5): Warning: discarding unexpected <main>
+DataEnvironment.html:302:1 (DataEnvironment.Rd:160): Warning: discarding unexpected </main>
+DataEnvironment.html:4:1 (DataEnvironment.Rd:5): Warning: <link> inserting "type" attribute
+DataEnvironment.html:12:1 (DataEnvironment.Rd:5): Warning: <script> proprietary attribute "onload"
+DataEnvironment.html:12:1 (DataEnvironment.Rd:5): Warning: <script> inserting "type" attribute
+DataEnvironment.html:17:1 (DataEnvironment.Rd:5): Warning: <table> lacks "summary" attribute
+NdaClasses.html:15:44 (NdaClasses.Rd:5): Error: <main> is not recognized!
+NdaClasses.html:15:44 (NdaClasses.Rd:5): Warning: discarding unexpected <main>
+NdaClasses.html:27:1 (NdaClasses.Rd:8): Warning: discarding unexpected </main>
+NdaClasses.html:4:1 (NdaClasses.Rd:5): Warning: <link> inserting "type" attribute
+NdaClasses.html:12:1 (NdaClasses.Rd:5): Warning: <script> proprietary attribute "onload"
+NdaClasses.html:12:1 (NdaClasses.Rd:5): Warning: <script> inserting "type" attribute
+NdaClasses.html:17:1 (NdaClasses.Rd:5): Warning: <table> lacks "summary" attribute
+NdaDataStructure.html:15:44 (NdaDataStructure.Rd:5): Error: <main> is not recognized!
+NdaDataStructure.html:15:44 (NdaDataStructure.Rd:5): Warning: discarding unexpected <main>
+NdaDataStructure.html:553:1 (NdaDataStructure.Rd:334): Warning: discarding unexpected </main>
+NdaDataStructure.html:4:1 (NdaDataStructure.Rd:5): Warning: <link> inserting "type" attribute
+NdaDataStructure.html:12:1 (NdaDataStructure.Rd:5): Warning: <script> proprietary attribute "onload"
+NdaDataStructure.html:12:1 (NdaDataStructure.Rd:5): Warning: <script> inserting "type" attribute
+NdaDataStructure.html:17:1 (NdaDataStructure.Rd:5): Warning: <table> lacks "summary" attribute
+ValidationState.html:15:44 (ValidationState.Rd:5): Error: <main> is not recognized!
+ValidationState.html:15:44 (ValidationState.Rd:5): Warning: discarding unexpected <main>
+ValidationState.html:516:1 (ValidationState.Rd:297): Warning: discarding unexpected </main>
+ValidationState.html:4:1 (ValidationState.Rd:5): Warning: <link> inserting "type" attribute
+ValidationState.html:12:1 (ValidationState.Rd:5): Warning: <script> proprietary attribute "onload"
+ValidationState.html:12:1 (ValidationState.Rd:5): Warning: <script> inserting "type" attribute
+ValidationState.html:17:1 (ValidationState.Rd:5): Warning: <table> lacks "summary" attribute
+assign_secret.html:15:44 (assign_secret.Rd:5): Error: <main> is not recognized!
+assign_secret.html:15:44 (assign_secret.Rd:5): Warning: discarding unexpected <main>
+assign_secret.html:52:1 (assign_secret.Rd:15): Warning: discarding unexpected </main>
+assign_secret.html:4:1 (assign_secret.Rd:5): Warning: <link> inserting "type" attribute
+assign_secret.html:12:1 (assign_secret.Rd:5): Warning: <script> proprietary attribute "onload"
+assign_secret.html:12:1 (assign_secret.Rd:5): Warning: <script> inserting "type" attribute
+assign_secret.html:17:1 (assign_secret.Rd:5): Warning: <table> lacks "summary" attribute
+assign_secret.html:35:1 (assign_secret.Rd:10): Warning: <table> lacks "summary" attribute
+clean.html:15:44 (clean.Rd:5): Error: <main> is not recognized!
+clean.html:15:44 (clean.Rd:5): Warning: discarding unexpected <main>
+clean.html:88:1 (clean.Rd:38): Warning: discarding unexpected </main>
+clean.html:4:1 (clean.Rd:5): Warning: <link> inserting "type" attribute
+clean.html:12:1 (clean.Rd:5): Warning: <script> proprietary attribute "onload"
+clean.html:12:1 (clean.Rd:5): Warning: <script> inserting "type" attribute
+clean.html:17:1 (clean.Rd:5): Warning: <table> lacks "summary" attribute
+clean.html:38:1 (clean.Rd:10): Warning: <table> lacks "summary" attribute
+clean.html:39:14 (clean.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+createCsv.html:15:44 (createCsv.Rd:5): Error: <main> is not recognized!
+createCsv.html:15:44 (createCsv.Rd:5): Warning: discarding unexpected <main>
+createCsv.html:60:1 (createCsv.Rd:24): Warning: discarding unexpected </main>
+createCsv.html:4:1 (createCsv.Rd:5): Warning: <link> inserting "type" attribute
+createCsv.html:12:1 (createCsv.Rd:5): Warning: <script> proprietary attribute "onload"
+createCsv.html:12:1 (createCsv.Rd:5): Warning: <script> inserting "type" attribute
+createCsv.html:17:1 (createCsv.Rd:5): Warning: <table> lacks "summary" attribute
+createCsv.html:36:1 (createCsv.Rd:10): Warning: <table> lacks "summary" attribute
+createCsv.html:37:14 (createCsv.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+createRds.html:15:44 (createRds.Rd:5): Error: <main> is not recognized!
+createRds.html:15:44 (createRds.Rd:5): Warning: discarding unexpected <main>
+createRds.html:60:1 (createRds.Rd:24): Warning: discarding unexpected </main>
+createRds.html:4:1 (createRds.Rd:5): Warning: <link> inserting "type" attribute
+createRds.html:12:1 (createRds.Rd:5): Warning: <script> proprietary attribute "onload"
+createRds.html:12:1 (createRds.Rd:5): Warning: <script> inserting "type" attribute
+createRds.html:17:1 (createRds.Rd:5): Warning: <table> lacks "summary" attribute
+createRds.html:36:1 (createRds.Rd:10): Warning: <table> lacks "summary" attribute
+createRds.html:37:14 (createRds.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+createSpss.html:15:44 (createSpss.Rd:5): Error: <main> is not recognized!
+createSpss.html:15:44 (createSpss.Rd:5): Warning: discarding unexpected <main>
+createSpss.html:60:1 (createSpss.Rd:24): Warning: discarding unexpected </main>
+createSpss.html:4:1 (createSpss.Rd:5): Warning: <link> inserting "type" attribute
+createSpss.html:12:1 (createSpss.Rd:5): Warning: <script> proprietary attribute "onload"
+createSpss.html:12:1 (createSpss.Rd:5): Warning: <script> inserting "type" attribute
+createSpss.html:17:1 (createSpss.Rd:5): Warning: <table> lacks "summary" attribute
+createSpss.html:36:1 (createSpss.Rd:10): Warning: <table> lacks "summary" attribute
+createSpss.html:37:14 (createSpss.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+dataFilter.html:15:44 (dataFilter.Rd:5): Error: <main> is not recognized!
+dataFilter.html:15:44 (dataFilter.Rd:5): Warning: discarding unexpected <main>
+dataFilter.html:61:1 (dataFilter.Rd:25): Warning: discarding unexpected </main>
+dataFilter.html:4:1 (dataFilter.Rd:5): Warning: <link> inserting "type" attribute
+dataFilter.html:12:1 (dataFilter.Rd:5): Warning: <script> proprietary attribute "onload"
+dataFilter.html:12:1 (dataFilter.Rd:5): Warning: <script> inserting "type" attribute
+dataFilter.html:17:1 (dataFilter.Rd:5): Warning: <table> lacks "summary" attribute
+dataFilter.html:36:1 (dataFilter.Rd:10): Warning: <table> lacks "summary" attribute
+dataFilter.html:37:14 (dataFilter.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+dataMerge.html:15:44 (dataMerge.Rd:5): Error: <main> is not recognized!
+dataMerge.html:15:44 (dataMerge.Rd:5): Warning: discarding unexpected <main>
+dataMerge.html:59:1 (dataMerge.Rd:23): Warning: discarding unexpected </main>
+dataMerge.html:4:1 (dataMerge.Rd:5): Warning: <link> inserting "type" attribute
+dataMerge.html:12:1 (dataMerge.Rd:5): Warning: <script> proprietary attribute "onload"
+dataMerge.html:12:1 (dataMerge.Rd:5): Warning: <script> inserting "type" attribute
+dataMerge.html:17:1 (dataMerge.Rd:5): Warning: <table> lacks "summary" attribute
+dataMerge.html:36:1 (dataMerge.Rd:10): Warning: <table> lacks "summary" attribute
+dataMerge.html:37:14 (dataMerge.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+dataRequest.html:15:44 (dataRequest.Rd:5): Error: <main> is not recognized!
+dataRequest.html:15:44 (dataRequest.Rd:5): Warning: discarding unexpected <main>
+dataRequest.html:59:1 (dataRequest.Rd:23): Warning: discarding unexpected </main>
+dataRequest.html:4:1 (dataRequest.Rd:5): Warning: <link> inserting "type" attribute
+dataRequest.html:12:1 (dataRequest.Rd:5): Warning: <script> proprietary attribute "onload"
+dataRequest.html:12:1 (dataRequest.Rd:5): Warning: <script> inserting "type" attribute
+dataRequest.html:17:1 (dataRequest.Rd:5): Warning: <table> lacks "summary" attribute
+dataRequest.html:36:1 (dataRequest.Rd:10): Warning: <table> lacks "summary" attribute
+dataRequest.html:37:14 (dataRequest.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+display_tree.html:15:44 (display_tree.Rd:5): Error: <main> is not recognized!
+display_tree.html:15:44 (display_tree.Rd:5): Warning: discarding unexpected <main>
+display_tree.html:48:1 (display_tree.Rd:13): Warning: discarding unexpected </main>
+display_tree.html:4:1 (display_tree.Rd:5): Warning: <link> inserting "type" attribute
+display_tree.html:12:1 (display_tree.Rd:5): Warning: <script> proprietary attribute "onload"
+display_tree.html:12:1 (display_tree.Rd:5): Warning: <script> inserting "type" attribute
+display_tree.html:17:1 (display_tree.Rd:5): Warning: <table> lacks "summary" attribute
+display_tree.html:35:1 (display_tree.Rd:10): Warning: <table> lacks "summary" attribute
+getRedcap.html:15:44 (getRedcap.Rd:5): Error: <main> is not recognized!
+getRedcap.html:15:44 (getRedcap.Rd:5): Warning: discarding unexpected <main>
+getRedcap.html:61:1 (getRedcap.Rd:25): Warning: discarding unexpected </main>
+getRedcap.html:4:1 (getRedcap.Rd:5): Warning: <link> inserting "type" attribute
+getRedcap.html:12:1 (getRedcap.Rd:5): Warning: <script> proprietary attribute "onload"
+getRedcap.html:12:1 (getRedcap.Rd:5): Warning: <script> inserting "type" attribute
+getRedcap.html:17:1 (getRedcap.Rd:5): Warning: <table> lacks "summary" attribute
+getRedcap.html:36:1 (getRedcap.Rd:10): Warning: <table> lacks "summary" attribute
+getRedcap.html:37:14 (getRedcap.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+getSurvey.html:15:44 (getSurvey.Rd:5): Error: <main> is not recognized!
+getSurvey.html:15:44 (getSurvey.Rd:5): Warning: discarding unexpected <main>
+getSurvey.html:61:1 (getSurvey.Rd:25): Warning: discarding unexpected </main>
+getSurvey.html:4:1 (getSurvey.Rd:5): Warning: <link> inserting "type" attribute
+getSurvey.html:12:1 (getSurvey.Rd:5): Warning: <script> proprietary attribute "onload"
+getSurvey.html:12:1 (getSurvey.Rd:5): Warning: <script> inserting "type" attribute
+getSurvey.html:17:1 (getSurvey.Rd:5): Warning: <table> lacks "summary" attribute
+getSurvey.html:36:1 (getSurvey.Rd:10): Warning: <table> lacks "summary" attribute
+getSurvey.html:37:14 (getSurvey.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+getTask.html:15:44 (getTask.Rd:5): Error: <main> is not recognized!
+getTask.html:15:44 (getTask.Rd:5): Warning: discarding unexpected <main>
+getTask.html:61:1 (getTask.Rd:25): Warning: discarding unexpected </main>
+getTask.html:4:1 (getTask.Rd:5): Warning: <link> inserting "type" attribute
+getTask.html:12:1 (getTask.Rd:5): Warning: <script> proprietary attribute "onload"
+getTask.html:12:1 (getTask.Rd:5): Warning: <script> inserting "type" attribute
+getTask.html:17:1 (getTask.Rd:5): Warning: <table> lacks "summary" attribute
+getTask.html:36:1 (getTask.Rd:10): Warning: <table> lacks "summary" attribute
+getTask.html:37:14 (getTask.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+meld.html:15:44 (meld.Rd:5): Error: <main> is not recognized!
+meld.html:15:44 (meld.Rd:5): Warning: discarding unexpected <main>
+meld.html:117:1 (meld.Rd:63): Warning: discarding unexpected </main>
+meld.html:4:1 (meld.Rd:5): Warning: <link> inserting "type" attribute
+meld.html:12:1 (meld.Rd:5): Warning: <script> proprietary attribute "onload"
+meld.html:12:1 (meld.Rd:5): Warning: <script> inserting "type" attribute
+meld.html:17:1 (meld.Rd:5): Warning: <table> lacks "summary" attribute
+meld.html:45:1 (meld.Rd:18): Warning: <table> lacks "summary" attribute
+meld.html:46:14 (meld.Rd:18): Warning: <code> attribute "id" has invalid value "..."
+mongo.html:15:44 (mongo.Rd:5): Error: <main> is not recognized!
+mongo.html:15:44 (mongo.Rd:5): Warning: discarding unexpected <main>
+mongo.html:94:1 (mongo.Rd:46): Warning: discarding unexpected </main>
+mongo.html:4:1 (mongo.Rd:5): Warning: <link> inserting "type" attribute
+mongo.html:12:1 (mongo.Rd:5): Warning: <script> proprietary attribute "onload"
+mongo.html:12:1 (mongo.Rd:5): Warning: <script> inserting "type" attribute
+mongo.html:17:1 (mongo.Rd:5): Warning: <table> lacks "summary" attribute
+mongo.html:43:1 (mongo.Rd:18): Warning: <table> lacks "summary" attribute
+mongo.html:48:14 (mongo.Rd:20): Warning: <code> attribute "id" has invalid value "..."
+mongo.index.html:15:44 (mongo.index.Rd:5): Error: <main> is not recognized!
+mongo.index.html:15:44 (mongo.index.Rd:5): Warning: discarding unexpected <main>
+mongo.index.html:50:1 (mongo.index.Rd:15): Warning: discarding unexpected </main>
+mongo.index.html:4:1 (mongo.index.Rd:5): Warning: <link> inserting "type" attribute
+mongo.index.html:12:1 (mongo.index.Rd:5): Warning: <script> proprietary attribute "onload"
+mongo.index.html:12:1 (mongo.index.Rd:5): Warning: <script> inserting "type" attribute
+mongo.index.html:17:1 (mongo.index.Rd:5): Warning: <table> lacks "summary" attribute
+mongo.index.html:35:1 (mongo.index.Rd:10): Warning: <table> lacks "summary" attribute
+mongo.rune.html:15:44 (mongo.rune.Rd:5): Error: <main> is not recognized!
+mongo.rune.html:15:44 (mongo.rune.Rd:5): Warning: discarding unexpected <main>
+mongo.rune.html:107:1 (mongo.rune.Rd:51): Warning: discarding unexpected </main>
+mongo.rune.html:4:1 (mongo.rune.Rd:5): Warning: <link> inserting "type" attribute
+mongo.rune.html:12:1 (mongo.rune.Rd:5): Warning: <script> proprietary attribute "onload"
+mongo.rune.html:12:1 (mongo.rune.Rd:5): Warning: <script> inserting "type" attribute
+mongo.rune.html:17:1 (mongo.rune.Rd:5): Warning: <table> lacks "summary" attribute
+mongo.rune.html:38:1 (mongo.rune.Rd:10): Warning: <table> lacks "summary" attribute
+nda.html:15:44 (nda.Rd:5): Error: <main> is not recognized!
+nda.html:15:44 (nda.Rd:5): Warning: discarding unexpected <main>
+nda.html:126:1 (nda.Rd:68): Warning: discarding unexpected </main>
+nda.html:4:1 (nda.Rd:5): Warning: <link> inserting "type" attribute
+nda.html:12:1 (nda.Rd:5): Warning: <script> proprietary attribute "onload"
+nda.html:12:1 (nda.Rd:5): Warning: <script> inserting "type" attribute
+nda.html:17:1 (nda.Rd:5): Warning: <table> lacks "summary" attribute
+nda.html:48:1 (nda.Rd:20): Warning: <table> lacks "summary" attribute
+nda.html:49:14 (nda.Rd:20): Warning: <code> attribute "id" has invalid value "..."
+ndaRequest.html:15:44 (ndaRequest.Rd:5): Error: <main> is not recognized!
+ndaRequest.html:15:44 (ndaRequest.Rd:5): Warning: discarding unexpected <main>
+ndaRequest.html:59:1 (ndaRequest.Rd:23): Warning: discarding unexpected </main>
+ndaRequest.html:4:1 (ndaRequest.Rd:5): Warning: <link> inserting "type" attribute
+ndaRequest.html:12:1 (ndaRequest.Rd:5): Warning: <script> proprietary attribute "onload"
+ndaRequest.html:12:1 (ndaRequest.Rd:5): Warning: <script> inserting "type" attribute
+ndaRequest.html:17:1 (ndaRequest.Rd:5): Warning: <table> lacks "summary" attribute
+ndaRequest.html:36:1 (ndaRequest.Rd:10): Warning: <table> lacks "summary" attribute
+ndaRequest.html:37:14 (ndaRequest.Rd:10): Warning: <code> attribute "id" has invalid value "..."
+oracle.html:15:44 (oracle.Rd:5): Error: <main> is not recognized!
+oracle.html:15:44 (oracle.Rd:5): Warning: discarding unexpected <main>
+oracle.html:135:1 (oracle.Rd:75): Warning: discarding unexpected </main>
+oracle.html:4:1 (oracle.Rd:5): Warning: <link> inserting "type" attribute
+oracle.html:12:1 (oracle.Rd:5): Warning: <script> proprietary attribute "onload"
+oracle.html:12:1 (oracle.Rd:5): Warning: <script> inserting "type" attribute
+oracle.html:17:1 (oracle.Rd:5): Warning: <table> lacks "summary" attribute
+oracle.html:50:1 (oracle.Rd:24): Warning: <table> lacks "summary" attribute
+oracle.html:55:14 (oracle.Rd:26): Warning: <code> attribute "id" has invalid value "..."
+oracle.desc.html:15:44 (oracle.desc.Rd:5): Error: <main> is not recognized!
+oracle.desc.html:15:44 (oracle.desc.Rd:5): Warning: discarding unexpected <main>
+oracle.desc.html:52:1 (oracle.desc.Rd:15): Warning: discarding unexpected </main>
+oracle.desc.html:4:1 (oracle.desc.Rd:5): Warning: <link> inserting "type" attribute
+oracle.desc.html:12:1 (oracle.desc.Rd:5): Warning: <script> proprietary attribute "onload"
+oracle.desc.html:12:1 (oracle.desc.Rd:5): Warning: <script> inserting "type" attribute
+oracle.desc.html:17:1 (oracle.desc.Rd:5): Warning: <table> lacks "summary" attribute
+oracle.desc.html:35:1 (oracle.desc.Rd:10): Warning: <table> lacks "summary" attribute
+oracle.index.html:15:44 (oracle.index.Rd:5): Error: <main> is not recognized!
+oracle.index.html:15:44 (oracle.index.Rd:5): Warning: discarding unexpected <main>
+oracle.index.html:48:1 (oracle.index.Rd:13): Warning: discarding unexpected </main>
+oracle.index.html:4:1 (oracle.index.Rd:5): Warning: <link> inserting "type" attribute
+oracle.index.html:12:1 (oracle.index.Rd:5): Warning: <script> proprietary attribute "onload"
+oracle.index.html:12:1 (oracle.index.Rd:5): Warning: <script> inserting "type" attribute
+oracle.index.html:17:1 (oracle.index.Rd:5): Warning: <table> lacks "summary" attribute
+oracle.index.html:35:1 (oracle.index.Rd:10): Warning: <table> lacks "summary" attribute
+oracle.query.html:15:44 (oracle.query.Rd:5): Error: <main> is not recognized!
+oracle.query.html:15:44 (oracle.query.Rd:5): Warning: discarding unexpected <main>
+oracle.query.html:56:1 (oracle.query.Rd:17): Warning: discarding unexpected </main>
+oracle.query.html:4:1 (oracle.query.Rd:5): Warning: <link> inserting "type" attribute
+oracle.query.html:12:1 (oracle.query.Rd:5): Warning: <script> proprietary attribute "onload"
+oracle.query.html:12:1 (oracle.query.Rd:5): Warning: <script> inserting "type" attribute
+oracle.query.html:17:1 (oracle.query.Rd:5): Warning: <table> lacks "summary" attribute
+oracle.query.html:35:1 (oracle.query.Rd:10): Warning: <table> lacks "summary" attribute
+oracle.test.html:15:44 (oracle.test.Rd:5): Error: <main> is not recognized!
+oracle.test.html:15:44 (oracle.test.Rd:5): Warning: discarding unexpected <main>
+oracle.test.html:53:1 (oracle.test.Rd:24): Warning: discarding unexpected </main>
+oracle.test.html:4:1 (oracle.test.Rd:5): Warning: <link> inserting "type" attribute
+oracle.test.html:12:1 (oracle.test.Rd:5): Warning: <script> proprietary attribute "onload"
+oracle.test.html:12:1 (oracle.test.Rd:5): Warning: <script> inserting "type" attribute
+oracle.test.html:17:1 (oracle.test.Rd:5): Warning: <table> lacks "summary" attribute
+qualtrics.html:15:44 (qualtrics.Rd:5): Error: <main> is not recognized!
+qualtrics.html:15:44 (qualtrics.Rd:5): Warning: discarding unexpected <main>
+qualtrics.html:89:1 (qualtrics.Rd:43): Warning: discarding unexpected </main>
+qualtrics.html:4:1 (qualtrics.Rd:5): Warning: <link> inserting "type" attribute
+qualtrics.html:12:1 (qualtrics.Rd:5): Warning: <script> proprietary attribute "onload"
+qualtrics.html:12:1 (qualtrics.Rd:5): Warning: <script> inserting "type" attribute
+qualtrics.html:17:1 (qualtrics.Rd:5): Warning: <table> lacks "summary" attribute
+qualtrics.html:42:1 (qualtrics.Rd:17): Warning: <table> lacks "summary" attribute
+qualtrics.html:47:14 (qualtrics.Rd:19): Warning: <code> attribute "id" has invalid value "..."
+qualtrics.dict.html:15:44 (qualtrics.dict.Rd:5): Error: <main> is not recognized!
+qualtrics.dict.html:15:44 (qualtrics.dict.Rd:5): Warning: discarding unexpected <main>
+qualtrics.dict.html:54:1 (qualtrics.dict.Rd:15): Warning: discarding unexpected </main>
+qualtrics.dict.html:4:1 (qualtrics.dict.Rd:5): Warning: <link> inserting "type" attribute
+qualtrics.dict.html:12:1 (qualtrics.dict.Rd:5): Warning: <script> proprietary attribute "onload"
+qualtrics.dict.html:12:1 (qualtrics.dict.Rd:5): Warning: <script> inserting "type" attribute
+qualtrics.dict.html:17:1 (qualtrics.dict.Rd:5): Warning: <table> lacks "summary" attribute
+qualtrics.dict.html:37:1 (qualtrics.dict.Rd:10): Warning: <table> lacks "summary" attribute
+qualtrics.index.html:15:44 (qualtrics.index.Rd:5): Error: <main> is not recognized!
+qualtrics.index.html:15:44 (qualtrics.index.Rd:5): Warning: discarding unexpected <main>
+qualtrics.index.html:58:1 (qualtrics.index.Rd:19): Warning: discarding unexpected </main>
+qualtrics.index.html:4:1 (qualtrics.index.Rd:5): Warning: <link> inserting "type" attribute
+qualtrics.index.html:12:1 (qualtrics.index.Rd:5): Warning: <script> proprietary attribute "onload"
+qualtrics.index.html:12:1 (qualtrics.index.Rd:5): Warning: <script> inserting "type" attribute
+qualtrics.index.html:17:1 (qualtrics.index.Rd:5): Warning: <table> lacks "summary" attribute
+qualtrics.index.html:37:1 (qualtrics.index.Rd:10): Warning: <table> lacks "summary" attribute
+qualtrics.rune.html:15:44 (qualtrics.rune.Rd:5): Error: <main> is not recognized!
+qualtrics.rune.html:15:44 (qualtrics.rune.Rd:5): Warning: discarding unexpected <main>
+qualtrics.rune.html:126:1 (qualtrics.rune.Rd:64): Warning: discarding unexpected </main>
+qualtrics.rune.html:4:1 (qualtrics.rune.Rd:5): Warning: <link> inserting "type" attribute
+qualtrics.rune.html:12:1 (qualtrics.rune.Rd:5): Warning: <script> proprietary attribute "onload"
+qualtrics.rune.html:12:1 (qualtrics.rune.Rd:5): Warning: <script> inserting "type" attribute
+qualtrics.rune.html:17:1 (qualtrics.rune.Rd:5): Warning: <table> lacks "summary" attribute
+qualtrics.rune.html:46:1 (qualtrics.rune.Rd:18): Warning: <table> lacks "summary" attribute
+redcap.html:15:44 (redcap.Rd:5): Error: <main> is not recognized!
+redcap.html:15:44 (redcap.Rd:5): Warning: discarding unexpected <main>
+redcap.html:116:1 (redcap.Rd:60): Warning: discarding unexpected </main>
+redcap.html:4:1 (redcap.Rd:5): Warning: <link> inserting "type" attribute
+redcap.html:12:1 (redcap.Rd:5): Warning: <script> proprietary attribute "onload"
+redcap.html:12:1 (redcap.Rd:5): Warning: <script> inserting "type" attribute
+redcap.html:17:1 (redcap.Rd:5): Warning: <table> lacks "summary" attribute
+redcap.html:48:1 (redcap.Rd:22): Warning: <table> lacks "summary" attribute
+redcap.html:53:14 (redcap.Rd:24): Warning: <code> attribute "id" has invalid value "..."
+redcap.dict.html:15:44 (redcap.dict.Rd:5): Error: <main> is not recognized!
+redcap.dict.html:15:44 (redcap.dict.Rd:5): Warning: discarding unexpected <main>
+redcap.dict.html:51:1 (redcap.dict.Rd:14): Warning: discarding unexpected </main>
+redcap.dict.html:4:1 (redcap.dict.Rd:5): Warning: <link> inserting "type" attribute
+redcap.dict.html:12:1 (redcap.dict.Rd:5): Warning: <script> proprietary attribute "onload"
+redcap.dict.html:12:1 (redcap.dict.Rd:5): Warning: <script> inserting "type" attribute
+redcap.dict.html:17:1 (redcap.dict.Rd:5): Warning: <table> lacks "summary" attribute
+redcap.dict.html:37:1 (redcap.dict.Rd:10): Warning: <table> lacks "summary" attribute
+redcap.index.html:15:44 (redcap.index.Rd:5): Error: <main> is not recognized!
+redcap.index.html:15:44 (redcap.index.Rd:5): Warning: discarding unexpected <main>
+redcap.index.html:38:1 (redcap.index.Rd:10): Warning: discarding unexpected </main>
+redcap.index.html:4:1 (redcap.index.Rd:5): Warning: <link> inserting "type" attribute
+redcap.index.html:12:1 (redcap.index.Rd:5): Warning: <script> proprietary attribute "onload"
+redcap.index.html:12:1 (redcap.index.Rd:5): Warning: <script> inserting "type" attribute
+redcap.index.html:17:1 (redcap.index.Rd:5): Warning: <table> lacks "summary" attribute
+redcap.rune.html:15:44 (redcap.rune.Rd:5): Error: <main> is not recognized!
+redcap.rune.html:15:44 (redcap.rune.Rd:5): Warning: discarding unexpected <main>
+redcap.rune.html:123:1 (redcap.rune.Rd:67): Warning: discarding unexpected </main>
+redcap.rune.html:4:1 (redcap.rune.Rd:5): Warning: <link> inserting "type" attribute
+redcap.rune.html:12:1 (redcap.rune.Rd:5): Warning: <script> proprietary attribute "onload"
+redcap.rune.html:12:1 (redcap.rune.Rd:5): Warning: <script> inserting "type" attribute
+redcap.rune.html:17:1 (redcap.rune.Rd:5): Warning: <table> lacks "summary" attribute
+redcap.rune.html:49:1 (redcap.rune.Rd:22): Warning: <table> lacks "summary" attribute
+rune.html:15:44 (rune.Rd:5): Error: <main> is not recognized!
+rune.html:15:44 (rune.Rd:5): Warning: discarding unexpected <main>
+rune.html:113:1 (rune.Rd:62): Warning: discarding unexpected </main>
+rune.html:4:1 (rune.Rd:5): Warning: <link> inserting "type" attribute
+rune.html:12:1 (rune.Rd:5): Warning: <script> proprietary attribute "onload"
+rune.html:12:1 (rune.Rd:5): Warning: <script> inserting "type" attribute
+rune.html:17:1 (rune.Rd:5): Warning: <table> lacks "summary" attribute
+rune.html:38:1 (rune.Rd:10): Warning: <table> lacks "summary" attribute
+scry.html:15:44 (scry.Rd:5): Error: <main> is not recognized!
+scry.html:15:44 (scry.Rd:5): Warning: discarding unexpected <main>
+scry.html:181:1 (scry.Rd:95): Warning: discarding unexpected </main>
+scry.html:4:1 (scry.Rd:5): Warning: <link> inserting "type" attribute
+scry.html:12:1 (scry.Rd:5): Warning: <script> proprietary attribute "onload"
+scry.html:12:1 (scry.Rd:5): Warning: <script> inserting "type" attribute
+scry.html:17:1 (scry.Rd:5): Warning: <table> lacks "summary" attribute
+scry.html:46:1 (scry.Rd:19): Warning: <table> lacks "summary" attribute
+sift.html:15:44 (sift.Rd:5): Error: <main> is not recognized!
+sift.html:15:44 (sift.Rd:5): Warning: discarding unexpected <main>
+sift.html:227:1 (sift.Rd:148): Warning: discarding unexpected </main>
+sift.html:4:1 (sift.Rd:5): Warning: <link> inserting "type" attribute
+sift.html:12:1 (sift.Rd:5): Warning: <script> proprietary attribute "onload"
+sift.html:12:1 (sift.Rd:5): Warning: <script> inserting "type" attribute
+sift.html:17:1 (sift.Rd:5): Warning: <table> lacks "summary" attribute
+sift.html:59:1 (sift.Rd:34): Warning: <table> lacks "summary" attribute
+sql.html:15:44 (sql.Rd:5): Error: <main> is not recognized!
+sql.html:15:44 (sql.Rd:5): Warning: discarding unexpected <main>
+sql.html:127:1 (sql.Rd:69): Warning: discarding unexpected </main>
+sql.html:4:1 (sql.Rd:5): Warning: <link> inserting "type" attribute
+sql.html:12:1 (sql.Rd:5): Warning: <script> proprietary attribute "onload"
+sql.html:12:1 (sql.Rd:5): Warning: <script> inserting "type" attribute
+sql.html:17:1 (sql.Rd:5): Warning: <table> lacks "summary" attribute
+sql.html:49:1 (sql.Rd:23): Warning: <table> lacks "summary" attribute
+sql.html:54:14 (sql.Rd:25): Warning: <code> attribute "id" has invalid value "..."
+sql.desc.html:15:44 (sql.desc.Rd:5): Error: <main> is not recognized!
+sql.desc.html:15:44 (sql.desc.Rd:5): Warning: discarding unexpected <main>
+sql.desc.html:48:1 (sql.desc.Rd:13): Warning: discarding unexpected </main>
+sql.desc.html:4:1 (sql.desc.Rd:5): Warning: <link> inserting "type" attribute
+sql.desc.html:12:1 (sql.desc.Rd:5): Warning: <script> proprietary attribute "onload"
+sql.desc.html:12:1 (sql.desc.Rd:5): Warning: <script> inserting "type" attribute
+sql.desc.html:17:1 (sql.desc.Rd:5): Warning: <table> lacks "summary" attribute
+sql.desc.html:35:1 (sql.desc.Rd:10): Warning: <table> lacks "summary" attribute
+sql.index.html:15:44 (sql.index.Rd:5): Error: <main> is not recognized!
+sql.index.html:15:44 (sql.index.Rd:5): Warning: discarding unexpected <main>
+sql.index.html:48:1 (sql.index.Rd:13): Warning: discarding unexpected </main>
+sql.index.html:4:1 (sql.index.Rd:5): Warning: <link> inserting "type" attribute
+sql.index.html:12:1 (sql.index.Rd:5): Warning: <script> proprietary attribute "onload"
+sql.index.html:12:1 (sql.index.Rd:5): Warning: <script> inserting "type" attribute
+sql.index.html:17:1 (sql.index.Rd:5): Warning: <table> lacks "summary" attribute
+sql.index.html:35:1 (sql.index.Rd:10): Warning: <table> lacks "summary" attribute
+sql.query.html:15:44 (sql.query.Rd:5): Error: <main> is not recognized!
+sql.query.html:15:44 (sql.query.Rd:5): Warning: discarding unexpected <main>
+sql.query.html:52:1 (sql.query.Rd:15): Warning: discarding unexpected </main>
+sql.query.html:4:1 (sql.query.Rd:5): Warning: <link> inserting "type" attribute
+sql.query.html:12:1 (sql.query.Rd:5): Warning: <script> proprietary attribute "onload"
+sql.query.html:12:1 (sql.query.Rd:5): Warning: <script> inserting "type" attribute
+sql.query.html:17:1 (sql.query.Rd:5): Warning: <table> lacks "summary" attribute
+sql.query.html:35:1 (sql.query.Rd:10): Warning: <table> lacks "summary" attribute
+to.csv.html:15:44 (to.csv.Rd:5): Error: <main> is not recognized!
+to.csv.html:15:44 (to.csv.Rd:5): Warning: discarding unexpected <main>
+to.csv.html:102:1 (to.csv.Rd:54): Warning: discarding unexpected </main>
+to.csv.html:4:1 (to.csv.Rd:5): Warning: <link> inserting "type" attribute
+to.csv.html:12:1 (to.csv.Rd:5): Warning: <script> proprietary attribute "onload"
+to.csv.html:12:1 (to.csv.Rd:5): Warning: <script> inserting "type" attribute
+to.csv.html:17:1 (to.csv.Rd:5): Warning: <table> lacks "summary" attribute
+to.csv.html:40:1 (to.csv.Rd:10): Warning: <table> lacks "summary" attribute
+to.nda.html:15:44 (to.nda.Rd:5): Error: <main> is not recognized!
+to.nda.html:15:44 (to.nda.Rd:5): Warning: discarding unexpected <main>
+to.nda.html:192:1 (to.nda.Rd:120): Warning: discarding unexpected </main>
+to.nda.html:4:1 (to.nda.Rd:5): Warning: <link> inserting "type" attribute
+to.nda.html:12:1 (to.nda.Rd:5): Warning: <script> proprietary attribute "onload"
+to.nda.html:12:1 (to.nda.Rd:5): Warning: <script> inserting "type" attribute
+to.nda.html:17:1 (to.nda.Rd:5): Warning: <table> lacks "summary" attribute
+to.nda.html:61:1 (to.nda.Rd:26): Warning: <table> lacks "summary" attribute
+to.rds.html:15:44 (to.rds.Rd:5): Error: <main> is not recognized!
+to.rds.html:15:44 (to.rds.Rd:5): Warning: discarding unexpected <main>
+to.rds.html:96:1 (to.rds.Rd:54): Warning: discarding unexpected </main>
+to.rds.html:4:1 (to.rds.Rd:5): Warning: <link> inserting "type" attribute
+to.rds.html:12:1 (to.rds.Rd:5): Warning: <script> proprietary attribute "onload"
+to.rds.html:12:1 (to.rds.Rd:5): Warning: <script> inserting "type" attribute
+to.rds.html:17:1 (to.rds.Rd:5): Warning: <table> lacks "summary" attribute
+to.rds.html:40:1 (to.rds.Rd:10): Warning: <table> lacks "summary" attribute
+to.sav.html:15:44 (to.sav.Rd:5): Error: <main> is not recognized!
+to.sav.html:15:44 (to.sav.Rd:5): Warning: discarding unexpected <main>
+to.sav.html:96:1 (to.sav.Rd:54): Warning: discarding unexpected </main>
+to.sav.html:4:1 (to.sav.Rd:5): Warning: <link> inserting "type" attribute
+to.sav.html:12:1 (to.sav.Rd:5): Warning: <script> proprietary attribute "onload"
+to.sav.html:12:1 (to.sav.Rd:5): Warning: <script> inserting "type" attribute
+to.sav.html:17:1 (to.sav.Rd:5): Warning: <table> lacks "summary" attribute
+to.sav.html:39:1 (to.sav.Rd:10): Warning: <table> lacks "summary" attribute
+wizaRdry-deprecated.html:15:44 (wizaRdry-deprecated.Rd:5): Error: <main> is not recognized!
+wizaRdry-deprecated.html:15:44 (wizaRdry-deprecated.Rd:5): Warning: discarding unexpected <main>
+wizaRdry-deprecated.html:67:1 (wizaRdry-deprecated.Rd:30): Warning: discarding unexpected </main>
+wizaRdry-deprecated.html:4:1 (wizaRdry-deprecated.Rd:5): Warning: <link> inserting "type" attribute
+wizaRdry-deprecated.html:12:1 (wizaRdry-deprecated.Rd:5): Warning: <script> proprietary attribute "onload"
+wizaRdry-deprecated.html:12:1 (wizaRdry-deprecated.Rd:5): Warning: <script> inserting "type" attribute
+wizaRdry-deprecated.html:17:1 (wizaRdry-deprecated.Rd:5): Warning: <table> lacks "summary" attribute
+wizaRdry-package.html:15:44 (wizaRdry-package.Rd:7): Error: <main> is not recognized!
+wizaRdry-package.html:15:44 (wizaRdry-package.Rd:7): Warning: discarding unexpected <main>
+wizaRdry-package.html:81:1 (wizaRdry-package.Rd:17): Warning: discarding unexpected </main>
+wizaRdry-package.html:4:1 (wizaRdry-package.Rd:7): Warning: <link> inserting "type" attribute
+wizaRdry-package.html:12:1 (wizaRdry-package.Rd:7): Warning: <script> proprietary attribute "onload"
+wizaRdry-package.html:12:1 (wizaRdry-package.Rd:7): Warning: <script> inserting "type" attribute
+wizaRdry-package.html:17:1 (wizaRdry-package.Rd:7): Warning: <table> lacks "summary" attribute
+* checking for non-standard things in the check directory ... OK
+* checking for detritus in the temp directory ... OK
+* DONE
+Status: 3 NOTEs

@@ -1,0 +1,41 @@
+Package: wizaRdry
+Title: A Magical Framework for Collaborative & Reproducible Data
+        Analysis
+Version: 0.6.4
+Authors@R: c(
+    person("Joshua G.", "Kenney", email = "joshua.kenney@yale.edu", role = c("aut", "cre")),
+    person("Trevor F.", "Williams", email = "trevormsu@gmail.com", role = "aut"),
+    person("Minerva K.", "Pappu", email = "minerva.pappu@yale.edu", role = "aut"),
+    person("Michael J.", "Spilka", email = "michael.j.spilka@gmail.com", role = "aut"),
+    person("Danielle N. Pratt", email = "danielle.pratt33@gmail.com", role = "ctb"),
+    person("Victor J.", "Pokorny", email = "victor.pokorny@northwestern.edu", role = "ctb"),
+    person("Santiago", "Castiello de Obeso", email = "santiago.castiellodeobeso@yale.edu", role = "ctb"),
+    person("Praveen", "Suthaharan", email = "praveen.suthaharan@yale.edu", role = "ctb"),
+    person("Christian R.", "Horgan", email = "christian.horgan@yale.edu", role = "ctb")
+  )
+Description: A comprehensive data analysis framework for NIH-funded research that streamlines workflows for both data cleaning and preparing NIH Data Archive ('NDA') submission templates. Provides unified access to multiple data sources ('REDCap', 'MongoDB', 'Qualtrics') through interfaces to their APIs, with specialized functions for data cleaning, filtering, merging, and parsing. Features automatic validation, field harmonization, and memory-aware processing to enhance reproducibility in multi-site collaborative research as described in Mittal et al. (2021) <doi:10.20900/jpbs.20210011>.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: beepr, cli, config, dplyr, future, future.apply, haven, httr,
+        jsonlite, knitr, mongolite, parallel, qualtRics, REDCapR,
+        rlang, stringdist, testthat, rstudioapi, lubridate, DBI,
+        RMariaDB, odbc, R6, openxlsx, openxlsx2
+Depends: R (>= 4.1.0)
+URL: https://github.com/belieflab/wizaRdry
+BugReports: https://github.com/belieflab/wizaRdry/issues
+Suggests: rmarkdown, yaml
+NeedsCompilation: no
+Packaged: 2026-02-03 05:20:51 UTC; Joshua
+Author: Joshua G. Kenney [aut, cre],
+  Trevor F. Williams [aut],
+  Minerva K. Pappu [aut],
+  Michael J. Spilka [aut],
+  Danielle N. Pratt [ctb],
+  Victor J. Pokorny [ctb],
+  Santiago Castiello de Obeso [ctb],
+  Praveen Suthaharan [ctb],
+  Christian R. Horgan [ctb]
+Maintainer: Joshua G. Kenney <joshua.kenney@yale.edu>
+Built: R 4.4.2; ; 2026-02-03 05:21:13 UTC; unix

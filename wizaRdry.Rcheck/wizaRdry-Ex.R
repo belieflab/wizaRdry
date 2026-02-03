@@ -1,0 +1,926 @@
+pkgname <- "wizaRdry"
+source(file.path(R.home("share"), "R", "examples-header.R"))
+options(warn = 1)
+base::assign(".ExTimings", "wizaRdry-Ex.timings", pos = 'CheckExEnv')
+base::cat("name\tuser\tsystem\telapsed\n", file=base::get(".ExTimings", pos = 'CheckExEnv'))
+base::assign(".format_ptime",
+function(x) {
+  if(!is.na(x[4L])) x[1L] <- x[1L] + x[4L]
+  if(!is.na(x[5L])) x[2L] <- x[2L] + x[5L]
+  options(OutDec = '.')
+  format(x[1L:3L], digits = 7L)
+},
+pos = 'CheckExEnv')
+
+### * </HEADER>
+library('wizaRdry')
+
+base::assign(".oldSearch", base::search(), pos = 'CheckExEnv')
+base::assign(".old_wd", base::getwd(), pos = 'CheckExEnv')
+cleanEx()
+nameEx("clean")
+### * clean
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: clean
+### Title: Generate clean data frames from cleaning scripts created in the
+###   ./clean directory
+### Aliases: clean
+
+### ** Examples
+
+## Not run: 
+##D   clean("prl", csv=TRUE)
+##D   clean("rgpts", "kamin", rdata=TRUE)
+##D 
+##D   # Skip confirmation prompts
+##D   clean("prl", csv=TRUE, skip_prompt=TRUE)
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("clean", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("createCsv")
+### * createCsv
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: createCsv
+### Title: Alias for 'to.csv' (DEPRECATED)
+### Aliases: createCsv
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use to.csv() instead
+##D createCsv(prl01)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("createCsv", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("createRds")
+### * createRds
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: createRds
+### Title: Alias for 'to.rds' (DEPRECATED)
+### Aliases: createRds
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use to.rds() instead
+##D createRds(prl01)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("createRds", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("createSpss")
+### * createSpss
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: createSpss
+### Title: Alias for 'to.sav' (DEPRECATED)
+### Aliases: createSpss
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use to.sav() instead
+##D createSpss(prl01)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("createSpss", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("dataFilter")
+### * dataFilter
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: dataFilter
+### Title: Alias for 'sift' (DEPRECATED)
+### Aliases: dataFilter
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use sift() instead
+##D filtered <- dataFilter(df, sex="F")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("dataFilter", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("dataMerge")
+### * dataMerge
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: dataMerge
+### Title: Alias for 'meld' (DEPRECATED)
+### Aliases: dataMerge
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use meld() instead
+##D merged <- dataMerge(df1_clean, df2_clean)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("dataMerge", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("dataRequest")
+### * dataRequest
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: dataRequest
+### Title: Alias for 'clean' (DEPRECATED)
+### Aliases: dataRequest
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use clean() instead
+##D prl <- dataRequest("prl")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("dataRequest", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getRedcap")
+### * getRedcap
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getRedcap
+### Title: Alias for 'redcap' (DEPRECATED)
+### Aliases: getRedcap
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use redcap() instead
+##D survey_data <- getRedcap("demographics")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getRedcap", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getSurvey")
+### * getSurvey
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getSurvey
+### Title: Alias for 'qualtrics' (DEPRECATED)
+### Aliases: getSurvey
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use qualtrics() instead
+##D survey_data <- getSurvey("your_survey_alias")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getSurvey", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getTask")
+### * getTask
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getTask
+### Title: Alias for 'mongo' (DEPRECATED)
+### Aliases: getTask
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use mongo() instead
+##D survey_data <- getTask("task_alias")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getTask", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("meld")
+### * meld
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: meld
+### Title: Merge two or more data frames magically according to their
+###   candidate key
+### Aliases: meld
+
+### ** Examples
+
+## Not run: 
+##D # Create sample dataframes for demonstration
+##D df1 <- data.frame(
+##D   src_subject_id = c("S001", "S002", "S003"),
+##D   visit = c(1, 2, 1),
+##D   measure1 = c(10, 15, 12),
+##D   stringsAsFactors = FALSE
+##D )
+##D 
+##D df2 <- data.frame(
+##D   src_subject_id = c("S001", "S002", "S004"),
+##D   visit = c(1, 2, 2),
+##D   measure2 = c(85, 92, 78),
+##D   stringsAsFactors = FALSE
+##D )
+##D 
+##D # Perform an OUTER JOIN using default keys:
+##D merged1 <- meld(df1, df2, all = TRUE)
+##D 
+##D # Perform an INNER JOIN using specified keys:
+##D merged2 <- meld(df1, df2, by = "src_subject_id", all = FALSE)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("meld", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("mongo")
+### * mongo
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: mongo
+### Title: Fetch data from MongoDB to be stored in a data frame - UPDATED
+###   VERSION
+### Aliases: mongo
+
+### ** Examples
+
+## Not run: 
+##D # Get data from MongoDB collection
+##D data <- mongo("collection")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("mongo", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("mongo.rune")
+### * mongo.rune
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: mongo.rune
+### Title: Parse composite MongoDB collection into component data frames by
+###   variable prefix
+### Aliases: mongo.rune
+
+### ** Examples
+
+## Not run: 
+##D # Parse a MongoDB collection into its component dataframes
+##D mongo.rune("combined_surveys")
+##D 
+##D # After running, access individual survey dataframes directly:
+##D head(pss)  # Access the PSS survey dataframe
+##D head(cesd) # Access the CESD survey dataframe
+##D 
+##D # Parse a single survey from composite collection
+##D rgpts <- mongo.rune("combined_surveys", prefix = "rgpts")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("mongo.rune", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("nda")
+### * nda
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: nda
+### Title: Generate validated NDA submission templates created in the ./nda
+###   directory
+### Aliases: nda
+
+### ** Examples
+
+## Not run: 
+##D   nda("prl", csv=TRUE)
+##D   nda("rgpts", "kamin", rdata=TRUE)
+##D 
+##D   # Skip confirmation prompts
+##D   nda("prl", csv=TRUE, skip_prompt=TRUE)
+##D   
+##D   # Show detailed processing information
+##D   nda("prl", verbose=TRUE)
+##D   
+##D   # Use lenient validation mode (allow missing data with warnings)
+##D   nda("prl", strict=FALSE)
+##D   
+##D   # Include DCC fields from ndar_subject01
+##D   nda("prl", dcc=TRUE)
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("nda", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("ndaRequest")
+### * ndaRequest
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: ndaRequest
+### Title: Alias for 'nda' (DEPRECATED)
+### Aliases: ndaRequest
+
+### ** Examples
+
+## Not run: 
+##D # DEPRECATED - use nda() instead
+##D prl01 <- ndaRequest("prl01")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("ndaRequest", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("oracle")
+### * oracle
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: oracle
+### Title: Fetch data from Oracle database to be stored in a data frame
+### Aliases: oracle
+
+### ** Examples
+
+## Not run: 
+##D # Get data from a specific table
+##D data <- oracle("participants")
+##D 
+##D # Get data with a where clause
+##D survey_data <- oracle("vw_surveyquestionresults",
+##D                   where_clause = "resultidentifier = 'NRS'")
+##D 
+##D # Get all records, including those without matching primary key
+##D all_data <- oracle("candidate", all = TRUE)
+##D 
+##D # Specify schema explicitly
+##D schema_data <- oracle("survey_results", schema = "STUDY_DATA")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("oracle", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("oracle.test")
+### * oracle.test
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: oracle.test
+### Title: Test Oracle database connection
+### Aliases: oracle.test
+
+### ** Examples
+
+## Not run: 
+##D # Test the Oracle connection
+##D if (oracle.test()) {
+##D   message("Oracle connection successful!")
+##D } else {
+##D   message("Oracle connection failed!")
+##D }
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("oracle.test", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("qualtrics")
+### * qualtrics
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: qualtrics
+### Title: Retrieve Survey Data from Qualtrics
+### Aliases: qualtrics
+
+### ** Examples
+
+## Not run: 
+##D # Get survey by alias (will search all institutions)
+##D survey_data <- qualtrics("rgpts")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("qualtrics", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("qualtrics.rune")
+### * qualtrics.rune
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: qualtrics.rune
+### Title: Parse composite Qualtrics survey into component data frames by
+###   variable prefix
+### Aliases: qualtrics.rune
+
+### ** Examples
+
+## Not run: 
+##D # Parse a a Qualtrics survey into its component dataframes
+##D qualtrics.rune("combined_surveys", label = FALSE)
+##D 
+##D # After running, access individual survey dataframes directly:
+##D head(pss)  # Access the PSS survey dataframe
+##D head(cesd) # Access the CESD survey dataframe
+##D 
+##D # Parse a single Qualtrics survey from composite survey
+##D rgpts <- qualtrics.rune("combined_surveys", prefix = "rgpts")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("qualtrics.rune", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("redcap")
+### * redcap
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: redcap
+### Title: Fetch data from REDCap to be stored in a data frame
+### Aliases: redcap
+
+### ** Examples
+
+## Not run: 
+##D # Get data from a specific instrument
+##D data <- redcap("demographics")
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("redcap", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("redcap.rune")
+### * redcap.rune
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: redcap.rune
+### Title: Parse composite REDCap instrument into component data frames by
+###   variable prefix
+### Aliases: redcap.rune
+
+### ** Examples
+
+## Not run: 
+##D # Parse a REDCap instrument into its component dataframes
+##D redcap.rune("baseline_assessment")
+##D 
+##D # After running, access individual survey dataframes directly:
+##D head(pss)  # Access the PSS survey dataframe
+##D head(cesd) # Access the CESD survey dataframe
+##D 
+##D # Parse a single survey from composite instrument
+##D rgpts <- redcap.rune("baseline_assessment", prefix = "rgpts")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("redcap.rune", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("rune")
+### * rune
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: rune
+### Title: Parse composite data frame into component data frames by
+###   variable prefix
+### Aliases: rune
+
+### ** Examples
+
+# Parse a data frame containing multiple surveys
+combined_df <- data.frame(
+  record_id = c("REC001", "REC002", "REC003", "REC004"),
+  src_subject_id = c("SUB001", "SUB002", "SUB003", "SUB004"),
+  subjectkey = c("KEY001", "KEY002", "KEY003", "KEY004"),
+  site = c("Yale", "NU", "Yale", "NU"),
+  phenotype = c("A", "B", "A", "C"),
+  visit = c(1, 2, 2, 1),
+  state = c("complete", "completed baseline", "in progress", NA),
+  status = c(NA, NA, NA, "complete"),
+  lost_to_followup = c(FALSE, FALSE, TRUE, NA),
+  interview_date = c("2023-01-15", "2023/02/20", NA, "2023-03-10"),
+  foo_1 = c(1, 3, 5, 7),
+  foo_2 = c("a", "b", "c", "d"),
+  bar_1 = c(2, 4, 6, 8),
+  bar_2 = c("w", "x", "y", "z")
+)
+rune(combined_df)
+
+# After running, access individual survey dataframes directly:
+head(foo)  # Access the foo dataframe
+head(bar)  # Access the bar dataframe
+
+# Parse a single survey from composite dataframe
+foo_df <- rune(combined_df, prefix = "foo")
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("rune", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("scry")
+### * scry
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: scry
+### Title: Initialize the wizaRdry directory structure inside an R project
+### Aliases: scry
+
+### ** Examples
+
+## Not run: 
+##D # Initialize in current directory
+##D scry()
+##D 
+##D # Repair structure in current directory
+##D scry(repair = TRUE)
+##D 
+##D # Initialize in a specific directory with an R project
+##D scry("path/to/project", create_project = TRUE, repair = TRUE)
+##D 
+##D # Skip the tree display
+##D scry(repair = TRUE, show_tree = FALSE)
+##D 
+##D # Explicitly create example scripts when repairing
+##D scry(repair = TRUE, examples = TRUE)
+##D 
+##D # Skip the confirmation prompt
+##D scry(skip_prompt = TRUE)
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("scry", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("sift")
+### * sift
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: sift
+### Title: Filter data frame by superkey parameters, rows, and columns
+### Aliases: sift
+
+### ** Examples
+
+# Create a sample dataframe
+sample_df <- data.frame(
+  record_id = c("REC001", "REC002", "REC003", "REC004"),
+  src_subject_id = c("SUB001", "SUB002", "SUB003", "SUB004"),
+  subjectkey = c("KEY001", "KEY002", "KEY003", "KEY004"),
+  site = c("Yale", "NU", "Yale", "NU"),
+  phenotype = c("A", "B", "A", "C"),
+  visit = c(1, 2, 2, 1),
+  state = c("complete", "completed baseline", "in progress", NA),
+  status = c(NA, NA, NA, "complete"),
+  lost_to_followup = c(FALSE, FALSE, TRUE, NA),
+  interview_date = c("2023-01-15", "2023/02/20", NA, "2023-03-10")
+)
+
+# Set row names for demonstration
+rownames(sample_df) <- c("foo", "bar", "baz", "qux")
+
+# Filter by specific date
+filtered1 <- sift(sample_df, 
+                 cols = c("src_subject_id", "phenotype"), 
+                 visit = 2, 
+                 interview_date = "01/31/2023")
+                 
+# Filter to include only rows with non-NA interview dates
+filtered2 <- sift(sample_df, 
+                 interview_date = TRUE)
+                 
+# Filter by status (works with either state or status column)
+filtered3 <- sift(sample_df,
+                 status = c("complete", "completed baseline"))
+                 
+# Filter with specific row names
+filtered4 <- sift(sample_df,
+                 rows = c("foo", "qux"))
+                 
+# Filter with vector of visit values
+filtered6 <- sift(sample_df,
+                 visit = c(1, 2))
+                 
+# Filter by lost_to_followup
+filtered10 <- sift(sample_df,
+                 lost_to_followup = FALSE)
+                 
+# Filter by src_subject_id
+filtered11 <- sift(sample_df,
+                 src_subject_id = c("SUB001", "SUB004"))
+                 
+# Multiple filters combined
+filtered12 <- sift(sample_df,
+                 site = "Yale",
+                 visit = 1,
+                 cols = c("record_id", "src_subject_id", "site"))
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("sift", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("sql")
+### * sql
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: sql
+### Title: Fetch data from SQL database to be stored in a data frame
+### Aliases: sql
+
+### ** Examples
+
+## Not run: 
+##D # Get data from a specific table
+##D data <- sql("participants")
+##D 
+##D # Get data with a where clause
+##D survey_data <- sql("vw_surveyquestionresults",
+##D                   where_clause = "resultidentifier = 'NRS'")
+##D 
+##D # Get all records, including those without matching primary key
+##D all_data <- sql("candidate", all = TRUE)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("sql", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("to.csv")
+### * to.csv
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: to.csv
+### Title: Create .csv file from a data frame
+### Aliases: to.csv
+
+### ** Examples
+
+## Not run: 
+##D # Create a sample data frame
+##D sample_df <- data.frame(
+##D   id = 1:3,
+##D   name = c("Alice", "Bob", "Charlie")
+##D )
+##D 
+##D # Basic usage with prompt
+##D to.csv(sample_df)
+##D 
+##D # Custom filename
+##D to.csv(sample_df, "participants_data")
+##D 
+##D # Skip the confirmation prompt
+##D to.csv(sample_df, skip_prompt = TRUE)
+##D 
+##D # Save in a different directory
+##D to.csv(sample_df, path = "path/to/project")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("to.csv", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("to.nda")
+### * to.nda
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: to.nda
+### Title: Create NDA Submission Template
+### Aliases: to.nda
+
+### ** Examples
+
+## Not run: 
+##D   # First create some sample data
+##D   eefrt01 <- data.frame(
+##D     src_subject_id = c("SUB001", "SUB002"),
+##D     interview_age = c(240, 360),
+##D     interview_date = c("01/01/2023", "02/15/2023"),
+##D     response_time = c(450, 520)
+##D   )
+##D 
+##D   # Create the NDA template using the data frame directly
+##D   to.nda(eefrt01)
+##D 
+##D   # Or using the name as a string
+##D   to.nda("eefrt01")
+##D 
+##D   # Skip the confirmation prompt
+##D   to.nda(eefrt01, skip_prompt = TRUE)
+## End(Not run)
+
+## Not run: 
+##D   # First create some sample data
+##D   eefrt01 <- data.frame(
+##D     src_subject_id = c("SUB001", "SUB002"),
+##D     interview_age = c(240, 360),
+##D     interview_date = c("01/01/2023", "02/15/2023"),
+##D     response_time = c(450, 520)
+##D   )
+##D 
+##D   # Create the NDA template using the data frame directly
+##D   to.nda(eefrt01)
+##D 
+##D   # Or using the name as a string
+##D   to.nda("eefrt01")
+##D 
+##D   # Skip the confirmation prompt
+##D   to.nda(eefrt01, skip_prompt = TRUE)
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("to.nda", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("to.rds")
+### * to.rds
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: to.rds
+### Title: Create .rds file from a data frame
+### Aliases: to.rds
+
+### ** Examples
+
+## Not run: 
+##D # Create a sample data frame
+##D sample_df <- data.frame(
+##D   id = 1:3,
+##D   name = c("Alice", "Bob", "Charlie")
+##D )
+##D 
+##D # Basic usage with prompt
+##D to.rds(sample_df)
+##D 
+##D # Custom filename
+##D to.rds(sample_df, "participants_data")
+##D 
+##D # Skip the confirmation prompt
+##D to.rds(sample_df, skip_prompt = TRUE)
+##D 
+##D # Save in a different directory
+##D to.rds(sample_df, path = "path/to/project")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("to.rds", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("to.sav")
+### * to.sav
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: to.sav
+### Title: Create .sav SPSS file from a data frame
+### Aliases: to.sav
+
+### ** Examples
+
+## Not run: 
+##D # Create a sample data frame
+##D sample_df <- data.frame(
+##D   id = 1:3,
+##D   score = c(85, 92, 78),
+##D   group = c("A", "B", "A")
+##D )
+##D 
+##D # Basic usage with prompt
+##D to.sav(sample_df)
+##D 
+##D # Custom filename
+##D to.sav(sample_df, "participants_data")
+##D 
+##D # Skip the confirmation prompt
+##D to.sav(sample_df, skip_prompt = TRUE)
+##D 
+##D # Save in a different directory
+##D to.sav(sample_df, path = "path/to/project")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("to.sav", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+### * <FOOTER>
+###
+cleanEx()
+options(digits = 7L)
+base::cat("Time elapsed: ", proc.time() - base::get("ptime", pos = 'CheckExEnv'),"\n")
+grDevices::dev.off()
+###
+### Local variables: ***
+### mode: outline-minor ***
+### outline-regexp: "\\(> \\)?### [*]+" ***
+### End: ***
+quit('no')

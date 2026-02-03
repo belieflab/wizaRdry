@@ -1,0 +1,441 @@
+Hmm ... looks like a package
+Converting parsed Rd's to LaTeX ....
+Creating pdf output from LaTeX ...
+
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+LaTeX2e <2018-12-01>
+(./Rd2.tex
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2018/09/03 v1.4i Standard LaTeX document class
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/bk10.clo))
+(/Library/Frameworks/R.framework/Resources/share/texmf/tex/latex/Rd.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ifthen.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/generic/iftex/iftex.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/longtable.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/bm.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/alltt.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/verbatim.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/url/url.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/textcomp.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1enc.def
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1enc.dfu)))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amstext.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsgen.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsbsy.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsopn.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/amsfonts.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/amssymb.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/jknapltx/mathrsfs.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/fontenc.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/t1enc.def))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/times.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/zi4.sty
+`inconsolata-zi4' v1.112, 2017/01/04 Text macros for Inconsolata (msharpe)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/keyval.tex)))))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics/color.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics-def/pdftex.def))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/hobsub-hyperref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/hobsub-generic.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/generic/ifxetex/ifxetex.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/auxhook.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/kvoptions.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/latexconfig/hyperref.cfg))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/hpdftex.def
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/rerunfilecheck.sty)))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/makeidx.sty)
+Writing index file Rd2.idx
+No file Rd2.aux.
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1cmr.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/t1ptm.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/gettitlestring.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/ts1ptm.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/t1zi4.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/umsa.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/umsb.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/jknapltx/ursfs.fd) [1{/usr/local/
+texlive/2019/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2] [3] [4]
+[5] [6] [7] [8] [9] [10] [11] [12] [13]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 913--914
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[14]
+Overfull \hbox (1.18712pt too wide) in paragraph at lines 982--984
+[]\T1/ptm/m/n/10 Logical. If TRUE (de-fault), skips con-fir-ma-tion prompts un-
+less pref-er-ences aren't
+[15] [16] [17] [18] [19] [20] [21]
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/ts1zi4.fd) [22]
+[23] [24] [25] [26]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 1855--1856
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[27] [28] [29] [30]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 2099--2100
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[31] [32] [33] [34]
+Overfull \hbox (1.1676pt too wide) in paragraph at lines 2304--2305
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle record_id or a vec-tor of record_i
+ds to fil-ter the dataframe
+
+Overfull \hbox (6.08665pt too wide) in paragraph at lines 2306--2307
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle sub-ject ID or a vec-tor of sub-je
+ct IDs to fil-ter the dataframe
+
+Overfull \hbox (9.56744pt too wide) in paragraph at lines 2308--2309
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle sub-jec-tkey or a vec-tor of sub-j
+ec-tkeys to fil-ter the dataframe
+
+Overfull \hbox (4.44739pt too wide) in paragraph at lines 2316--2317
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle race value or a vec-tor of race va
+l-ues to fil-ter the dataframe
+
+Overfull \hbox (20.25769pt too wide) in paragraph at lines 2322--2323
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle phe-no-type_description or a vec-t
+or of phe-no-type_descriptions
+
+Overfull \hbox (5.60696pt too wide) in paragraph at lines 2338--2340
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle visit value or a vec-tor of visit 
+val-ues to fil-ter the dataframe
+[35]
+Overfull \hbox (2.2474pt too wide) in paragraph at lines 2344--2345
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle arm value or a vec-tor of arm val-
+ues to fil-ter the dataframe
+[36] [37] [38] [39] [40] [41] [42] [43] [44] [45] [46] [47] [48]
+No file Rd2.ind.
+[49]
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.aux)
+
+Package rerunfilecheck Warning: File `Rd2.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+ )
+(see the transcript file for additional information){/usr/local/texlive/2019/te
+xmf-dist/fonts/enc/dvips/inconsolata/i4-ts1.enc}{/usr/local/texlive/2019/texmf-
+dist/fonts/enc/dvips/base/8r.enc}{/usr/local/texlive/2019/texmf-dist/fonts/enc/
+dvips/inconsolata/i4-t1-0.enc}</usr/local/texlive/2019/texmf-dist/fonts/type1/p
+ublic/inconsolata/Inconsolata-zi4r.pfb></usr/local/texlive/2019/texmf-dist/font
+s/type1/urw/times/utmb8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/ur
+w/times/utmr8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw/times/ut
+mr8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+
+Output written on Rd2.pdf (49 pages, 167893 bytes).
+Transcript written on Rd2.log.
+This is makeindex, version 2.15 [TeX Live 2019] (kpathsea + Thai support).
+Scanning input file Rd2.idx....done (56 entries accepted, 0 rejected).
+Sorting entries....done (389 comparisons).
+Generating output file Rd2.ind....done (101 lines written, 0 warnings).
+Output written in Rd2.ind.
+Transcript written in Rd2.ilg.
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+LaTeX2e <2018-12-01>
+(./Rd2.tex
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2018/09/03 v1.4i Standard LaTeX document class
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/bk10.clo))
+(/Library/Frameworks/R.framework/Resources/share/texmf/tex/latex/Rd.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ifthen.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/generic/iftex/iftex.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/longtable.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/bm.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/alltt.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/verbatim.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/url/url.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/textcomp.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1enc.def
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1enc.dfu)))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amstext.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsgen.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsbsy.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsopn.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/amsfonts.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/amssymb.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/jknapltx/mathrsfs.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/fontenc.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/t1enc.def))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/times.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/zi4.sty
+`inconsolata-zi4' v1.112, 2017/01/04 Text macros for Inconsolata (msharpe)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/keyval.tex)))))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics/color.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics-def/pdftex.def))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/hobsub-hyperref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/hobsub-generic.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/generic/ifxetex/ifxetex.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/auxhook.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/kvoptions.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/latexconfig/hyperref.cfg))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/hpdftex.def
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/rerunfilecheck.sty)))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/makeidx.sty)
+Writing index file Rd2.idx
+
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.aux) (/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1cmr.fd
+) (/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/t1ptm.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/gettitlestring.sty))
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.out)
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.out)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/ts1ptm.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/t1zi4.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/umsa.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/umsb.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/jknapltx/ursfs.fd)
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.toc [1{/usr/local/texlive/2019/texmf-var/fonts/map/pdftex/updmap/
+pdftex.map}]) [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12] [13] [14]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 913--914
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[15]
+Overfull \hbox (1.18712pt too wide) in paragraph at lines 982--984
+[]\T1/ptm/m/n/10 Logical. If TRUE (de-fault), skips con-fir-ma-tion prompts un-
+less pref-er-ences aren't
+[16] [17] [18] [19] [20] [21] [22]
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/ts1zi4.fd) [23]
+[24] [25] [26] [27]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 1855--1856
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[28] [29] [30] [31]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 2099--2100
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[32] [33] [34] [35]
+Overfull \hbox (1.1676pt too wide) in paragraph at lines 2304--2305
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle record_id or a vec-tor of record_i
+ds to fil-ter the dataframe
+
+Overfull \hbox (6.08665pt too wide) in paragraph at lines 2306--2307
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle sub-ject ID or a vec-tor of sub-je
+ct IDs to fil-ter the dataframe
+
+Overfull \hbox (9.56744pt too wide) in paragraph at lines 2308--2309
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle sub-jec-tkey or a vec-tor of sub-j
+ec-tkeys to fil-ter the dataframe
+
+Overfull \hbox (4.44739pt too wide) in paragraph at lines 2316--2317
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle race value or a vec-tor of race va
+l-ues to fil-ter the dataframe
+
+Overfull \hbox (20.25769pt too wide) in paragraph at lines 2322--2323
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle phe-no-type_description or a vec-t
+or of phe-no-type_descriptions
+
+Overfull \hbox (5.60696pt too wide) in paragraph at lines 2338--2340
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle visit value or a vec-tor of visit 
+val-ues to fil-ter the dataframe
+[36]
+Overfull \hbox (2.2474pt too wide) in paragraph at lines 2344--2345
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle arm value or a vec-tor of arm val-
+ues to fil-ter the dataframe
+[37] [38] [39] [40] [41] [42] [43] [44] [45] [46] [47] [48] [49]
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.ind [50]
+
+LaTeX Font Warning: Font shape `T1/zi4/m/it' undefined
+(Font)              using `T1/zi4/m/n' instead on input line 96.
+
+[51])
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.aux)
+
+Package rerunfilecheck Warning: File `Rd2.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+
+LaTeX Font Warning: Some font shapes were not available, defaults substituted.
+
+ )
+(see the transcript file for additional information){/usr/local/texlive/2019/te
+xmf-dist/fonts/enc/dvips/inconsolata/i4-ts1.enc}{/usr/local/texlive/2019/texmf-
+dist/fonts/enc/dvips/base/8r.enc}{/usr/local/texlive/2019/texmf-dist/fonts/enc/
+dvips/inconsolata/i4-t1-0.enc}</usr/local/texlive/2019/texmf-dist/fonts/type1/p
+ublic/inconsolata/Inconsolata-zi4r.pfb></usr/local/texlive/2019/texmf-dist/font
+s/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2019/texmf-dist/fonts
+/type1/urw/times/utmb8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw
+/times/utmr8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw/times/utm
+r8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on Rd2.pdf (51 pages, 183300 bytes).
+Transcript written on Rd2.log.
+This is makeindex, version 2.15 [TeX Live 2019] (kpathsea + Thai support).
+Scanning input file Rd2.idx....done (56 entries accepted, 0 rejected).
+Sorting entries....done (389 comparisons).
+Generating output file Rd2.ind....done (101 lines written, 0 warnings).
+Output written in Rd2.ind.
+Transcript written in Rd2.ilg.
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+LaTeX2e <2018-12-01>
+(./Rd2.tex
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2018/09/03 v1.4i Standard LaTeX document class
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/bk10.clo))
+(/Library/Frameworks/R.framework/Resources/share/texmf/tex/latex/Rd.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ifthen.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/generic/iftex/iftex.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/longtable.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/bm.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/alltt.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/tools/verbatim.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/url/url.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/textcomp.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1enc.def
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1enc.dfu)))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amstext.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsgen.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsbsy.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsmath/amsopn.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/amsfonts.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/amssymb.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/jknapltx/mathrsfs.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/fontenc.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/t1enc.def))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/times.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/zi4.sty
+`inconsolata-zi4' v1.112, 2017/01/04 Text macros for Inconsolata (msharpe)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+(/usr/local/texlive/2019/texmf-dist/tex/generic/xkeyval/keyval.tex)))))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics/color.sty
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/graphics-def/pdftex.def))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/hobsub-hyperref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/hobsub-generic.sty))
+(/usr/local/texlive/2019/texmf-dist/tex/generic/ifxetex/ifxetex.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/auxhook.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/kvoptions.sty)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/latexconfig/hyperref.cfg))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/hpdftex.def
+(/usr/local/texlive/2019/texmf-dist/tex/latex/oberdiek/rerunfilecheck.sty)))
+(/usr/local/texlive/2019/texmf-dist/tex/latex/base/makeidx.sty)
+Writing index file Rd2.idx
+
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.aux) (/usr/local/texlive/2019/texmf-dist/tex/latex/base/ts1cmr.fd
+) (/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/t1ptm.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/local/texlive/2019/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/local/texlive/2019/texmf-dist/tex/generic/oberdiek/gettitlestring.sty))
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.out)
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.out)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/psnfss/ts1ptm.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/t1zi4.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/umsa.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/amsfonts/umsb.fd)
+(/usr/local/texlive/2019/texmf-dist/tex/latex/jknapltx/ursfs.fd)
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.toc [1{/usr/local/texlive/2019/texmf-var/fonts/map/pdftex/updmap/
+pdftex.map}]) [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12] [13] [14]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 913--914
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[15]
+Overfull \hbox (1.18712pt too wide) in paragraph at lines 982--984
+[]\T1/ptm/m/n/10 Logical. If TRUE (de-fault), skips con-fir-ma-tion prompts un-
+less pref-er-ences aren't
+[16] [17] [18] [19] [20] [21] [22]
+(/usr/local/texlive/2019/texmf-dist/tex/latex/inconsolata/ts1zi4.fd) [23]
+[24] [25] [26] [27]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 1855--1856
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[28] [29] [30] [31]
+Overfull \hbox (27.86702pt too wide) in paragraph at lines 2099--2100
+[]\T1/ptm/m/n/10 Identifies which iden-ti-fier col-umn to use (par-tic-i-pan-tI
+d, work-erId, PRO-LIFIC_PID, or src_subject_id) 
+[32] [33] [34] [35]
+Overfull \hbox (1.1676pt too wide) in paragraph at lines 2304--2305
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle record_id or a vec-tor of record_i
+ds to fil-ter the dataframe
+
+Overfull \hbox (6.08665pt too wide) in paragraph at lines 2306--2307
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle sub-ject ID or a vec-tor of sub-je
+ct IDs to fil-ter the dataframe
+
+Overfull \hbox (9.56744pt too wide) in paragraph at lines 2308--2309
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle sub-jec-tkey or a vec-tor of sub-j
+ec-tkeys to fil-ter the dataframe
+
+Overfull \hbox (4.44739pt too wide) in paragraph at lines 2316--2317
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle race value or a vec-tor of race va
+l-ues to fil-ter the dataframe
+
+Overfull \hbox (20.25769pt too wide) in paragraph at lines 2322--2323
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle phe-no-type_description or a vec-t
+or of phe-no-type_descriptions
+
+Overfull \hbox (5.60696pt too wide) in paragraph at lines 2338--2340
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle visit value or a vec-tor of visit 
+val-ues to fil-ter the dataframe
+[36]
+Overfull \hbox (2.2474pt too wide) in paragraph at lines 2344--2345
+[]\T1/ptm/m/n/10 Optional; ei-ther a sin-gle arm value or a vec-tor of arm val-
+ues to fil-ter the dataframe
+[37] [38] [39] [40] [41] [42] [43] [44] [45] [46] [47] [48] [49]
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.ind [50]
+
+LaTeX Font Warning: Font shape `T1/zi4/m/it' undefined
+(Font)              using `T1/zi4/m/n' instead on input line 96.
+
+[51])
+(/private/var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T/RtmpJsnhEH/Rd2pdf1814
+b41498c56/Rd2.aux)
+
+LaTeX Font Warning: Some font shapes were not available, defaults substituted.
+
+ )
+(see the transcript file for additional information){/usr/local/texlive/2019/te
+xmf-dist/fonts/enc/dvips/inconsolata/i4-ts1.enc}{/usr/local/texlive/2019/texmf-
+dist/fonts/enc/dvips/base/8r.enc}{/usr/local/texlive/2019/texmf-dist/fonts/enc/
+dvips/inconsolata/i4-t1-0.enc}</usr/local/texlive/2019/texmf-dist/fonts/type1/p
+ublic/inconsolata/Inconsolata-zi4r.pfb></usr/local/texlive/2019/texmf-dist/font
+s/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2019/texmf-dist/fonts
+/type1/urw/times/utmb8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw
+/times/utmr8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw/times/utm
+r8a.pfb></usr/local/texlive/2019/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on Rd2.pdf (51 pages, 183480 bytes).
+Transcript written on Rd2.log.
+Saving output to ‘wizaRdry-manual.pdf’ ...
+Done
+You may want to clean up by 'rm -Rf /var/folders/nt/w9f3f1h97h7g7ynzl6n9_9mc0000gp/T//RtmpJsnhEH/Rd2pdf1814b41498c56'

@@ -1,0 +1,59 @@
+clean                   Generate clean data frames from cleaning
+                        scripts created in the ./clean directory
+createCsv               Alias for 'to.csv' (DEPRECATED)
+createRds               Alias for 'to.rds' (DEPRECATED)
+createSpss              Alias for 'to.sav' (DEPRECATED)
+dataFilter              Alias for 'sift' (DEPRECATED)
+dataMerge               Alias for 'meld' (DEPRECATED)
+dataRequest             Alias for 'clean' (DEPRECATED)
+getRedcap               Alias for 'redcap' (DEPRECATED)
+getSurvey               Alias for 'qualtrics' (DEPRECATED)
+getTask                 Alias for 'mongo' (DEPRECATED)
+meld                    Merge two or more data frames magically
+                        according to their candidate key
+mongo                   Fetch data from MongoDB to be stored in a data
+                        frame - UPDATED VERSION
+mongo.index             Display table of available MongoDB collections
+mongo.rune              Parse composite MongoDB collection into
+                        component data frames by variable prefix
+nda                     Generate validated NDA submission templates
+                        created in the ./nda directory
+ndaRequest              Alias for 'nda' (DEPRECATED)
+oracle                  Fetch data from Oracle database to be stored in
+                        a data frame
+oracle.desc             Get Oracle table columns/metadata
+oracle.index            Get a list of tables from the Oracle database
+oracle.query            Perform a direct Oracle query with minimal
+                        processing
+oracle.test             Test Oracle database connection
+qualtrics               Retrieve Survey Data from Qualtrics
+qualtrics.dict          Fetch Qualtrics survey metadata to be stored in
+                        data frame
+qualtrics.index         Display table of available Qualtrics surveys
+qualtrics.rune          Parse composite Qualtrics survey into component
+                        data frames by variable prefix
+redcap                  Fetch data from REDCap to be stored in a data
+                        frame
+redcap.dict             Fetch REDCap data dictionary to be stored in
+                        data frame
+redcap.index            Display table of available REDCap instruments
+                        and their labels
+redcap.rune             Parse composite REDCap instrument into
+                        component data frames by variable prefix
+rune                    Parse composite data frame into component data
+                        frames by variable prefix
+scry                    Initialize the wizaRdry directory structure
+                        inside an R project
+sift                    Filter data frame by superkey parameters, rows,
+                        and columns
+sql                     Fetch data from SQL database to be stored in a
+                        data frame
+sql.desc                Get SQL table columns/metadata
+sql.index               Get a list of tables from the SQL database
+sql.query               Perform a direct SQL query with minimal
+                        processing
+to.csv                  Create .csv file from a data frame
+to.nda                  Create NDA Submission Template
+to.rds                  Create .rds file from a data frame
+to.sav                  Create .sav SPSS file from a data frame
+wizaRdry-deprecated     Deprecated functions in wizaRdry
