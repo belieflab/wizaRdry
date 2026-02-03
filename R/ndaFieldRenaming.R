@@ -409,7 +409,7 @@ apply_field_rename <- function(df, source_field, target_field, verbose = TRUE) {
   df[[target_field]] <- field_data
   
   if (verbose) {
-    message(sprintf("[RENAME] '%s' → '%s'", source_field, target_field))
+    message(sprintf("[RENAME] '%s' -> '%s'", source_field, target_field))
   }
   
   return(df)
@@ -548,12 +548,12 @@ process_unexpected_fields <- function(df, elements, structure_name, measure_name
       for (i in seq_along(result$renames)) {
         old_name <- names(result$renames)[i]
         new_name <- result$renames[i]
-        message(sprintf("    • %s → %s", old_name, new_name))
+        message(sprintf("    - %s -> %s", old_name, new_name))
       }
     }
     if (length(result$columns_to_drop) > 0) {
       message(sprintf("  - Dropped: %d field(s)", length(result$columns_to_drop)))
-      message(sprintf("    • %s", paste(result$columns_to_drop, collapse = ", ")))
+      message(sprintf("    - %s", paste(result$columns_to_drop, collapse = ", ")))
     }
   }
   
@@ -653,7 +653,7 @@ generate_auto_generated_section <- function(measure_name, renames, drops) {
     for (i in seq_along(renames)) {
       old_name <- names(renames)[i]
       new_name <- renames[i]
-      lines <- c(lines, sprintf("%s$%s <- %s$%s  # Renamed: %s → %s", 
+      lines <- c(lines, sprintf("%s$%s <- %s$%s  # Renamed: %s -> %s",
                                measure_name, new_name, measure_name, old_name, old_name, new_name))
       lines <- c(lines, sprintf("%s$%s <- NULL  # Remove original field", measure_name, old_name))
     }
