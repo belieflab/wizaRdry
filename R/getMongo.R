@@ -434,7 +434,9 @@ mongo <- function(collection, ..., database = NULL, identifier = NULL, chunk_siz
   }
 
   # Collect results
-  results <- lapply(future_results, future::value)
+  # results <- lapply(future_results, future::value)
+  # Recommended new syntax by Futureverse maintainer
+  results <- value(future_results)
 
   # Combine results
   df <- dplyr::bind_rows(results)
