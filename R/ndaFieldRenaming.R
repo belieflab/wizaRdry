@@ -581,18 +581,18 @@ process_unexpected_fields <- function(df, elements, structure_name, measure_name
 #' @param verbose Logical
 #' @return Logical - TRUE if successful, FALSE otherwise
 #' @noRd
-update_cleaning_script <- function(script_path, measure_name, renames, drops, verbose = TRUE) {
+update_cleaning_script <- function(script_path, measure_name, renames, drops, assignments = c(), verbose = TRUE) {
   # Check if script exists
   if (!file.exists(script_path)) {
     if (verbose) message(sprintf("[SCRIPT UPDATE] Script not found: %s", script_path))
     return(FALSE)
   }
-  
+
   # Read script
   script_lines <- readLines(script_path, warn = FALSE)
-  
+
   # Generate new auto-generated section
-  new_section <- generate_auto_generated_section(measure_name, renames, drops)
+  new_section <- generate_auto_generated_section(measure_name, renames, drops, assignments)
   
   # Find existing auto-generated section
   auto_gen_start <- grep("^# ========== AUTO-GENERATED: Field Operations", script_lines)
@@ -646,12 +646,12 @@ update_cleaning_script <- function(script_path, measure_name, renames, drops, ve
 #' @param drops Character vector - fields to drop
 #' @return Character vector - lines of code
 #' @noRd
-generate_auto_generated_section <- function(measure_name, renames, drops) {
+generate_auto_generated_section <- function(measure_name, renames, drops, assignments = c()) {
   lines <- character()
-  
+
   # Header
   lines <- c(lines, "# ========== AUTO-GENERATED: Field Operations (DO NOT EDIT) ==========")
-  
+
   # Renames section
   if (length(renames) > 0) {
     lines <- c(lines, "# Renames (from interactive field mapping)")
@@ -664,19 +664,30 @@ generate_auto_generated_section <- function(measure_name, renames, drops) {
     }
     lines <- c(lines, "")
   }
-  
+
+  # Assignments section (required field values added automatically)
+  if (length(assignments) > 0) {
+    lines <- c(lines, "# Assignments (required field values \u2014 added automatically by wizaRdry)")
+    for (i in seq_along(assignments)) {
+      field <- names(assignments)[i]
+      value <- assignments[i]
+      lines <- c(lines, sprintf("%s$%s <- %s", measure_name, field, value))
+    }
+    lines <- c(lines, "")
+  }
+
   # Drops section
   if (length(drops) > 0) {
     lines <- c(lines, "# Drops (from interactive field mapping + standard cleanup)")
     drop_vector <- paste0("c('", paste(drops, collapse = "', '"), "')")
-    lines <- c(lines, sprintf("%s <- %s[, !names(%s) %%in%% %s, drop = FALSE]", 
+    lines <- c(lines, sprintf("%s <- %s[, !names(%s) %%in%% %s, drop = FALSE]",
                              measure_name, measure_name, measure_name, drop_vector))
   } else {
     lines <- c(lines, "# No fields marked for drop")
   }
-  
+
   # Footer
   lines <- c(lines, "# =====================================================================")
-  
+
   return(lines)
 }

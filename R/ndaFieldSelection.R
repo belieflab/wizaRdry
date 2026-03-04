@@ -72,54 +72,63 @@ select_nda_fields <- function(validation_state,
     include_required = FALSE
   )
   
-  # Interactive prompt for other required fields (only if in interactive mode)
-  if (interactive_mode && length(missing_required) > 0) {
-    message("\nThe following NDA required fields exist in this structure but are not currently selected:")
-    message(paste("  ", paste(missing_required, collapse = ", ")))
+  # Auto-add required fields — required means required, no prompt needed
+  if (length(missing_required) > 0) {
+    selected_fields <- unique(c(selected_fields, missing_required))
+    user_choices$include_required <- TRUE
 
-    # Safe readline with error handling
-    safe_readline <- function(prompt, default = "n") {
+    # Safe readline with error handling (defined locally for this scope)
+    safe_readline_local <- function(prompt, default = "") {
       result <- tryCatch({
         readline(prompt = prompt)
       }, error = function(e) {
         return(default)
+      }, interrupt = function(e) {
+        message("\nInput cancelled")
+        return(default)
       })
-      if (is.null(result) || result == "") default else result
+      if (is.null(result) || trimws(result) == "") default else result
     }
-    
-    user_input <- safe_readline(
-      prompt = sprintf("Would you like to include these %d required field(s)? (y/n): ", 
-                       length(missing_required)),
-      default = "n"
-    )
-    
-    # Validate input
-    attempts <- 0
-    while (!tolower(user_input) %in% c("y", "n", "yes", "no") && attempts < 3) {
-      user_input <- safe_readline(
-        prompt = "Please enter 'y' for yes or 'n' for no: ",
-        default = "n"
-      )
-      attempts <- attempts + 1
-    }
-    
-    # Default to "n" if still invalid after 3 attempts
-    if (!tolower(user_input) %in% c("y", "n", "yes", "no")) {
-      user_input <- "n"
-      if (verbose) message("Invalid input - defaulting to 'n' (skip fields)")
-    }
-    
-    user_choices$include_required <- tolower(user_input) %in% c("y", "yes")
-    
-    if (user_choices$include_required) {
-      selected_fields <- unique(c(selected_fields, missing_required))
-      if (verbose) {
-        message(sprintf("Added %d required field(s) to selection.", 
-                       length(missing_required)))
+
+    # Collect value assignments for remediation script
+    assignments <- c()
+
+    for (field in missing_required) {
+      # Look up metadata from nda_structure$dataElements
+      field_row   <- elements[elements$name == field, ]
+      value_range <- if (nrow(field_row) > 0 && !is.na(field_row$valueRange[1])) field_row$valueRange[1] else ""
+      notes       <- if (nrow(field_row) > 0 && !is.na(field_row$notes[1]))      field_row$notes[1]      else ""
+      desc        <- if (nrow(field_row) > 0 && !is.na(field_row$description[1])) field_row$description[1] else ""
+
+      message(sprintf("\nRequired field auto-added: %s", field))
+      if (nchar(desc) > 0)        message(sprintf("  Description: %s", desc))
+      if (nchar(value_range) > 0) message(sprintf("  Value range: %s", value_range))
+      if (nchar(notes) > 0)       message(sprintf("  Notes:       %s", notes))
+
+      if (interactive_mode) {
+        val <- safe_readline_local(
+          prompt = sprintf("  Enter value for %s$%s (Enter to leave as NA): ",
+                           validation_state$measure_name, field),
+          default = ""
+        )
+        if (nchar(trimws(val)) > 0) {
+          assignments[field] <- trimws(val)
+        }
       }
-    } else {
-      if (verbose) {
-        message("Skipping required fields. Note: These fields may be needed for NDA submission.")
+    }
+
+    # Write assignments to remediation script
+    if (length(assignments) > 0) {
+      script_path <- sprintf("./nda/%s/%s.R",
+                             validation_state$api,
+                             validation_state$measure_name)
+      if (file.exists(script_path)) {
+        update_cleaning_script(script_path, validation_state$measure_name,
+                               renames = c(), drops = c(), assignments = assignments,
+                               verbose = verbose)
+        message(sprintf("  Written to remediation script: %s", script_path))
+      } else {
+        if (verbose) message(sprintf("  Script not found, skipping write: %s", script_path))
       }
     }
   }

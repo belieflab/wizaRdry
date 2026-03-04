@@ -597,46 +597,16 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     ndar_required_in_structure <- character(0)
   }
   
-  # In interactive mode, prompt user to include other required fields that exist in structure
+  # Silent auto-add — required fields are always included
   # SKIP if skip_prompts=TRUE (when called from create_nda_files with pre-selected fields)
-  if (!skip_prompts && interactive_mode && length(ndar_required_in_structure) > 0) {
-    # Check which ones are not already in selected_columns
+  if (!skip_prompts && length(ndar_required_in_structure) > 0) {
     missing_required_in_structure <- setdiff(ndar_required_in_structure, selected_columns)
-    
+
     if (length(missing_required_in_structure) > 0) {
-      message("\nThe following NDA required fields exist in this structure but are not currently selected:")
-      message(paste("  ", paste(missing_required_in_structure, collapse = ", ")))
-      
-      # Helper function for safe readline
-      safe_readline <- function(prompt, default = "") {
-        if (!interactive()) return(default)
-        result <- tryCatch({
-          readline(prompt = prompt)
-        }, error = function(e) default)
-        if (is.null(result) || result == "") default else result
-      }
-      
-      user_input <- safe_readline(
-        prompt = sprintf("Would you like to include these %d required field(s)? (y/n): ", 
-                         length(missing_required_in_structure)),
-        default = "y"
-      )
-      
-      # Validate input
-      while (!tolower(user_input) %in% c("y", "n", "yes", "no")) {
-        user_input <- safe_readline(
-          prompt = "Please enter 'y' for yes or 'n' for no: ",
-          default = "y"
-        )
-      }
-      
-      if (tolower(user_input) %in% c("y", "yes")) {
-        selected_columns <- c(selected_columns, missing_required_in_structure)
-        message(sprintf("Added %d required field(s) to selected columns.", 
-                       length(missing_required_in_structure)))
-      } else {
-        message("Skipping required fields. Note: These fields may be needed for NDA submission.")
-      }
+      message(sprintf("\nAdding %d NDA required field(s) to selected columns: %s",
+                      length(missing_required_in_structure),
+                      paste(missing_required_in_structure, collapse = ", ")))
+      selected_columns <- c(selected_columns, missing_required_in_structure)
     }
   }
   

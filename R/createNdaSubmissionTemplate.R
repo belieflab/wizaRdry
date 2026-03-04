@@ -237,37 +237,16 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     # This removes any fields that were excluded (e.g., DCC fields when dcc=FALSE)
     template <- template[, intersect(selected_fields, names(template)), drop = FALSE]
     template_cols <- names(template)
-  } else if (interactive() && length(ndar_required_in_structure) > 0 && !skip_prompts) {
-    # Original interactive prompt logic (only when NOT using pre-selected fields)
+  } else if (length(ndar_required_in_structure) > 0 && !skip_prompts) {
+    # Silent auto-add — required fields are always included
     missing_required_in_structure <- setdiff(ndar_required_in_structure, template_cols)
-    
+
     if (length(missing_required_in_structure) > 0) {
-      message("\nThe following NDA required fields exist in this structure but are not in the template:")
-      message(paste("  ", paste(missing_required_in_structure, collapse = ", ")))
-      
-      user_input <- readline(
-        prompt = sprintf("Would you like to include these %d required field(s)? (y/n): ", 
-                         length(missing_required_in_structure))
-      )
-      
-      # Validate input
-      while (!tolower(user_input) %in% c("y", "n", "yes", "no")) {
-        user_input <- readline(
-          prompt = "Please enter 'y' for yes or 'n' for no: "
-        )
-      }
-      
-      if (tolower(user_input) %in% c("y", "yes")) {
-        # Add missing required fields with NA values
-        for (field in missing_required_in_structure) {
-          template[[field]] <- NA
-        }
-        message(sprintf("Added %d required field(s) to template.", 
-                       length(missing_required_in_structure)))
-        template_cols <- names(template)  # Update after adding fields
-      } else {
-        message("Skipping required fields. Note: These fields may be needed for NDA submission.")
-      }
+      message(sprintf("\nAdding %d NDA required field(s) to template: %s",
+                      length(missing_required_in_structure),
+                      paste(missing_required_in_structure, collapse = ", ")))
+      for (field in missing_required_in_structure) template[[field]] <- NA
+      template_cols <- names(template)
     }
   }
   
