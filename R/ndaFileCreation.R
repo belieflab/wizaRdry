@@ -280,6 +280,67 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
         warning(sprintf("Error writing subject count: %s", e$message))
       })
 
+      # STEP 4D: Category and description template (always created for new structures)
+      tryCatch({
+        cat_path <- sprintf("./tmp/%s_category-and-description.xlsx", measure_name)
+        wb <- openxlsx::createWorkbook()
+
+        # Sheet 1: Filled template row
+        openxlsx::addWorksheet(wb, "Category and Description Templa")
+        template_df <- data.frame(
+          `Structure Title`  = "",
+          `Shortname`        = measure_name,
+          `Category (see Categories Tab)` = "",
+          `Description(One or two sentences about the purpose of the structure/measure/assessment/questionnaire)` = "",
+          `Reference`        = "",
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+        openxlsx::writeData(wb, "Category and Description Templa", template_df, startRow = 1)
+        headerStyle <- openxlsx::createStyle(textDecoration = "bold")
+        openxlsx::addStyle(wb, "Category and Description Templa", headerStyle,
+                           rows = 1, cols = 1:5, gridExpand = TRUE)
+
+        # Sheet 2: Categories reference list
+        openxlsx::addWorksheet(wb, "Categories")
+        categories_df <- data.frame(
+          `Category List` = c(
+            "ADHD","Abuse","Acoustics","Activity","Addiction","Adverse Events",
+            "Aggression","Anger","Anxiety","Arousal","Attention","Behavior",
+            "Body Image","Cognitive","Conflict","Coping","DTI","DTI, MRI, fMRI",
+            "Delusions","Demographics","Depression","Diagnostic","EEG","EGG","EMG",
+            "ERP","Eating Disorder","Emotions","Enrollment","Entry Form","Evaluated",
+            "Exit Form","Experimental","Exposure","Eye Tracking","Fatigue","Fear",
+            "Food","Gen Test","Hallucinations","IQ","Life Events","Loneliness","MEG",
+            "MRI","Mania","Med History","Mood","Network","Neurophysiology","OCD",
+            "Omics","PTSD","Pain","Panic","Parenting","Perception","Personality",
+            "Phobia","Phys Characteristics","Phys Exam","Pleasure","Psychophysiology",
+            "Psychosis","Quality of Life","Questionnaire","Relationships",
+            "Resolve Identifiers","Satisfaction","Seizure","Self-Harm","Sensory",
+            "Sexuality","Side Effects","Sleep","Social Adjustment",
+            "Social Responsiveness","Social Support","Socioeconomic","Spectroscopy",
+            "Speech-Language","Stigma","Stress","Substance Use","Suicide","Summary",
+            "Task Based","Taste","Temperament","Trauma","Treatment","Victimization",
+            "Violence","Vision","Well-Being","X-Ray"
+          ),
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+        openxlsx::writeData(wb, "Categories", categories_df, startRow = 1)
+        headerStyle2 <- openxlsx::createStyle(textDecoration = "bold")
+        openxlsx::addStyle(wb, "Categories", headerStyle2, rows = 1, cols = 1)
+
+        openxlsx::saveWorkbook(wb, cat_path, overwrite = TRUE)
+
+        if (!verbose) {
+          message(sprintf("[OK] ./tmp/%s_category-and-description.xlsx", measure_name))
+        } else {
+          message(sprintf("[OK] Category/description template created: %s", cat_path))
+        }
+      }, error = function(e) {
+        warning(sprintf("Error creating category/description template: %s", e$message))
+      })
+
     } else {
       # EXISTING structure: Create submission file (and data definition if modified)
       
