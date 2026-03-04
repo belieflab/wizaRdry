@@ -263,7 +263,23 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
       }, error = function(e) {
         warning(sprintf("Error creating data definition: %s", e$message))
       })
-      
+
+      # STEP 4C: Subject count (always written for new structures)
+      tryCatch({
+        df <- validation_state$get_df()
+        id_col <- if ("src_subject_id" %in% names(df)) "src_subject_id" else "subjectkey"
+        n_subjects <- length(unique(df[[id_col]]))
+        count_path <- sprintf("./tmp/%s_subject_count.txt", measure_name)
+        writeLines(as.character(n_subjects), count_path)
+        if (!verbose) {
+          message(sprintf("[OK] ./tmp/%s_subject_count.txt (%d unique subjects)", measure_name, n_subjects))
+        } else {
+          message(sprintf("[OK] Subject count written: %d unique subjects -> %s", n_subjects, count_path))
+        }
+      }, error = function(e) {
+        warning(sprintf("Error writing subject count: %s", e$message))
+      })
+
     } else {
       # EXISTING structure: Create submission file (and data definition if modified)
       
