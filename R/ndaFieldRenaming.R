@@ -532,8 +532,7 @@ process_unexpected_fields <- function(df, elements, structure_name, measure_name
       result$df <- apply_field_rename(result$df, field, action$target, verbose)
       result$renamed_fields <- c(result$renamed_fields, field)
       # Store as named vector: old_name = new_name
-      names(result$renames)[length(result$renames) + 1] <- field
-      result$renames[length(result$renames)] <- action$target
+      result$renames <- c(result$renames, stats::setNames(action$target, field))
     } else if (action$action == "drop") {
       result$columns_to_drop <- c(result$columns_to_drop, field)
     }

@@ -6,7 +6,7 @@
 \alias{wizaRdry-package}
 \title{wizaRdry: A Magical Framework for Collaborative & Reproducible Data Analysis}
 \description{
-A comprehensive data analysis framework for NIH-funded research that streamlines workflows for both data cleaning and preparing NIH Data Archive ('NDA') submission templates. Provides unified access to multiple data sources ('REDCap', 'MongoDB', 'Qualtrics') through interfaces to their APIs, with specialized functions for data cleaning, filtering, merging, and parsing. Features automatic validation, field harmonization, and memory-aware processing to enhance reproducibility in multi-site collaborative research as described in Mittal et al. (2021) \doi{10.20900/jpbs.20210011}.
+A comprehensive data analysis framework for NIH-funded research that streamlines workflows for both data cleaning and preparing NIH Data Archive ('NDA') submission templates. Provides unified access to multiple data sources ('REDCap', 'MongoDB', 'Qualtrics', 'SQL', 'ORACLE') through interfaces to their APIs, with specialized functions for data cleaning, filtering, merging, and parsing. Features automatic validation, field harmonization, and memory-aware processing to enhance reproducibility in multi-site collaborative research as described in Mittal et al. (2021) \doi{10.20900/jpbs.20210011}.
 }
 \seealso{
 Useful links:
