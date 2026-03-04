@@ -789,6 +789,9 @@ Description <- R6::R6Class("Description",
       self$validate()
       invisible(self)
     }
+  ),
+  active = list(
+    value = function() self$text %||% ""
   )
 )
 
