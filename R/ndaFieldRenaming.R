@@ -485,7 +485,13 @@ process_unexpected_fields <- function(df, elements, structure_name, measure_name
       }
       next
     }
-    
+
+    # Auto-drop DCC and internal wizaRdry fields — never belong in NDA structures
+    if (field %in% NDAR_SKIP_FIELDS) {
+      result$columns_to_drop <- c(result$columns_to_drop, field)
+      next
+    }
+
     # Calculate similarity scores
     similarities <- calculate_field_similarities(field, elements$name, verbose = FALSE)
     

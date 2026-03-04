@@ -70,6 +70,24 @@ DCC_RECOMMENDED_FIELDS <- c(
 #' @noRd
 DCC_FIELDS <- c(DCC_REQUIRED_FIELDS, DCC_RECOMMENDED_FIELDS)
 
+#' Fields to automatically drop during unexpected field processing
+#'
+#' @description
+#' Combined list of DCC fields (from ndar_subject01) and internal wizaRdry
+#' tracking fields that should never be included in NDA data structures.
+#' These are silently dropped during interactive field mapping without
+#' prompting the user.
+#'
+#' @keywords internal
+#' @noRd
+NDAR_SKIP_FIELDS <- c(
+  DCC_FIELDS,                      # race, phenotype, subsiteid, etc.
+  "state",                         # Internal wizaRdry tracking field
+  "lost_to_followup",              # Internal wizaRdry tracking field
+  "lost_to_follow-up",             # Hyphenated variant
+  "study_status"                   # Internal wizaRdry tracking field
+)
+
 .onLoad <- function(libname, pkgname) {
   options(mongolite.quiet = TRUE)
   options(wizaRdry.nda_base_url = "https://nda.nih.gov/api/datadictionary/v2")

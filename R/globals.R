@@ -14,5 +14,6 @@ utils::globalVariables(c(
   "NdaDataStructure",  # R6 class for NDA field definitions
   "DCC_REQUIRED_FIELDS",  # DCC required fields constant
   "DCC_RECOMMENDED_FIELDS",  # DCC recommended fields constant
-  "DCC_FIELDS"  # All DCC fields constant
+  "DCC_FIELDS",  # All DCC fields constant
+  "NDAR_SKIP_FIELDS"  # DCC + internal fields to auto-drop
 ))

@@ -74,11 +74,9 @@ select_nda_fields <- function(validation_state,
   
   # Interactive prompt for other required fields (only if in interactive mode)
   if (interactive_mode && length(missing_required) > 0) {
-    if (verbose) {
-      message("\nThe following NDA required fields exist in this structure but are not currently selected:")
-      message(paste("  ", paste(missing_required, collapse = ", ")))
-    }
-    
+    message("\nThe following NDA required fields exist in this structure but are not currently selected:")
+    message(paste("  ", paste(missing_required, collapse = ", ")))
+
     # Safe readline with error handling
     safe_readline <- function(prompt, default = "n") {
       result <- tryCatch({
