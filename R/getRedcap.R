@@ -325,13 +325,15 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
   message("")
 
   # 1. First, get the superkey data (always using "label")
+  # IMPORTANT: Do NOT filter superkey by redcap_event_name here.
+  # We want superkey values consolidated across ALL events for each subject,
+  # then propagated to the instrument data (which may be event-filtered).
   superkey_response <- REDCapR::redcap_read(
     redcap_uri = uri,
     token = token,
     forms = config$redcap$superkey,
     batch_size = batch_size,
     records = records,
-    events = redcap_event_name,  # Filter by event names if specified
     raw_or_label = "label",  # Always use label for superkey
     raw_or_label_headers = "raw",
     verbose = FALSE
@@ -735,24 +737,24 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
       if (na_counts > 0) {
         message(sprintf("Note: Found %d rows with NA values in %s", na_counts, complete_var))
       }
-      # If complete is TRUE, keep only complete records
-      # If complete is FALSE, keep only incomplete records
+      # If complete is TRUE, keep only complete records (exclude NA)
+      # If complete is FALSE, keep only incomplete records (exclude NA)
       if (is.logical(complete)) {
         if (complete) {
           message("Filtering for complete records only...")
           # Handle both raw (1) and label ("Complete") formats
           if (raw_or_label == "raw") {
-            df <- df[df[[complete_var]] == 2, ]
+            df <- df[!is.na(df[[complete_var]]) & df[[complete_var]] == 2, ]
           } else {
-            df <- df[df[[complete_var]] == "Complete", ]
+            df <- df[!is.na(df[[complete_var]]) & df[[complete_var]] == "Complete", ]
           }
         } else {
           message("Filtering for incomplete records only...")
           # Handle both raw (0) and label ("Incomplete") formats
           if (raw_or_label == "raw") {
-            df <- df[df[[complete_var]] == 0, ]
+            df <- df[!is.na(df[[complete_var]]) & df[[complete_var]] == 0, ]
           } else {
-            df <- df[df[[complete_var]] == "Incomplete", ]
+            df <- df[!is.na(df[[complete_var]]) & df[[complete_var]] == "Incomplete", ]
           }
         }
       } else {
