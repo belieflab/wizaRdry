@@ -724,6 +724,17 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       required_field_metadata <- enhancement_result$required_metadata
       recommended_field_metadata <- enhancement_result$recommended_metadata  # NEW
 
+      # Save redcap_event_name values before removal for possible auto-mapping later
+      saved_event_names <- NULL
+      if (api == "redcap" && "redcap_event_name" %in% names(df)) {
+        event_vals <- unique(na.omit(df$redcap_event_name))
+        if (length(event_vals) > 1) {
+          saved_event_names <- df$redcap_event_name
+          if (verbose) message(sprintf("[AUTO] Saved %d event name values for potential visit/week mapping",
+                                       length(saved_event_names)))
+        }
+      }
+
       # REMOVE STANDARD OUTPUT FIELDS while preserving categorical variables
       # This must happen BEFORE any NDA processing to ensure these fields
       # never make it into submission templates or data definitions
@@ -990,8 +1001,27 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         ndar_additions <- character(0)
       }
 
+      # Auto-map redcap_event_name -> visit or week if NDA structure requires it
+      if (!is.null(saved_event_names) && "dataElements" %in% names(nda_structure)) {
+        nda_field_names <- nda_structure$dataElements$name
+        for (visit_col in c("visit", "week")) {
+          if (visit_col %in% nda_field_names) {
+            current_vals <- if (visit_col %in% names(df)) unique(na.omit(df[[visit_col]])) else character(0)
+            if (length(current_vals) <= 1) {
+              df[[visit_col]] <- saved_event_names
+              base::assign(measure, df, envir = wizaRdry_env)
+              base::assign(measure, df, envir = .GlobalEnv)
+              tryCatch(base::assign(measure, df, envir = origin_env), error = function(e) NULL)
+              message(sprintf("[AUTO] Mapped redcap_event_name -> %s (%d unique event values)",
+                              visit_col, length(unique(na.omit(saved_event_names)))))
+              break
+            }
+          }
+        }
+      }
+
       # EXISTING NDA STRUCTURE - Run full validation
-      validation_state <- ndaValidator(measure, api, limited_dataset, 
+      validation_state <- ndaValidator(measure, api, limited_dataset,
                                        modified_structure = nda_structure,
                                        verbose = verbose,
                                        strict = strict,
