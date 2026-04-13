@@ -462,6 +462,99 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
     }
     cat("\n")
   }
-  
+
   return(df)
+}
+
+#' Recode user-defined missing data codes to the NDA-expected special codes
+#'
+#' @description
+#' For each column in \code{df}, looks up the NDA structure's \code{valueRange}
+#' for that field, extracts the special (non-range) codes the NDA expects, and
+#' replaces any study-specific missing data codes (from config.yml) with those
+#' NDA-defined codes. This runs per-field so the target code matches exactly
+#' what the NDA structure defines for each measure (e.g., -9 from "1::4;-9").
+#'
+#' @param df Data frame
+#' @param config List - config object from validate_config()
+#' @param nda_structure List - NDA structure with a \code{dataElements} data frame
+#' @param verbose Logical - print replacement summary
+#' @return Data frame with user missing codes replaced by NDA special codes
+#' @noRd
+recode_missing_data_codes <- function(df, config, nda_structure, verbose = TRUE) {
+  if (is.null(config) || is.null(config$missing_data_codes)) return(df)
+  if (is.null(nda_structure) || !"dataElements" %in% names(nda_structure)) return(df)
+
+  # Flatten all user-defined codes across all categories into a numeric vector
+  all_user_codes <- unique(suppressWarnings(as.numeric(unlist(config$missing_data_codes))))
+  all_user_codes <- all_user_codes[!is.na(all_user_codes)]
+  if (length(all_user_codes) == 0) return(df)
+
+  elements <- nda_structure$dataElements
+  total_replacements <- 0L
+  affected_cols <- character(0)
+
+  for (col in names(df)) {
+    # Only recode numeric/integer columns that actually contain user missing codes
+    if (!is.numeric(df[[col]]) && !is.integer(df[[col]])) next
+    user_hits <- !is.na(df[[col]]) & df[[col]] %in% all_user_codes
+    if (!any(user_hits)) next
+
+    # Find the NDA field definition for this column
+    field_idx <- which(elements$name == col)
+    if (length(field_idx) == 0) next
+    range_str <- elements$valueRange[field_idx[1]]
+    if (is.null(range_str) || is.na(range_str) || range_str == "") next
+
+    # Extract NDA special codes: values listed after ';' that fall outside the
+    # primary numeric range (e.g., from "1::4;-9" extract -9)
+    nda_special_codes <- .extract_nda_special_codes(range_str)
+    if (length(nda_special_codes) == 0) next
+
+    # Use the most-negative special code as the replacement target
+    # (most negative is typically the generic "missing / not known" code)
+    target_code <- nda_special_codes[which.min(nda_special_codes)]
+
+    n <- sum(user_hits)
+    df[[col]][user_hits] <- target_code
+    total_replacements <- total_replacements + n
+    affected_cols <- c(affected_cols, col)
+  }
+
+  if (verbose && total_replacements > 0) {
+    message(sprintf(
+      "Recoded %d missing value(s) in %d field(s) to NDA-defined special codes: %s",
+      total_replacements, length(affected_cols),
+      paste(affected_cols, collapse = ", ")
+    ))
+  }
+
+  return(df)
+}
+
+#' Extract NDA special (non-range) codes from a valueRange string
+#'
+#' @description
+#' Given a valueRange like "1::4;-9" or "0::3;-8;-9", returns the numeric
+#' codes that are listed explicitly (after ";") and fall outside the primary
+#' contiguous range. These are the NDA-defined special/missing codes.
+#'
+#' @param range_str valueRange string from an NDA data element
+#' @return Numeric vector of special codes outside the primary range
+#' @noRd
+.extract_nda_special_codes <- function(range_str) {
+  if (!grepl(";", range_str)) return(numeric(0))
+  parts <- trimws(strsplit(range_str, ";")[[1]])
+  range_parts   <- parts[grepl("::", parts)]
+  special_parts <- suppressWarnings(as.numeric(parts[!grepl("::", parts)]))
+  special_parts <- special_parts[!is.na(special_parts)]
+
+  # Exclude specials that fall inside the primary numeric range
+  if (length(range_parts) > 0) {
+    bounds <- suppressWarnings(as.numeric(strsplit(range_parts[1], "::")[[1]]))
+    if (length(bounds) == 2 && !any(is.na(bounds))) {
+      special_parts <- special_parts[special_parts < bounds[1] | special_parts > bounds[2]]
+    }
+  }
+  special_parts
 }

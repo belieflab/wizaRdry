@@ -1020,6 +1020,13 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         }
       }
 
+      # Recode study-specific missing data codes to NDA-defined special codes
+      if (!is.null(config$missing_data_codes)) {
+        df <- recode_missing_data_codes(df, config, nda_structure, verbose = verbose)
+        base::assign(measure, df, envir = origin_env)
+        base::assign(measure, df, envir = wizaRdry_env)
+      }
+
       # EXISTING NDA STRUCTURE - Run full validation
       validation_state <- ndaValidator(measure, api, limited_dataset,
                                        modified_structure = nda_structure,
