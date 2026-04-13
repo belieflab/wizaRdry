@@ -19,6 +19,7 @@
 #' @param dcc Logical. If TRUE, include 11 DCC (Data Coordinating Center) fields from ndar_subject01 
 #'   (7 required + 4 recommended). Default FALSE.
 #' @return Prints the time taken for the data request process.
+#' @importFrom stats na.omit
 #' @export
 #' @examples
 #' \dontrun{
