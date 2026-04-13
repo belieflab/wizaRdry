@@ -591,12 +591,44 @@ update_cleaning_script <- function(script_path, measure_name, renames, drops, as
   # Read script
   script_lines <- readLines(script_path, warn = FALSE)
 
-  # Generate new auto-generated section
-  new_section <- generate_auto_generated_section(measure_name, renames, drops, assignments)
-  
-  # Find existing auto-generated section
+  # Find existing auto-generated section first so we can parse and preserve mappings
   auto_gen_start <- grep("^# ========== AUTO-GENERATED: Field Operations", script_lines)
   auto_gen_end <- grep("^# =====================================================================", script_lines)
+
+  # Parse existing renames and drops so they survive the rewrite
+  existing_renames <- c()
+  existing_drops <- character(0)
+
+  if (length(auto_gen_start) > 0 && length(auto_gen_end) > 0) {
+    section_lines <- script_lines[auto_gen_start[1]:auto_gen_end[length(auto_gen_end)]]
+
+    for (line in section_lines) {
+      # Rename lines carry a trailing comment "# Renamed: old -> new"
+      m <- regmatches(line, regexec("# Renamed: (\\w+) -> (\\w+)", line))[[1]]
+      if (length(m) == 3) {
+        existing_renames[m[2]] <- m[3]   # names = old field, value = new field
+        next
+      }
+
+      # Drop lines contain "!names(measure_name) %in% c(...)"
+      drop_m <- regmatches(line, regexec(
+        paste0("!names\\(", measure_name, "\\)\\s*%in%\\s*c\\(([^)]+)\\)"), line))[[1]]
+      if (length(drop_m) == 2) {
+        field_strs <- strsplit(drop_m[2], ",")[[1]]
+        fields <- gsub("['\"]", "", trimws(field_strs))
+        existing_drops <- c(existing_drops, fields[nchar(fields) > 0])
+      }
+    }
+  }
+
+  # Merge: incoming values take precedence; existing fill in everything else
+  merged_renames <- existing_renames
+  for (nm in names(renames)) merged_renames[nm] <- renames[nm]
+
+  merged_drops <- unique(c(existing_drops, drops))
+
+  # Generate new auto-generated section using the fully merged mappings
+  new_section <- generate_auto_generated_section(measure_name, merged_renames, merged_drops, assignments)
   
   if (length(auto_gen_start) > 0 && length(auto_gen_end) > 0) {
     # Replace existing section
