@@ -46,7 +46,10 @@ ValidationState <- R6::R6Class("ValidationState",
     
     #' @field value_range_violations List - fields with value range violations
     value_range_violations = list(),
-    
+
+    #' @field na_violations List - fields with uncoded NA values in constrained ranges
+    na_violations = list(),
+
     #' @field new_fields Character vector - fields in data not in NDA structure
     new_fields = character(),
     
@@ -150,7 +153,24 @@ ValidationState <- R6::R6Class("ValidationState",
       
       invisible(self)
     },
-    
+
+    #' @description
+    #' Add an NA violation for a field with a constrained valueRange
+    #' @param field Field name
+    #' @param value_range The NDA-defined valueRange string for this field
+    #' @param na_count Integer - number of NA values found in this field
+    #' @return Self (invisibly) for method chaining
+    add_na_violation = function(field, value_range, na_count) {
+      self$na_violations[[field]] <- list(
+        value_range = value_range,
+        na_count    = na_count
+      )
+      self$is_modified_structure <- TRUE
+      message(sprintf("[NA VIOLATION] Field '%s': %d NA value(s) in constrained range '%s'",
+                      field, na_count, value_range))
+      invisible(self)
+    },
+
     #' @description
     #' Add violations of a specific type (e.g., DCC violations)
     #' @param type Character - type of violations ("dcc_required", "dcc_recommended", etc.)
@@ -179,8 +199,9 @@ ValidationState <- R6::R6Class("ValidationState",
     #' Check if structure has modifications requiring data definition
     #' @return Logical
     has_modifications = function() {
-      length(self$new_fields) > 0 || 
+      length(self$new_fields) > 0 ||
       length(self$value_range_violations) > 0 ||
+      length(self$na_violations) > 0 ||
       length(self$ndar_subject_additions) > 0
     },
     
@@ -214,11 +235,17 @@ ValidationState <- R6::R6Class("ValidationState",
       }
       
       if (length(self$value_range_violations) > 0) {
-        reasons <- c(reasons, sprintf("%d value range difference%s", 
+        reasons <- c(reasons, sprintf("%d value range difference%s",
                                      length(self$value_range_violations),
                                      if(length(self$value_range_violations) > 1) "s" else ""))
       }
-      
+
+      if (length(self$na_violations) > 0) {
+        reasons <- c(reasons, sprintf("%d field%s with uncoded NA values",
+                                     length(self$na_violations),
+                                     if(length(self$na_violations) > 1) "s" else ""))
+      }
+
       if (length(reasons) == 0) {
         return("unmodified")
       }
@@ -236,6 +263,7 @@ ValidationState <- R6::R6Class("ValidationState",
         message = self$get_modification_reason(),
         bypassed_validation = self$bypassed_validation,
         value_range_violations = self$value_range_violations,
+        na_violations = self$na_violations,
         missing_required = self$missing_required,
         warnings = self$warnings,
         errors = self$errors
@@ -261,10 +289,14 @@ ValidationState <- R6::R6Class("ValidationState",
       }
       
       if (length(self$value_range_violations) > 0) {
-        cat(sprintf("  Value Range Violations: %d field(s)\n", 
+        cat(sprintf("  Value Range Violations: %d field(s)\n",
                     length(self$value_range_violations)))
       }
-      
+
+      if (length(self$na_violations) > 0) {
+        cat(sprintf("  Uncoded NA Violations: %d field(s)\n", length(self$na_violations)))
+      }
+
       if (length(self$new_fields) > 0) {
         cat(sprintf("  New Fields: %d\n", length(self$new_fields)))
       }

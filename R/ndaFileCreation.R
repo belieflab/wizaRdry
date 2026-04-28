@@ -189,6 +189,15 @@ create_nda_files <- function(validation_state, measure = NULL, strict = TRUE, ve
           }
         }
       }
+
+      # Show uncoded NA fields
+      if (length(validation_state$na_violations) > 0) {
+        for (field in names(validation_state$na_violations)) {
+          nav <- validation_state$na_violations[[field]]
+          message(sprintf("    - Uncoded NAs in '%s': %d NA value(s) in constrained range '%s'",
+                         field, nav$na_count, nav$value_range))
+        }
+      }
       message("")
     }
     
