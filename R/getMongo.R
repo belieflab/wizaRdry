@@ -302,8 +302,7 @@ validateResults <- function(df, identifier) {
 #'
 #' @importFrom mongolite mongo ssl_options
 #' @importFrom parallel detectCores
-#' @importFrom future plan multisession
-#' @importFrom future future
+#' @importFrom future plan multisession future value
 #' @importFrom future.apply future_lapply
 #' @importFrom dplyr bind_rows
 #' @importFrom utils flush.console
