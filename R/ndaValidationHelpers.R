@@ -134,31 +134,8 @@ check_value_range_violations <- function(state, elements, verbose = FALSE) {
     } else if (verbose) {
       cat("\n  All values within expected range")
     }
-
-    # NA check: raw NAs in constrained fields are not NDA-acceptable
-    na_count <- sum(is.na(df[[col]]))
-    if (na_count > 0) {
-      state$add_na_violation(
-        field       = col,
-        value_range = value_range,
-        na_count    = na_count
-      )
-      violations_detected[[col]] <- c(
-        violations_detected[[col]],
-        list(na_check = list(
-          type        = "na_in_constrained_field",
-          field       = col,
-          value_range = value_range,
-          na_count    = na_count
-        ))
-      )
-      if (verbose) {
-        cat(sprintf("\n  WARN: %d NA value(s) in constrained field (valueRange: %s)", na_count, value_range))
-        cat("\n        Raw NAs are not accepted by NDA — use a missing code or update the data definition.")
-      }
-    }
   }
-
+  
   if (verbose && length(violations_detected) > 0) {
     cat(sprintf("\n\nSummary: %d field(s) with value range issues", 
                length(violations_detected)))
@@ -580,13 +557,7 @@ print_validation_summary <- function(state) {
                    length(state$value_range_violations),
                    paste(names(state$value_range_violations), collapse = ", ")))
   }
-
-  if (length(state$na_violations) > 0) {
-    message(sprintf("- Uncoded NA Values: %d field(s) with NAs in constrained ranges (%s)",
-                   length(state$na_violations),
-                   paste(names(state$na_violations), collapse = ", ")))
-  }
-
+  
   if (length(state$new_fields) > 0) {
     message(sprintf("- New Fields: %d (%s)",
                    length(state$new_fields),
