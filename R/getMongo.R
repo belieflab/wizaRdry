@@ -145,11 +145,14 @@ calculateResourceParams <- function(total_records, mem_info, num_cores) {
 
   # Adjust for very small datasets
   if (total_records < params$chunk_size * 2) {
-    params$chunk_size <- max(500, floor(total_records / 2))
+    params$chunk_size <- max(1, floor(total_records / 2))
   }
 
   # Calculate resulting chunks
-  params$num_chunks <- ceiling(total_records / params$chunk_size)
+  params$num_chunks <- max(1, ceiling(total_records / params$chunk_size))
+
+  # Never spin up more workers than there are chunks
+  params$workers <- min(params$workers, params$num_chunks)
 
   return(params)
 }
@@ -699,11 +702,12 @@ getCollectionsFromConnection <- function(mongo_connection) {
 #' @importFrom stats setNames
 #' @noRd
 taskHarmonization <- function(df, identifier, collection) {
+  if (nrow(df) == 0) return(df)
   # Ensure 'visit' column exists and update it as necessary
   if (!("visit" %in% colnames(df))) {
-    df$visit <- "bl"  # Add 'visit' column with all values as "bl" if it doesn't exist
+    df$visit <- rep("bl", nrow(df))
   } else {
-    df$visit <- ifelse(is.na(df$visit) | df$visit == "", "bl", df$visit)  # Replace empty or NA 'visit' values with "bl"
+    df$visit <- ifelse(is.na(df$visit) | df$visit == "", "bl", df$visit)
   }
 
   # convert dates (from string ("m/d/Y") to iso date format)
