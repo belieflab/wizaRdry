@@ -408,8 +408,8 @@ mongo <- function(collection, ..., database = NULL, identifier = NULL, chunk_siz
   chunk_result <- chunkIds(all_ids, chunk_sz)
   chunks <- chunk_result$chunks
 
-  message(sprintf("Processing: %d chunks x ~%d records in parallel (%d workers)",
-                  length(chunks), params$chunk_size, params$workers))
+  message(sprintf("Processing: %d chunks x ~%d %s in parallel (%d workers)",
+                  length(chunks), params$chunk_size, identifier, params$workers))
 
   # Setup parallel processing with optimized worker count, restoring the
   # caller's existing future plan when mongo() returns
@@ -417,10 +417,12 @@ mongo <- function(collection, ..., database = NULL, identifier = NULL, chunk_siz
   on.exit(future::plan(old_plan), add = TRUE)
   plan(future::multisession, workers = params$workers)
 
-  # Progress message
-  message(sprintf("\nImporting %s records from %s/%s into dataframe...",
+  # Progress message (total_records is the count of distinct identifier
+  # values, not documents - the result may contain more rows than this)
+  message(sprintf("\nImporting %s/%s (%s unique %s) into dataframe...",
+                  database, collection,
                   formatC(total_records, format = "d", big.mark = ","),
-                  database, collection))
+                  identifier))
 
   # Initialize custom progress bar
   pb <- initializeLoadingAnimation(length(chunks))
@@ -439,7 +441,9 @@ mongo <- function(collection, ..., database = NULL, identifier = NULL, chunk_siz
       })
 
       tryCatch({
-        chunk_mongo <- ConnectMongo(collection, database)
+        # Existence already validated once in the main process; skip the
+        # per-chunk listCollections probe
+        chunk_mongo <- connectMongoRaw(collection, database)
         getMongoDataConsistent(chunk_mongo, identifier, chunks[[i]], verbose)
       }, error = function(e) {
         # Return a structured marker instead of NULL so the parent process can
@@ -642,24 +646,49 @@ with_suppressed_output <- function(expr) {
   force(expr)
 }
 
-#' Setup MongoDB connection with suppressed messages
-#' @param collection The name of the collection you want to connect to.
-#' @param database The name of the database you cant to connect to.
-#' @return A mongolite::mongo object representing the connection to the MongoDB collection.
+#' Open a MongoDB connection without the collection-existence probe
+#'
+#' Validates secrets/config and returns a live connection. Skips the
+#' listCollections round-trip done by [ConnectMongo()]; use this on hot paths
+#' (e.g. per-chunk in parallel workers) where existence was already verified
+#' once in the main process.
+#' @param collection Collection to connect to.
+#' @param database Database name; resolved from config when NULL.
+#' @return A mongolite::mongo connection object.
 #' @noRd
-ConnectMongo <- function(collection, database) {
-  # Validate secrets
+connectMongoRaw <- function(collection, database) {
   validate_secrets("mongo")
   config <- validate_config("mongo")
-
-  # Get secrets using get_secret() to keep it secret, keep it safe
   connectionString <- get_secret("connectionString")
 
   if (is.null(database)) {
-    database = config$mongo$database
+    database <- config$mongo$database
   }
 
-  options <- mongoSslOptions()
+  with_suppressed_output(
+    mongolite::mongo(
+      collection = collection,
+      db = database,
+      url = connectionString,
+      verbose = FALSE,
+      options = mongoSslOptions()
+    )
+  )
+}
+
+#' Setup MongoDB connection, validating that the collection exists
+#' @param collection The name of the collection you want to connect to.
+#' @param database The name of the database you want to connect to.
+#' @return A mongolite::mongo object representing the connection to the MongoDB collection.
+#' @noRd
+ConnectMongo <- function(collection, database) {
+  validate_secrets("mongo")
+  config <- validate_config("mongo")
+  connectionString <- get_secret("connectionString")
+
+  if (is.null(database)) {
+    database <- config$mongo$database
+  }
 
   # Probe for the collection list with driver output suppressed
   collections_list <- with_suppressed_output({
@@ -668,7 +697,7 @@ ConnectMongo <- function(collection, database) {
       db = database,
       url = connectionString,
       verbose = FALSE,
-      options = options
+      options = mongoSslOptions()
     )
     cl <- getCollectionsFromConnection(base_connection)
     base_connection$disconnect()
@@ -681,16 +710,8 @@ ConnectMongo <- function(collection, database) {
                  collection, database, paste(collections_list, collapse=", ")))
   }
 
-  # Collection exists - create and return the real connection
-  with_suppressed_output(
-    mongolite::mongo(
-      collection = collection,
-      db = database,
-      url = connectionString,
-      verbose = FALSE,
-      options = options
-    )
-  )
+  # Existence verified - hand off to the lightweight connector
+  connectMongoRaw(collection, database)
 }
 
 #' Safely close MongoDB connection
