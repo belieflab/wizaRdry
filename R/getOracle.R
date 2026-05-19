@@ -483,11 +483,13 @@ oracle <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
 #' Get a list of tables from the Oracle database
 #'
+#' @param pattern Optional regex string; if supplied, only tables whose name
+#'   matches (case-insensitive) are shown.
 #' @param schema Optional schema name to filter tables
 #' @return A data frame with table information
 #' @importFrom odbc dbConnect dbListTables dbDisconnect
 #' @export
-oracle.index <- function(schema = NULL) {
+oracle.index <- function(pattern = NULL, schema = NULL) {
 
   # Validate secrets
   validate_secrets("sql")
@@ -632,14 +634,23 @@ oracle.index <- function(schema = NULL) {
       tables_df <- data.frame()
     }
 
+    # Apply optional grep-style filter
+    if (nrow(tables_df) > 0 && !is.null(pattern)) {
+      tables_df <- tables_df[index_grep(tables_df$Table, pattern), ]
+    }
+
     # Sort by schema and table name
     if (nrow(tables_df) > 0) {
       tables_df <- tables_df[order(tables_df$Schema, tables_df$Table), ]
       return(knitr::kable(tables_df, format = "simple"))
     }
   }
-  
-  message("No tables found")
+
+  if (!is.null(pattern)) {
+    message(sprintf("No tables matching '%s'", pattern))
+  } else {
+    message("No tables found")
+  }
   return(NULL)
 }
 

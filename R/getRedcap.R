@@ -818,11 +818,13 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
 #'
 #' Retrieves a list of all available REDCap forms as a formatted table
 #'
+#' @param pattern Optional regex string; if supplied, only instruments whose
+#'   name or label matches (case-insensitive) are shown.
 #' @return A formatted table (kable) of available REDCap instruments/forms
 #' @importFrom REDCapR redcap_instruments
 #' @importFrom knitr kable
 #' @export
-redcap.index <- function() {
+redcap.index <- function(pattern = NULL) {
   # Load required packages
 
   # Validate secrets
@@ -844,7 +846,17 @@ redcap.index <- function() {
 
     # Check if the operation was successful
     if (forms_result$success) {
-      return(knitr::kable(forms_result$data, format = "simple"))
+      forms <- forms_result$data
+      if (!is.null(pattern)) {
+        nm <- if ("instrument_name" %in% names(forms)) forms$instrument_name else forms[[1]]
+        lbl <- if ("instrument_label" %in% names(forms)) forms$instrument_label else nm
+        forms <- forms[index_grep(nm, pattern) | index_grep(lbl, pattern), ]
+        if (nrow(forms) == 0) {
+          message(sprintf("No REDCap instruments matching '%s'.", pattern))
+          return(NULL)
+        }
+      }
+      return(knitr::kable(forms, format = "simple"))
     } else {
       message("REDCap API returned an error: ", forms_result$status_message)
       return(NULL)

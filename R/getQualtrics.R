@@ -429,6 +429,8 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
 #' surveys pulled down from Qualtrics, with alias and institution information
 #' merged from config.yml where available.
 #'
+#' @param pattern Optional regex string; if supplied, only surveys whose name
+#'   or alias matches (case-insensitive) are shown.
 #' @param institution Optional; the institution identifier to use. If NULL, uses all
 #'   institutions specified in the configuration file (or all available credentials if no config).
 #' @param all Logical; deprecated parameter kept for backward compatibility. All surveys
@@ -439,7 +441,7 @@ qualtricsHarmonization <- function(df, identifier, qualtrics_alias) {
 #'   show the alias and institution; unmapped surveys will show NA for these fields.
 #'
 #' @export
-qualtrics.index <- function(institution = NULL, all = FALSE) {
+qualtrics.index <- function(pattern = NULL, institution = NULL, all = FALSE) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
 
@@ -583,6 +585,17 @@ qualtrics.index <- function(institution = NULL, all = FALSE) {
       surveys <- surveys[surveys$institution == institution, ]
       if (nrow(surveys) == 0) {
         message(paste0("No surveys found for institution '", institution, "'."))
+        options(old_warn)
+        return(invisible(NULL))
+      }
+    }
+
+    # Apply optional grep-style filter (match survey name or alias)
+    if (!is.null(pattern) && nrow(surveys) > 0) {
+      surveys <- surveys[index_grep(surveys$name, pattern) |
+                           index_grep(surveys$alias, pattern), ]
+      if (nrow(surveys) == 0) {
+        message(sprintf("No surveys matching '%s'.", pattern))
         options(old_warn)
         return(invisible(NULL))
       }

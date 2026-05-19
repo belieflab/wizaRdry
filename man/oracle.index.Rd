@@ -4,9 +4,12 @@
 \alias{oracle.index}
 \title{Get a list of tables from the Oracle database}
 \usage{
-oracle.index(schema = NULL)
+oracle.index(pattern = NULL, schema = NULL)
 }
 \arguments{
+\item{pattern}{Optional regex string; if supplied, only tables whose name
+matches (case-insensitive) are shown.}
+
 \item{schema}{Optional schema name to filter tables}
 }
 \value{

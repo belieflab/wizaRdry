@@ -4,9 +4,12 @@
 \alias{qualtrics.index}
 \title{Display table of available Qualtrics surveys}
 \usage{
-qualtrics.index(institution = NULL, all = FALSE)
+qualtrics.index(pattern = NULL, institution = NULL, all = FALSE)
 }
 \arguments{
+\item{pattern}{Optional regex string; if supplied, only surveys whose name
+or alias matches (case-insensitive) are shown.}
+
 \item{institution}{Optional; the institution identifier to use. If NULL, uses all
 institutions specified in the configuration file (or all available credentials if no config).}
 

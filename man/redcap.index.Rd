@@ -4,7 +4,11 @@
 \alias{redcap.index}
 \title{Display table of available REDCap instruments and their labels}
 \usage{
-redcap.index()
+redcap.index(pattern = NULL)
+}
+\arguments{
+\item{pattern}{Optional regex string; if supplied, only instruments whose
+name or label matches (case-insensitive) are shown.}
 }
 \value{
 A formatted table (kable) of available REDCap instruments/forms

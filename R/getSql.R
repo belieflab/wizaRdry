@@ -472,10 +472,12 @@ sql <- function(table_name = NULL, ..., fields = NULL, where_clause = NULL,
 
 #' Get a list of tables from the SQL database
 #'
+#' @param pattern Optional regex string; if supplied, only tables whose name
+#'   matches (case-insensitive) are shown.
 #' @param schema Optional schema name to filter tables
 #' @return A data frame with table information
 #' @export
-sql.index <- function(schema = NULL) {
+sql.index <- function(pattern = NULL, schema = NULL) {
   # Check if required packages are available
   if (!requireNamespace("RMariaDB", quietly = TRUE)) {
     stop("Package 'RMariaDB' is needed for this function to work. Please install it.",
@@ -571,9 +573,17 @@ sql.index <- function(schema = NULL) {
     }
   })
 
+  # Apply optional grep-style filter
+  if (!is.null(tables) && nrow(tables) > 0 && !is.null(pattern)) {
+    tables <- tables[index_grep(tables$Table, pattern), ]
+  }
+
   # Format the result
   if (!is.null(tables) && nrow(tables) > 0) {
     return(knitr::kable(tables, format = "simple"))
+  } else if (!is.null(pattern)) {
+    message(sprintf("No tables matching '%s'", pattern))
+    return(NULL)
   } else {
     message("No tables found")
     return(NULL)

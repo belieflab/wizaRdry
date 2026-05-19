@@ -4,9 +4,12 @@
 \alias{mongo.index}
 \title{Display table of available MongoDB collections}
 \usage{
-mongo.index(database = NULL)
+mongo.index(pattern = NULL, database = NULL)
 }
 \arguments{
+\item{pattern}{Optional regex string; if supplied, only collections whose
+name matches (case-insensitive) are shown.}
+
 \item{database}{Optional; the name of the database to connect to. If NULL, uses the database
 specified in the configuration file.}
 }

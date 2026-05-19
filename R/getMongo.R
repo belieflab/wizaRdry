@@ -771,12 +771,14 @@ taskHarmonization <- function(df, identifier, collection) {
 #'
 #'
 #' Retrieves a list of all available collections in the configured MongoDB database.
+#' @param pattern Optional regex string; if supplied, only collections whose
+#'   name matches (case-insensitive) are shown.
 #' @param database Optional; the name of the database to connect to. If NULL, uses the database
 #'   specified in the configuration file.
 #' @return A character vector containing the names of all available collections
 #'   in the configured MongoDB database.
 #' @export
-mongo.index <- function(database = NULL) {
+mongo.index <- function(pattern = NULL, database = NULL) {
   # Temporarily suppress warnings
   old_warn <- options("warn")
 
@@ -856,6 +858,11 @@ mongo.index <- function(database = NULL) {
       }, "endSessions")
     })
 
+    # Apply optional grep-style filter
+    if (!is.null(pattern)) {
+      result <- result[index_grep(result, pattern)]
+    }
+
     # Display collections in a nice format
     if (length(result) > 0) {
       message(sprintf("Available %s Collections:", toupper(database)))
@@ -875,6 +882,8 @@ mongo.index <- function(database = NULL) {
 
       message("")
       message(sprintf("Total: %d collections", length(result)))
+    } else if (!is.null(pattern)) {
+      message(sprintf("No collections matching '%s' in the database.", pattern))
     } else {
       message("No collections found in the database.")
     }
