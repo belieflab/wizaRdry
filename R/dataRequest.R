@@ -387,25 +387,35 @@ processData <- function(measure, source, csv, rdata, spss, identifier) {
     gc()  # Force garbage collection
   })
 
-  result <- tryCatch({
-    base::source(file_path)  # Execute the cleaning script for the measure
-    # Ensure testSuite is sourced and then called
-    # Call testSuite with identifier
-    testSuite(measure, source, file_path, identifier)
-
-    df_name <- paste0(measure, "_clean")  # Construct the name of the cleaned data frame
-
-    # Assuming createExtract is a function to create data extracts
-    createExtract(base::get(df_name), df_name, csv, rdata, spss)  # Create data extracts
+  source_ok <- tryCatch({
+    base::source(file_path)
+    TRUE
   }, error = function(e) {
-    # Check if identifier is valid (you can modify this logic based on your criteria)
     if (length(identifier) == 0 || all(is.na(identifier))) {
-      message("An error occurred: ", e$message)  # General error message
+      message("An error occurred: ", e$message)
     } else {
-      message("Error with ./clean/", source, "/", measure, ".R: ", e$message)  # Specific error message
+      message("Error in ./clean/", source, "/", measure, ".R: ", e$message)
     }
-    NULL  # Return NULL on error
+    FALSE
   })
+
+  tryCatch({
+    testSuite(measure, source, file_path, identifier)
+  }, error = function(e) {
+    message("testSuite error for ", measure, ": ", e$message)
+  })
+
+  result <- if (source_ok) {
+    df_name <- paste0(measure, "_clean")
+    tryCatch({
+      createExtract(base::get(df_name), df_name, csv, rdata, spss)
+    }, error = function(e) {
+      message("Error creating extract for ", measure, ": ", e$message)
+      NULL
+    })
+  } else {
+    NULL
+  }
 
   return(result)  # Return the result of the processing
 }

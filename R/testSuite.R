@@ -38,10 +38,12 @@ testSuite <- function(measure_alias, measure_type, script_path, super_key) {
   nda_required_variables <- c("src_subject_id", "phenotype", "site", "arm", "visit", "week",
                               "subjectkey", "sex", "interview_date", "interview_age", "state")
 
-  # Perform generic tests
-  checkQualtricsDuplicates(measure_alias, measure_type) # and give allow to View them in a table
-  cleanDataFrameExists(measure_alias, measure_type) #checkin_clean x
-  checkColumnPrefix(measure_alias, measure_type, nda_required_variables, identifier) # checkin_distress
+  # Verify _clean exists before any check that requires the df
+  df_exists <- cleanDataFrameExists(measure_alias, measure_type)
+  if (!isTRUE(df_exists)) return(invisible(NULL))
+
+  checkQualtricsDuplicates(measure_alias, measure_type)
+  checkColumnPrefix(measure_alias, measure_type, nda_required_variables, identifier)
 
   # perform nda-specific tests
   if (identifier == "src_subject_id") {

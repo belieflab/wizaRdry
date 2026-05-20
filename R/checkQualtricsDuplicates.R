@@ -24,9 +24,9 @@ checkQualtricsDuplicates <- function(measure_alias, measure_type, verbose = TRUE
 
   # Ensure required packages are loaded
 
-  # Generate the name of the dataframe and get it
   output_df_name <- paste0(measure_alias, "_clean")
-  df <- base::get(output_df_name)
+  if (!exists(output_df_name, envir = .GlobalEnv)) return(invisible(NULL))
+  df <- base::get(output_df_name, envir = .GlobalEnv)
   
   # possible identifiers
   possible_identifiers <- c("src_subject_id", "workerId", "PROLIFIC_PID", "participantId")
