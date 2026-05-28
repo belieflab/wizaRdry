@@ -509,21 +509,26 @@ recode_missing_data_codes <- function(df, config, nda_structure, verbose = TRUE)
     # Extract NDA special codes: values listed after ';' that fall outside the
     # primary numeric range (e.g., from "1::4;-9" extract -9)
     nda_special_codes <- .extract_nda_special_codes(range_str)
-    if (length(nda_special_codes) == 0) next
 
-    # Use the most-negative special code as the replacement target
-    # (most negative is typically the generic "missing / not known" code)
-    target_code <- nda_special_codes[which.min(nda_special_codes)]
+    if (length(nda_special_codes) == 0) {
+      # No NDA-defined special code for this field; blank it out.
+      # NDA accepts NA for fields that don't define an explicit missing-value code.
+      df[[col]][user_hits] <- NA_real_
+    } else {
+      # Use the most-negative special code as the replacement target
+      # (most negative is typically the generic "missing / not known" code)
+      target_code <- nda_special_codes[which.min(nda_special_codes)]
+      df[[col]][user_hits] <- target_code
+    }
 
     n <- sum(user_hits)
-    df[[col]][user_hits] <- target_code
     total_replacements <- total_replacements + n
     affected_cols <- c(affected_cols, col)
   }
 
   if (verbose && total_replacements > 0) {
     message(sprintf(
-      "Recoded %d missing value(s) in %d field(s) to NDA-defined special codes: %s",
+      "Recoded %d missing value(s) in %d field(s) to NDA special code or NA: %s",
       total_replacements, length(affected_cols),
       paste(affected_cols, collapse = ", ")
     ))
@@ -544,6 +549,7 @@ recode_missing_data_codes <- function(df, config, nda_structure, verbose = TRUE)
 #' @noRd
 .extract_nda_special_codes <- function(range_str) {
   if (!grepl(";", range_str)) return(numeric(0))
+  if (!grepl("::", range_str)) return(numeric(0))  # categorical only (e.g. "1;2;3") — no special codes
   parts <- trimws(strsplit(range_str, ";")[[1]])
   range_parts   <- parts[grepl("::", parts)]
   special_parts <- suppressWarnings(as.numeric(parts[!grepl("::", parts)]))
