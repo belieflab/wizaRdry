@@ -479,8 +479,13 @@ ndaValidator <- function(measure_name,
       message("\n--- PHASE 6: De-identification ---")
     }
     
+    # Always standardize date format to MM/DD/YYYY (required by NDA regardless of pathway)
+    if ("interview_date" %in% names(df)) {
+      df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
+    }
+
     if (limited_dataset) {
-      # Limited dataset mode - skip de-identification
+      # Limited dataset mode - date format standardized above, skip age-capping/date-shifting
       if (!verbose) {
         message("[OK] Using limited dataset (de-identification already applied per your configuration)")
         message("")  # Blank line
@@ -488,23 +493,18 @@ ndaValidator <- function(measure_name,
         message("[OK] Limited dataset mode - de-identification already applied")
       }
     } else {
-      # Normal mode - perform de-identification
-      
+      # Normal mode - date-shifting handled by standardize_dates above, also cap age
+
       # Single intro message
       if (!verbose) {
         message("Applying HIPAA Safe Harbor de-identification to limited dataset")
         message("")
       }
-      
-      # Process date-shifting silently
-      if ("interview_date" %in% names(df)) {
-        df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
-      }
-      
+
       # Process age-capping silently
       if ("interview_age" %in% names(df)) {
         age_result <- standardize_age(df, verbose = verbose, limited_dataset = limited_dataset)
-        
+
         # Defensive check: ensure age_result is a list with df and stats
         if (is.list(age_result) && "df" %in% names(age_result) && "stats" %in% names(age_result)) {
           df <- age_result$df
@@ -517,14 +517,14 @@ ndaValidator <- function(measure_name,
           age_stats <- NULL
         }
       }
-      
+
       # Show completion messages together
       if (!verbose) {
         message("[OK] Date-shifting complete")
         message("[OK] Age-capping complete")
         message("")  # Blank line after completion
       }
-      
+
       if (verbose) {
         message("\nDataset has been de-identified using date-shifting and age-capping.")
       }

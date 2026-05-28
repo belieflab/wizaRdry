@@ -658,6 +658,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   # Add debugging flag
   DEBUG <- FALSE
 
+  config <- validate_config()
+
   if (DEBUG) message("\n[DEBUG] Starting processNda with measure: ", measure, ", api: ", api)
 
   # Check if input is a dataframe
@@ -805,9 +807,6 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         stop(paste("Object", measure, "not found in any environment"))
       }
 
-
-      # Define config so you can access primary key
-      config <- validate_config()
 
       # Remove specified REDCap columns, including configured primary key
       cols_to_remove <- c(config$redcap$primary_key, "redcap_event_name")
@@ -1141,6 +1140,12 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         message("Enhanced new structure with ndar_subject01 required and recommended field metadata")
       }
       
+      # Standardize date format to MM/DD/YYYY before file creation (new structures bypass ndaValidator)
+      if ("interview_date" %in% names(df)) {
+        df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
+        base::assign(measure, df, envir = wizaRdry_env)
+      }
+
       # Create ValidationState for new structure
       validation_state <- ValidationState$new(measure, api, df, mock_structure)
       validation_state$is_new_structure <- TRUE
