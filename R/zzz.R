@@ -88,6 +88,16 @@ NDAR_SKIP_FIELDS <- c(
   "study_status"                   # Internal wizaRdry tracking field
 )
 
+#' Fields exempt from required-field completeness check for ndar_subject01
+#'
+#' @description
+#' When ndar_subject01 itself is submitted, interview_age and interview_date
+#' are structural field definitions, not per-record requirements.
+#'
+#' @keywords internal
+#' @noRd
+NDAR_SUBJECT01_EXEMPT_FIELDS <- c("interview_age", "interview_date")
+
 .onLoad <- function(libname, pkgname) {
   options(mongolite.quiet = TRUE)
   options(wizaRdry.nda_base_url = "https://nda.nih.gov/api/datadictionary/v2")

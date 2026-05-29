@@ -197,13 +197,21 @@ ndaValidator <- function(measure_name,
     }
     
     if (verbose) message("\n--- PHASE 3: Required Field Data Validation ---")
-    
-    # Check field data completeness (only validates 5 super required fields)
+
+    # ndar_subject01 defines interview_age/interview_date for other structures;
+    # they are not per-record requirements when submitting ndar_subject01 itself.
+    effective_super_required <- if (measure_name == "ndar_subject01") {
+      SUPER_REQUIRED_FIELDS[!SUPER_REQUIRED_FIELDS %in% NDAR_SUBJECT01_EXEMPT_FIELDS]
+    } else {
+      SUPER_REQUIRED_FIELDS
+    }
+
+    # Check field data completeness (only validates super required fields)
     data_violations <- check_field_data_completeness(
-      state, 
-      elements, 
-      super_required_fields = SUPER_REQUIRED_FIELDS,
-      strict = strict, 
+      state,
+      elements,
+      super_required_fields = effective_super_required,
+      strict = strict,
       verbose = verbose
     )
     required_violations <- data_violations$required
