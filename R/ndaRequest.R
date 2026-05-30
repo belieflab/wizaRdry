@@ -845,6 +845,17 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       # Update our local df variable for continuing the function
       df <- df_new
 
+      # ndar_subject01 defines interview_date/interview_age for other structures;
+      # drop them when submitting ndar_subject01 itself.
+      if (measure == "ndar_subject01") {
+        cols_to_drop <- intersect(NDAR_SUBJECT01_EXEMPT_FIELDS, names(df))
+        if (length(cols_to_drop) > 0) {
+          df <- df[, !names(df) %in% cols_to_drop, drop = FALSE]
+          base::assign(measure, df, envir = origin_env)
+          base::assign(measure, df, envir = wizaRdry_env)
+        }
+      }
+
       # Verify the changes took effect
       if (DEBUG) {
         if (exists(measure, envir = origin_env)) {
