@@ -348,7 +348,8 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     records = records,
     events = redcap_event_name,  # Filter by event names if specified
     fields = selected_fields,
-    raw_or_label = raw_or_label,  # Use user's preference
+    raw_or_label = if (!is.null(config$redcap$superkey) &&
+                        identical(instrument_name, config$redcap$superkey)) "label" else raw_or_label,
     raw_or_label_headers = "raw",
     verbose = FALSE
   )
