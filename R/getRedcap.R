@@ -368,10 +368,34 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     super_key_cols <- setdiff(super_key_cols, pii_fields)
   }
 
-  # If the requested instrument IS the superkey, return it directly without joins/propagation
+  # If the requested instrument IS the superkey, consolidate across all events.
+  # Using superkey_response (no event filter) ensures fields filled in any event are captured.
+  # If redcap_event_name was specified, restrict to subjects present in that event afterward.
   if (is_superkey_request) {
-    message("Requested instrument matches configured superkey; returning without joins or propagation.")
-    df <- instrument_response$data
+    primary_key_col <- config$redcap$primary_key
+    if ("redcap_event_name" %in% names(superkey_response$data)) {
+      subjects <- unique(superkey_response$data[[primary_key_col]])
+      all_cols <- setdiff(names(superkey_response$data), "redcap_event_name")
+      df <- do.call(rbind, lapply(subjects, function(sid) {
+        rows <- superkey_response$data[superkey_response$data[[primary_key_col]] == sid,
+                                       all_cols, drop = FALSE]
+        result <- rows[1, , drop = FALSE]
+        rownames(result) <- NULL
+        for (col in all_cols) {
+          vals <- rows[[col]][!is.na(rows[[col]])]
+          if (length(vals) > 0) result[[col]] <- vals[1]
+        }
+        result
+      }))
+    } else {
+      df <- superkey_response$data
+    }
+    if (!is.null(redcap_event_name) && nrow(instrument_response$data) > 0 &&
+        primary_key_col %in% names(instrument_response$data)) {
+      event_subjects <- unique(instrument_response$data[[primary_key_col]])
+      df <- df[df[[primary_key_col]] %in% event_subjects, , drop = FALSE]
+    }
+    message("Requested instrument matches configured superkey; returning consolidated data.")
   } else if ("redcap_event_name" %in% names(superkey_response$data)) {
     # First, ensure the primary key exists in the superkey data
     if (!(config$redcap$primary_key %in% names(superkey_response$data))) {

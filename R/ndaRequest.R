@@ -937,6 +937,29 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
     }
 
+    # Coalesce duplicate src_subject_id rows (e.g. when NDA scripts use bind_rows across forms)
+    if (!is.null(df) && is.data.frame(df) && "src_subject_id" %in% names(df)) {
+      non_na_ids <- df$src_subject_id[!is.na(df$src_subject_id)]
+      dupe_ids <- unique(non_na_ids[duplicated(non_na_ids)])
+      if (length(dupe_ids) > 0) {
+        message(sprintf("Coalescing %d duplicate src_subject_id(s) into single rows...", length(dupe_ids)))
+        is_dupe <- df$src_subject_id %in% dupe_ids
+        coalesced <- do.call(rbind, lapply(dupe_ids, function(sid) {
+          rows <- df[!is.na(df$src_subject_id) & df$src_subject_id == sid, , drop = FALSE]
+          result <- rows[1, , drop = FALSE]
+          rownames(result) <- NULL
+          for (col in names(result)) {
+            vals <- rows[[col]][!is.na(rows[[col]])]
+            if (length(vals) > 0) result[[col]] <- vals[1]
+          }
+          result
+        }))
+        df <- rbind(df[!is_dupe, , drop = FALSE], coalesced)
+        base::assign(measure, df, envir = origin_env)
+        base::assign(measure, df, envir = wizaRdry_env)
+      }
+    }
+
     # show missing data that needs filled
     if (DEBUG) message("[DEBUG] Checking for missing data in required fields")
     missing_data <- df[is.na(df$src_subject_id) | is.na(df$subjectkey) | is.na(df$interview_age) | is.na(df$interview_date) | is.na(df$sex), ]
