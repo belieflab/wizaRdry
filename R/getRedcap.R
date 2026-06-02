@@ -390,10 +390,21 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     } else {
       df <- superkey_response$data
     }
-    if (!is.null(redcap_event_name) && nrow(instrument_response$data) > 0 &&
-        primary_key_col %in% names(instrument_response$data)) {
-      event_subjects <- unique(instrument_response$data[[primary_key_col]])
-      df <- df[df[[primary_key_col]] %in% event_subjects, , drop = FALSE]
+    if (!is.null(redcap_event_name) && "redcap_event_name" %in% names(superkey_response$data)) {
+      event_subjects <- unique(
+        superkey_response$data[
+          superkey_response$data$redcap_event_name %in% redcap_event_name,
+          primary_key_col
+        ]
+      )
+      if (length(event_subjects) > 0) {
+        df <- df[df[[primary_key_col]] %in% event_subjects, , drop = FALSE]
+      } else {
+        message(sprintf(
+          "No records found in event(s) '%s' — returning all consolidated subjects.",
+          paste(redcap_event_name, collapse = ", ")
+        ))
+      }
     }
     message("Requested instrument matches configured superkey; returning consolidated data.")
   } else if ("redcap_event_name" %in% names(superkey_response$data)) {
