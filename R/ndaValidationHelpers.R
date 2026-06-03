@@ -405,7 +405,7 @@ check_field_data_completeness <- function(state, elements, super_required_fields
           
           # Show individual messages only in strict mode OR verbose mode
           if (should_show_validation_message(strict, verbose)) {
-            message(sprintf("[RECOMMENDED FIELD ISSUE] %s: All values are NA", field_name))
+            message(sprintf("[RECOMMENDED FIELD NOTE] %s: All values are NA (optional field)", field_name))
           }
         }
       }

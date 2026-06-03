@@ -217,36 +217,37 @@ ndaValidator <- function(measure_name,
     required_violations <- data_violations$required
     recommended_violations <- data_violations$recommended
     
-    # Handle violations based on strict mode
-    has_violations <- length(required_violations) > 0 || length(recommended_violations) > 0
-    
+    # Recommended violations are advisory only — never block the pipeline
+    if (length(recommended_violations) > 0) {
+      for (field_name in names(recommended_violations)) {
+        state$warnings <- c(state$warnings,
+                           sprintf("Recommended field '%s': All values are NA (optional field)",
+                                  field_name))
+      }
+    }
+
+    # Handle violations based on strict mode — only REQUIRED violations block the pipeline
+    has_violations <- length(required_violations) > 0
+
     if (has_violations) {
-      # BOTH strict and lenient: Mark as invalid and store violations
+      # Mark as invalid and store required violations
       state$is_valid <- FALSE
-      
-      # Store violations in state (same for both modes)
+
       for (field_name in names(required_violations)) {
-        state$errors <- c(state$errors, 
-                         sprintf("Required field '%s': %s", 
-                                field_name, 
+        state$errors <- c(state$errors,
+                         sprintf("Required field '%s': %s",
+                                field_name,
                                 required_violations[[field_name]]$issue))
       }
-      
-      for (field_name in names(recommended_violations)) {
-        state$errors <- c(state$errors,
-                         sprintf("Recommended field '%s': %s",
-                                field_name,
-                                recommended_violations[[field_name]]$issue))
-      }
-      
+
       if (strict) {
         # STRICT MODE: Stop processing, skip remaining phases
-        
+
         # Non-verbose output
         if (!verbose) {
           message("")  # Blank line
           message("[ERROR] Field validation failed:\n")
-          
+
           if (length(required_violations) > 0) {
             message("  Required Fields:")
             for (field_name in names(required_violations)) {
@@ -255,22 +256,13 @@ ndaValidator <- function(measure_name,
             }
             message("")
           }
-          
-          if (length(recommended_violations) > 0) {
-            message("  Recommended Fields (strict mode):")
-            for (field_name in names(recommended_violations)) {
-              violation <- recommended_violations[[field_name]]
-              message(sprintf("    - %s: %s", field_name, violation$issue))
-            }
-            message("")
-          }
-          
-          total_violations <- length(required_violations) + length(recommended_violations)
+
+          total_violations <- length(required_violations)
           message(sprintf("[ERROR] Validation failed with %d field violation%s",
                          total_violations,
                          if (total_violations > 1) "s" else ""))
           message("")  # Blank line
-          
+
           # Skip remaining phases
           message("\n=== STEP 3: De-identifying Data ===")
           message("[SKIPPED - Validation failed]")
@@ -279,20 +271,20 @@ ndaValidator <- function(measure_name,
           message("[SKIPPED - Validation failed]")
           message("")
         }
-        
+
         # Return early with failed state
         return(state)
-        
+
       } else {
         # LENIENT MODE: Show warnings but continue processing
-        state$warnings <- c(state$warnings, 
-                           sprintf("Found %d field(s) with missing data", 
-                                  length(required_violations) + length(recommended_violations)))
-        
+        state$warnings <- c(state$warnings,
+                           sprintf("Found %d required field(s) with missing data",
+                                  length(required_violations)))
+
         if (!verbose) {
           message("")  # Blank line
           message("[WARN] Field validation failed (lenient mode):\n")
-          
+
           if (length(required_violations) > 0) {
             message("  Required Fields:")
             for (field_name in names(required_violations)) {
@@ -301,17 +293,8 @@ ndaValidator <- function(measure_name,
             }
             message("")
           }
-          
-          if (length(recommended_violations) > 0) {
-            message("  Recommended Fields:")
-            for (field_name in names(recommended_violations)) {
-              violation <- recommended_violations[[field_name]]
-              message(sprintf("    - %s: %s", field_name, violation$issue))
-            }
-            message("")
-          }
-          
-          total_violations <- length(required_violations) + length(recommended_violations)
+
+          total_violations <- length(required_violations)
           message(sprintf("[WARN] Validation failed with %d field violation%s (continuing anyway)",
                          total_violations,
                          if (total_violations > 1) "s" else ""))
