@@ -104,6 +104,17 @@ to.csv <- function(df, df_name = NULL, path = ".", skip_prompt = TRUE) { # set d
   # Construct the file path
   file_path <- file.path(tmp_path, paste0(filename, '.csv'))
 
+  # Flatten any list-type columns — write.csv can't serialize them
+  list_cols <- vapply(df, is.list, logical(1))
+  if (any(list_cols)) {
+    df[list_cols] <- lapply(df[list_cols], function(col) {
+      sapply(col, function(x) {
+        if (is.null(x) || (length(x) == 1 && is.na(x))) NA_character_
+        else paste(x, collapse = "|")
+      })
+    })
+  }
+
   # Write the DataFrame to a CSV file
   write.csv(df, file_path, row.names = FALSE, quote = TRUE)
 
