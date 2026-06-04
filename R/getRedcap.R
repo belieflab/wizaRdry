@@ -401,7 +401,7 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
         df <- df[df[[primary_key_col]] %in% event_subjects, , drop = FALSE]
       } else {
         message(sprintf(
-          "No records found in event(s) '%s' — returning all consolidated subjects.",
+          "No records found in event(s) '%s' -- returning all consolidated subjects.",
           paste(redcap_event_name, collapse = ", ")
         ))
       }
