@@ -1351,10 +1351,10 @@ processRequiredFields <- function(df, required_elements, verbose = FALSE) {
       conversion_func <- as.character
     } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
       default_value <- NA_integer_
-      conversion_func <- as.integer
+      conversion_func <- function(x) suppressWarnings(as.integer(as.numeric(x)))
     } else if (grepl("Float", col_type, ignore.case = TRUE)) {
       default_value <- NA_real_
-      conversion_func <- as.numeric
+      conversion_func <- function(x) suppressWarnings(as.numeric(x))
     } else if (grepl("Date", col_type, ignore.case = TRUE)) {
       default_value <- NA_character_
       conversion_func <- as.character
@@ -1433,10 +1433,10 @@ processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) 
       conversion_func <- as.character
     } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
       default_value <- NA_integer_
-      conversion_func <- as.integer
+      conversion_func <- function(x) suppressWarnings(as.integer(as.numeric(x)))
     } else if (grepl("Float", col_type, ignore.case = TRUE)) {
       default_value <- NA_real_
-      conversion_func <- as.numeric
+      conversion_func <- function(x) suppressWarnings(as.numeric(x))
     } else if (grepl("Date", col_type, ignore.case = TRUE)) {
       default_value <- NA_character_
       conversion_func <- as.character
