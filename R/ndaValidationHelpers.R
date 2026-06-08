@@ -207,6 +207,7 @@ detect_new_fields <- function(df, elements, dcc = FALSE) {
 #' @noRd
 get_violations <- function(value, range_str) {
   if (!is.atomic(value)) return(character(0))
+  if (is.logical(value)) value <- as.integer(value)
   if (is.null(range_str) || is.na(range_str) || range_str == "") return(character(0))
   
   # First check if there are non-numeric values (when expected numeric)

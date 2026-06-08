@@ -1028,6 +1028,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
     }
 
+    # Coerce logical columns to integer (TRUE→1, FALSE→0) — NDA requires 0/1 not booleans
+    if (!is.null(df) && is.data.frame(df)) {
+      logical_cols <- names(df)[vapply(df, is.logical, logical(1))]
+      if (length(logical_cols) > 0) {
+        for (col in logical_cols) df[[col]] <- as.integer(df[[col]])
+        base::assign(measure, df, envir = origin_env)
+        base::assign(measure, df, envir = wizaRdry_env)
+      }
+    }
+
     # Re-integrate ndaValidator with proper environment management
     if (DEBUG) message("[DEBUG] Running validation")
 
