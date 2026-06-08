@@ -951,10 +951,17 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (any(idx)) {
         n <- sum(idx)
         df$sex[idx] <- sex_map[df$sex[idx]]
-        base::assign(measure, df, envir = origin_env)
-        base::assign(measure, df, envir = wizaRdry_env)
         message(sprintf("Normalized %d 'sex' value(s) to NDA codes (M/F/O/NR)", n))
       }
+      # Zero out anything still not a valid NDA sex code — junk must never reach the validator
+      valid_sex <- c("M", "F", "O", "NR")
+      junk_mask <- !is.na(df$sex) & !df$sex %in% valid_sex
+      if (any(junk_mask)) {
+        df$sex[junk_mask] <- NA_character_
+        message(sprintf("Coerced %d unrecognized 'sex' value(s) to NA", sum(junk_mask)))
+      }
+      base::assign(measure, df, envir = origin_env)
+      base::assign(measure, df, envir = wizaRdry_env)
     }
 
     # Normalize handedness values to NDA codes (R/L/B)
@@ -970,10 +977,17 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       if (any(idx)) {
         n <- sum(idx)
         df$handedness[idx] <- hand_map[df$handedness[idx]]
-        base::assign(measure, df, envir = origin_env)
-        base::assign(measure, df, envir = wizaRdry_env)
         message(sprintf("Normalized %d 'handedness' value(s) to NDA codes (R/L/B)", n))
       }
+      # Zero out anything still not a valid NDA handedness code
+      valid_hand <- c("R", "L", "B", "999", "888", "777", "555")
+      junk_mask <- !is.na(df$handedness) & !df$handedness %in% valid_hand
+      if (any(junk_mask)) {
+        df$handedness[junk_mask] <- NA_character_
+        message(sprintf("Coerced %d unrecognized 'handedness' value(s) to NA", sum(junk_mask)))
+      }
+      base::assign(measure, df, envir = origin_env)
+      base::assign(measure, df, envir = wizaRdry_env)
     }
 
     # Coalesce duplicate src_subject_id rows (e.g. when NDA scripts use bind_rows across forms)
@@ -1390,7 +1404,14 @@ processRequiredFields <- function(df, required_elements, verbose = FALSE) {
       conversion_func <- as.character
     } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
       default_value <- NA_integer_
-      conversion_func <- function(x) suppressWarnings(as.integer(as.numeric(x)))
+      conversion_func <- function(x) {
+        if (is.logical(x)) return(as.integer(x))
+        if (is.character(x)) {
+          x[x %in% c("TRUE", "true", "True")]    <- "1"
+          x[x %in% c("FALSE", "false", "False")] <- "0"
+        }
+        suppressWarnings(as.integer(as.numeric(x)))
+      }
     } else if (grepl("Float", col_type, ignore.case = TRUE)) {
       default_value <- NA_real_
       conversion_func <- function(x) suppressWarnings(as.numeric(x))
@@ -1472,7 +1493,14 @@ processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) 
       conversion_func <- as.character
     } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
       default_value <- NA_integer_
-      conversion_func <- function(x) suppressWarnings(as.integer(as.numeric(x)))
+      conversion_func <- function(x) {
+        if (is.logical(x)) return(as.integer(x))
+        if (is.character(x)) {
+          x[x %in% c("TRUE", "true", "True")]    <- "1"
+          x[x %in% c("FALSE", "false", "False")] <- "0"
+        }
+        suppressWarnings(as.integer(as.numeric(x)))
+      }
     } else if (grepl("Float", col_type, ignore.case = TRUE)) {
       default_value <- NA_real_
       conversion_func <- function(x) suppressWarnings(as.numeric(x))
