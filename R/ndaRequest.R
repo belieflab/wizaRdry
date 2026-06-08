@@ -937,6 +937,45 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
     }
 
+    # Normalize sex values to NDA codes (M/F/O/NR)
+    if (!is.null(df) && is.data.frame(df) && "sex" %in% names(df)) {
+      if (is.factor(df$sex)) df$sex <- as.character(df$sex)
+      df$sex <- trimws(df$sex)
+      sex_map <- c(
+        "Male" = "M", "male" = "M", "MALE" = "M", "m" = "M",
+        "Female" = "F", "female" = "F", "FEMALE" = "F", "f" = "F",
+        "Other" = "O", "other" = "O",
+        "Non-reported" = "NR", "Non Reported" = "NR", "non-reported" = "NR"
+      )
+      idx <- !is.na(df$sex) & df$sex %in% names(sex_map)
+      if (any(idx)) {
+        n <- sum(idx)
+        df$sex[idx] <- sex_map[df$sex[idx]]
+        base::assign(measure, df, envir = origin_env)
+        base::assign(measure, df, envir = wizaRdry_env)
+        message(sprintf("Normalized %d 'sex' value(s) to NDA codes (M/F/O/NR)", n))
+      }
+    }
+
+    # Normalize handedness values to NDA codes (R/L/B)
+    if (!is.null(df) && is.data.frame(df) && "handedness" %in% names(df)) {
+      if (is.factor(df$handedness)) df$handedness <- as.character(df$handedness)
+      df$handedness <- trimws(df$handedness)
+      hand_map <- c(
+        "Right" = "R", "right" = "R", "RIGHTY" = "R",
+        "Left" = "L", "left" = "L", "LEFTY" = "L",
+        "Both" = "B", "both" = "B", "Ambidextrous" = "B", "ambidextrous" = "B"
+      )
+      idx <- !is.na(df$handedness) & df$handedness %in% names(hand_map)
+      if (any(idx)) {
+        n <- sum(idx)
+        df$handedness[idx] <- hand_map[df$handedness[idx]]
+        base::assign(measure, df, envir = origin_env)
+        base::assign(measure, df, envir = wizaRdry_env)
+        message(sprintf("Normalized %d 'handedness' value(s) to NDA codes (R/L/B)", n))
+      }
+    }
+
     # Coalesce duplicate src_subject_id rows (e.g. when NDA scripts use bind_rows across forms)
     if (!is.null(df) && is.data.frame(df) && "src_subject_id" %in% names(df)) {
       non_na_ids <- df$src_subject_id[!is.na(df$src_subject_id)]

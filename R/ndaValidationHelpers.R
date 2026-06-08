@@ -157,6 +157,7 @@ has_data_values <- function(field_values) {
 #' @return Character vector of unique values
 #' @noRd
 get_unique_values <- function(field_values) {
+  if (!is.atomic(field_values)) return(character(0))
   unique_vals <- unique(field_values[!is.na(field_values)])
   as.character(sort(unique_vals))
 }
@@ -205,6 +206,7 @@ detect_new_fields <- function(df, elements, dcc = FALSE) {
 #' @return Character vector of violating values
 #' @noRd
 get_violations <- function(value, range_str) {
+  if (!is.atomic(value)) return(character(0))
   if (is.null(range_str) || is.na(range_str) || range_str == "") return(character(0))
   
   # First check if there are non-numeric values (when expected numeric)

@@ -9,7 +9,7 @@ nda(
   csv = FALSE,
   rdata = FALSE,
   spss = FALSE,
-  limited_dataset = FALSE,
+  limited_dataset = TRUE,
   skip_prompt = TRUE,
   verbose = FALSE,
   strict = TRUE,
@@ -19,13 +19,13 @@ nda(
 \arguments{
 \item{...}{Strings, specifying the measures to process, which can be a Mongo collection, REDCap instrument, or Qualtrics survey.}
 
-\item{csv}{Optional; Boolean, if TRUE creates a .csv extract in ./tmp.}
+\item{csv}{Optional; Boolean, if TRUE creates a .csv extract in ./tmp. Default FALSE.}
 
-\item{rdata}{Optional; Boolean, if TRUE creates an .rdata extract in ./tmp.}
+\item{rdata}{Optional; Boolean, if TRUE creates an .rdata extract in ./tmp. Default FALSE.}
 
-\item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp.}
+\item{spss}{Optional; Boolean, if TRUE creates a .sav extract in ./tmp. Default FALSE.}
 
-\item{limited_dataset}{Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age}
+\item{limited_dataset}{Optional; Boolean, if TRUE does not perform date-shifting of interview_date or age-capping of interview_age. Default TRUE.}
 
 \item{skip_prompt}{Logical. If TRUE (default), skips confirmation prompts unless preferences aren't set yet. If FALSE,
 prompts for confirmation unless the user has previously chosen to remember their preference.}
@@ -55,13 +55,13 @@ unit tests to verify that the data quality standards are met.
 
   # Skip confirmation prompts
   nda("prl", csv=TRUE, skip_prompt=TRUE)
-  
+
   # Show detailed processing information
   nda("prl", verbose=TRUE)
-  
+
   # Use lenient validation mode (allow missing data with warnings)
   nda("prl", strict=FALSE)
-  
+
   # Include DCC fields from ndar_subject01
   nda("prl", dcc=TRUE)
 }
