@@ -89,10 +89,15 @@ ndaValidator <- function(measure_name,
     # ============================================================================
     if (verbose) message("\n--- PHASE 1: Data Cleaning ---")
     
+    # Convert array fields (list columns / bracket-notation strings) to NDA codes.
+    # Must run before convert_problematic_column_types so list structure is intact.
+    df <- convert_array_fields(df, elements, verbose = verbose)
+    state$set_df(df)
+
     # Convert problematic column types
     df <- convert_problematic_column_types(df, measure_name, verbose)
     state$set_df(df)
-    
+
     # Convert logical/boolean-string columns to integer (NDA requires 0/1, not TRUE/FALSE)
     df <- convert_logical_to_integer(df, verbose)
     state$set_df(df)

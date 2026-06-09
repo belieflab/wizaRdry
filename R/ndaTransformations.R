@@ -565,3 +565,154 @@ recode_missing_data_codes <- function(df, config, nda_structure, verbose = TRUE)
   }
   special_parts
 }
+
+#' Normalize an array-notation string for comparison
+#'
+#' @description
+#' Converts R vector notation c(...) to bracket notation [...], strips all
+#' whitespace, and lowercases so "[0.9, 0.7]" and "c(0.9,0.7)" compare equal.
+#'
+#' @param s Character scalar
+#' @return Normalized character scalar
+#' @noRd
+.normalize_array_string <- function(s) {
+  if (is.null(s) || length(s) == 0 || is.na(s)) return(NA_character_)
+  s <- gsub("^c\\((.*)\\)$", "[\\1]", trimws(s))
+  s <- gsub("\\s", "", s)
+  tolower(s)
+}
+
+#' Detect and convert array-notation fields to numeric codes
+#'
+#' @description
+#' Handles MongoDB list columns and character columns containing bracket/vector
+#' notation (e.g., "[0.9, 0.7, 0.3, 0.1]" or "c(0.9, 0.7, 0.3, 0.1)").
+#'
+#' For each such field that appears in the NDA structure, the function:
+#'   1. Looks up the NDA field notes for array-to-code mappings
+#'      (notes format: "1=(0.9, 0.7, 0.3, 0.1); 2=(0.1, 0.3, 0.7, 0.9)")
+#'   2. If mappings exist, converts every array value to its numeric code.
+#'   3. If array values are found but NO mapping is defined, stops with a
+#'      clear error explaining what format the notes must follow.
+#'   4. If values cannot be matched to any defined pattern, stops with the
+#'      unmatched samples and the patterns that were expected.
+#'
+#' @param df Data frame (may contain list columns from mongolite)
+#' @param elements NDA structure dataElements data frame
+#' @param verbose Logical - print conversion details
+#' @return Data frame with array columns recoded to numeric codes (character)
+#' @noRd
+convert_array_fields <- function(df, elements, verbose = FALSE) {
+  converted_fields <- character(0)
+
+  for (col in intersect(names(df), elements$name)) {
+    col_data <- df[[col]]
+
+    is_list_col  <- is.list(col_data)
+    is_char_array <- is.character(col_data) &&
+      any(!is.na(col_data) & grepl("^\\[|^c\\(", col_data))
+
+    if (!is_list_col && !is_char_array) next
+
+    field_idx <- which(elements$name == col)
+    if (length(field_idx) == 0) next
+    element  <- elements[field_idx[1], ]
+    notes    <- if ("notes" %in% names(element) && !is.na(element$notes[[1]])) element$notes[[1]] else ""
+
+    rules       <- get_mapping_rules(notes)
+    array_rules <- Filter(function(v) grepl("^\\[.*\\]$", v), rules)
+
+    # Helper: represent one list element as "[v1, v2, ...]"
+    list_to_bracket <- function(x) {
+      if (is.null(x) || length(x) == 0 || all(is.na(x))) return(NA_character_)
+      paste0("[", paste(x, collapse = ", "), "]")
+    }
+
+    if (length(array_rules) == 0) {
+      sample_vals <- if (is_list_col) {
+        head(vapply(col_data[!sapply(col_data, function(x) is.null(x) || length(x) == 0 || all(is.na(x)))],
+                    list_to_bracket, character(1)), 3)
+      } else {
+        head(col_data[!is.na(col_data) & grepl("^\\[|^c\\(", col_data)], 3)
+      }
+      stop(sprintf(
+        paste0(
+          "Field '%s' contains array data that cannot be automatically recoded.\n",
+          "  Sample values : %s\n",
+          "  No array-to-code mapping was found in the NDA field notes.\n",
+          "  Expected notes format: \"1=(val1, val2, ...); 2=(val3, val4, ...)\"\n",
+          "  Recode this field manually in your NDA script before submission."
+        ),
+        col, paste(sample_vals, collapse = ", ")
+      ))
+    }
+
+    # Build reverse map: normalized_array_string -> code
+    reverse_map <- setNames(
+      as.list(names(array_rules)),
+      vapply(unlist(array_rules), .normalize_array_string, character(1))
+    )
+
+    # Convert each row
+    if (is_list_col) {
+      new_values <- vapply(col_data, function(x) {
+        key <- .normalize_array_string(list_to_bracket(x))
+        if (is.na(key)) return(NA_character_)
+        code <- reverse_map[[key]]
+        if (is.null(code)) NA_character_ else as.character(code)
+      }, character(1))
+    } else {
+      new_values <- vapply(col_data, function(x) {
+        if (is.na(x)) return(NA_character_)
+        if (!grepl("^\\[|^c\\(", x)) return(x)
+        key  <- .normalize_array_string(x)
+        code <- reverse_map[[key]]
+        if (is.null(code)) NA_character_ else as.character(code)
+      }, character(1))
+    }
+
+    # Count values that had array notation but didn't match any pattern
+    if (is_list_col) {
+      had_array <- !sapply(col_data, function(x) is.null(x) || length(x) == 0 || all(is.na(x)))
+    } else {
+      had_array <- !is.na(col_data) & grepl("^\\[|^c\\(", col_data)
+    }
+
+    unmapped_idx <- which(had_array & is.na(new_values))
+
+    if (length(unmapped_idx) > 0) {
+      sample_unmapped <- if (is_list_col) {
+        head(vapply(col_data[unmapped_idx], list_to_bracket, character(1)), 3)
+      } else {
+        head(col_data[unmapped_idx], 3)
+      }
+      stop(sprintf(
+        paste0(
+          "Field '%s': %d array value(s) could not be matched to any NDA-defined code.\n",
+          "  Unmatched sample : %s\n",
+          "  Defined patterns : %s\n",
+          "  Verify the data matches the NDA structure definition."
+        ),
+        col,
+        length(unmapped_idx),
+        paste(unique(sample_unmapped), collapse = ", "),
+        paste(unlist(array_rules), collapse = " | ")
+      ))
+    }
+
+    df[[col]] <- new_values
+    converted_fields <- c(converted_fields, col)
+
+    if (verbose) {
+      message(sprintf("  [ARRAY RECODE] '%s': %d value(s) converted to numeric codes",
+                      col, sum(had_array)))
+    }
+  }
+
+  if (length(converted_fields) > 0 && !verbose) {
+    message(sprintf("[OK] Auto-recoded array fields: %s",
+                    paste(converted_fields, collapse = ", ")))
+  }
+
+  return(df)
+}
