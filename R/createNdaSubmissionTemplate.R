@@ -339,6 +339,17 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   # Close the connection to save changes
   close(con)
 
+  # Flatten list columns to bracket notation — write.table can't serialize them
+  list_cols <- vapply(template, is.list, logical(1))
+  if (any(list_cols)) {
+    template[list_cols] <- lapply(template[list_cols], function(col) {
+      sapply(col, function(x) {
+        if (is.null(x) || (length(x) == 1 && is.na(x))) NA_character_
+        else paste0("[", paste(x, collapse = ","), "]")
+      })
+    })
+  }
+
   # Append the data without column headers
   write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE,
               quote = TRUE, sep = ",", na = "")
