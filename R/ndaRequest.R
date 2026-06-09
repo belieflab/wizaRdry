@@ -920,75 +920,23 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
 
     }
 
-    # Normalize specific values prior to validation (e.g., race mapping)
-    # Difference between NIH reporting and ndar_subject01
-    if (!is.null(df) && is.data.frame(df) && "race" %in% names(df)) {
-      # Ensure character for safe replacement
-      if (is.factor(df$race)) df$race <- as.character(df$race)
-      df$race <- trimws(df$race)
-      # Map NDA-disallowed label to allowed value
-      idx <- which(!is.na(df$race) & df$race == "Native Hawaiian or Pacific Islander")
-      if (length(idx) > 0) {
-        df$race[idx] <- "Hawaiian or Pacific Islander"
-        # Propagate updates to environments used downstream
-        base::assign(measure, df, envir = origin_env)
-          base::assign(measure, df, envir = wizaRdry_env)
-        message(sprintf("Normalized %d 'race' value(s) to 'Hawaiian or Pacific Islander'", length(idx)))
-      }
-    }
+    # Normalize categorical NDA fields prior to validation
+    df <- normalize_nda_field(df, measure, "race",
+      c("Native Hawaiian or Pacific Islander" = "Hawaiian or Pacific Islander"),
+      character(0), origin_env, wizaRdry_env)
 
-    # Normalize sex values to NDA codes (M/F/O/NR)
-    if (!is.null(df) && is.data.frame(df) && "sex" %in% names(df)) {
-      if (is.factor(df$sex)) df$sex <- as.character(df$sex)
-      df$sex <- trimws(df$sex)
-      sex_map <- c(
-        "Male" = "M", "male" = "M", "MALE" = "M", "m" = "M",
-        "Female" = "F", "female" = "F", "FEMALE" = "F", "f" = "F",
-        "Other" = "O", "other" = "O",
-        "Non-reported" = "NR", "Non Reported" = "NR", "non-reported" = "NR"
-      )
-      idx <- !is.na(df$sex) & df$sex %in% names(sex_map)
-      if (any(idx)) {
-        n <- sum(idx)
-        df$sex[idx] <- sex_map[df$sex[idx]]
-        message(sprintf("Normalized %d 'sex' value(s) to NDA codes (M/F/O/NR)", n))
-      }
-      # Zero out anything still not a valid NDA sex code — junk must never reach the validator
-      valid_sex <- c("M", "F", "O", "NR")
-      junk_mask <- !is.na(df$sex) & !df$sex %in% valid_sex
-      if (any(junk_mask)) {
-        df$sex[junk_mask] <- NA_character_
-        message(sprintf("Coerced %d unrecognized 'sex' value(s) to NA", sum(junk_mask)))
-      }
-      base::assign(measure, df, envir = origin_env)
-      base::assign(measure, df, envir = wizaRdry_env)
-    }
+    df <- normalize_nda_field(df, measure, "sex",
+      c("Male"="M", "male"="M", "MALE"="M", "m"="M",
+        "Female"="F", "female"="F", "FEMALE"="F", "f"="F",
+        "Other"="O", "other"="O",
+        "Non-reported"="NR", "Non Reported"="NR", "non-reported"="NR"),
+      c("M", "F", "O", "NR"), origin_env, wizaRdry_env)
 
-    # Normalize handedness values to NDA codes (R/L/B)
-    if (!is.null(df) && is.data.frame(df) && "handedness" %in% names(df)) {
-      if (is.factor(df$handedness)) df$handedness <- as.character(df$handedness)
-      df$handedness <- trimws(df$handedness)
-      hand_map <- c(
-        "Right" = "R", "right" = "R", "RIGHTY" = "R",
-        "Left" = "L", "left" = "L", "LEFTY" = "L",
-        "Both" = "B", "both" = "B", "Ambidextrous" = "B", "ambidextrous" = "B"
-      )
-      idx <- !is.na(df$handedness) & df$handedness %in% names(hand_map)
-      if (any(idx)) {
-        n <- sum(idx)
-        df$handedness[idx] <- hand_map[df$handedness[idx]]
-        message(sprintf("Normalized %d 'handedness' value(s) to NDA codes (R/L/B)", n))
-      }
-      # Zero out anything still not a valid NDA handedness code
-      valid_hand <- c("R", "L", "B", "999", "888", "777", "555")
-      junk_mask <- !is.na(df$handedness) & !df$handedness %in% valid_hand
-      if (any(junk_mask)) {
-        df$handedness[junk_mask] <- NA_character_
-        message(sprintf("Coerced %d unrecognized 'handedness' value(s) to NA", sum(junk_mask)))
-      }
-      base::assign(measure, df, envir = origin_env)
-      base::assign(measure, df, envir = wizaRdry_env)
-    }
+    df <- normalize_nda_field(df, measure, "handedness",
+      c("Right"="R", "right"="R", "RIGHTY"="R",
+        "Left"="L", "left"="L", "LEFTY"="L",
+        "Both"="B", "both"="B", "Ambidextrous"="B", "ambidextrous"="B"),
+      c("R", "L", "B", "999", "888", "777", "555"), origin_env, wizaRdry_env)
 
     # Coalesce duplicate src_subject_id rows (e.g. when NDA scripts use bind_rows across forms)
     if (!is.null(df) && is.data.frame(df) && "src_subject_id" %in% names(df)) {
@@ -1382,6 +1330,61 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
   return(result)  # Return the result of the processing
 }
 
+#' Normalize a categorical NDA field: remap known variants then zero out remaining junk
+#' @param df Data frame
+#' @param measure Name of the measure (for env propagation)
+#' @param field Column name to normalize
+#' @param map Named character vector of known-variant → NDA-code mappings
+#' @param valid_codes Character vector of all valid NDA codes; if non-empty, anything not in
+#'   this set is coerced to NA after remapping
+#' @param origin_env,wizaRdry_env Environments to propagate the updated df to
+#' @return Modified data frame
+#' @noRd
+normalize_nda_field <- function(df, measure, field, map, valid_codes = character(0),
+                                origin_env, wizaRdry_env) {
+  if (is.null(df) || !is.data.frame(df) || !field %in% names(df)) return(df)
+  if (is.factor(df[[field]])) df[[field]] <- as.character(df[[field]])
+  df[[field]] <- trimws(df[[field]])
+  idx <- !is.na(df[[field]]) & df[[field]] %in% names(map)
+  if (any(idx)) {
+    message(sprintf("Normalized %d '%s' value(s) to NDA codes", sum(idx), field))
+    df[[field]][idx] <- map[df[[field]][idx]]
+  }
+  if (length(valid_codes) > 0) {
+    junk <- !is.na(df[[field]]) & !df[[field]] %in% valid_codes
+    if (any(junk)) {
+      message(sprintf("Coerced %d unrecognized '%s' value(s) to NA", sum(junk), field))
+      df[[field]][junk] <- NA_character_
+    }
+  }
+  base::assign(measure, df, envir = origin_env)
+  base::assign(measure, df, envir = wizaRdry_env)
+  df
+}
+
+#' Return default value and conversion function for an NDA field type
+#' @param col_type NDA type string (e.g. "Integer", "Float", "String", "Date")
+#' @return Named list with elements \code{default} and \code{func}
+#' @noRd
+get_type_conversion_spec <- function(col_type) {
+  if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
+    list(default = NA_character_, func = as.character)
+  } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
+    list(default = NA_integer_, func = function(x) {
+      if (is.logical(x)) return(as.integer(x))
+      if (is.character(x)) {
+        x[x %in% c("TRUE", "true", "True")]    <- "1"
+        x[x %in% c("FALSE", "false", "False")] <- "0"
+      }
+      suppressWarnings(as.integer(as.numeric(x)))
+    })
+  } else if (grepl("Float", col_type, ignore.case = TRUE)) {
+    list(default = NA_real_, func = function(x) suppressWarnings(as.numeric(x)))
+  } else {
+    list(default = NA_character_, func = as.character)
+  }
+}
+
 #' Process super required fields from ndar_subject01
 #'
 #' @description
@@ -1408,30 +1411,9 @@ processRequiredFields <- function(df, required_elements, verbose = FALSE) {
 
     if (verbose) message(sprintf("Processing required field: %s (%s)", col_name, col_type))
 
-    # Determine R data type
-    if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
-      default_value <- NA_character_
-      conversion_func <- as.character
-    } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
-      default_value <- NA_integer_
-      conversion_func <- function(x) {
-        if (is.logical(x)) return(as.integer(x))
-        if (is.character(x)) {
-          x[x %in% c("TRUE", "true", "True")]    <- "1"
-          x[x %in% c("FALSE", "false", "False")] <- "0"
-        }
-        suppressWarnings(as.integer(as.numeric(x)))
-      }
-    } else if (grepl("Float", col_type, ignore.case = TRUE)) {
-      default_value <- NA_real_
-      conversion_func <- function(x) suppressWarnings(as.numeric(x))
-    } else if (grepl("Date", col_type, ignore.case = TRUE)) {
-      default_value <- NA_character_
-      conversion_func <- as.character
-    } else {
-      default_value <- NA_character_
-      conversion_func <- as.character
-    }
+    spec <- get_type_conversion_spec(col_type)
+    default_value   <- spec$default
+    conversion_func <- spec$func
 
     # Process field
     if (col_name %in% names(df)) {
@@ -1497,30 +1479,9 @@ processRecommendedFields <- function(df, recommended_elements, verbose = FALSE) 
 
     if (verbose) message(sprintf("Processing common recommended field: %s (%s)", col_name, col_type))
 
-    # Determine R data type (same logic as required)
-    if (grepl("String|GUID", col_type, ignore.case = TRUE)) {
-      default_value <- NA_character_
-      conversion_func <- as.character
-    } else if (grepl("Integer", col_type, ignore.case = TRUE)) {
-      default_value <- NA_integer_
-      conversion_func <- function(x) {
-        if (is.logical(x)) return(as.integer(x))
-        if (is.character(x)) {
-          x[x %in% c("TRUE", "true", "True")]    <- "1"
-          x[x %in% c("FALSE", "false", "False")] <- "0"
-        }
-        suppressWarnings(as.integer(as.numeric(x)))
-      }
-    } else if (grepl("Float", col_type, ignore.case = TRUE)) {
-      default_value <- NA_real_
-      conversion_func <- function(x) suppressWarnings(as.numeric(x))
-    } else if (grepl("Date", col_type, ignore.case = TRUE)) {
-      default_value <- NA_character_
-      conversion_func <- as.character
-    } else {
-      default_value <- NA_character_
-      conversion_func <- as.character
-    }
+    spec <- get_type_conversion_spec(col_type)
+    default_value   <- spec$default
+    conversion_func <- spec$func
 
     # Since we filtered for common fields, we know the column exists
     # Just ensure correct type and preserve existing values

@@ -149,6 +149,7 @@ check_value_range_violations <- function(state, elements, verbose = FALSE) {
 #' @return Logical
 #' @noRd
 has_data_values <- function(field_values) {
+  if (!is.atomic(field_values)) return(FALSE)
   !all(is.na(field_values)) && length(unique(field_values[!is.na(field_values)])) > 0
 }
 
@@ -287,7 +288,7 @@ get_violations <- function(value, range_str) {
     valid_values <- trimws(strsplit(range_str, ";")[[1]])
     
     # Convert to character for comparison
-    value_char <- as.character(value)
+    value_char <- trimws(as.character(value))
     invalid_mask <- !value_char %in% valid_values
     invalid_mask[is.na(invalid_mask)] <- FALSE
     return(sort(unique(value[invalid_mask])))
