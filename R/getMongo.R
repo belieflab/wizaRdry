@@ -311,13 +311,28 @@ getMongoDataConsistent <- function(Mongo, identifier, chunk_info, verbose = FALS
 validateResults <- function(df, identifier) {
   if (nrow(df) == 0) return(TRUE)
 
+  # Columns that imply repeated rows per subject are intentional
+  multi_obs_cols <- c("trial", "trial_index", "index", "visit", "week",
+                      "timepoint", "session", "run", "block", "event")
+
+  if (any(multi_obs_cols %in% names(df))) {
+    # Multi-observation data: duplicates are expected — check for true duplicates
+    # (fully identical rows) instead
+    true_dupes <- sum(duplicated(df))
+    if (true_dupes > 0) {
+      warning(sprintf("Found %d fully duplicate rows (identical across all columns)", true_dupes))
+      return(FALSE)
+    }
+    return(TRUE)
+  }
+
+  # Subject-level data: each identifier should appear exactly once
   duplicates <- sum(duplicated(df[[identifier]]))
   if (duplicates > 0) {
     warning(sprintf("Found %d duplicate records for identifier %s", duplicates, identifier))
     return(FALSE)
   }
 
-  message(sprintf("Validation passed: %d unique records", nrow(df)))
   return(TRUE)
 }
 
