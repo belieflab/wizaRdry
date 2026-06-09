@@ -874,7 +874,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
 
       # Remove specified qualtrics columns
-      cols_to_remove <- c("internal_node_id", "trial_type", "trial_index", "stimulus", "time_elapsed")
+      cols_to_remove <- c("internal_node_id", "trial_type", "stimulus", "time_elapsed")
 
       if (DEBUG) {
         message("[DEBUG] Current columns: ", paste(names(df), collapse=", "))
@@ -976,14 +976,11 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       }
     }
 
-    # Coerce logical columns to integer (TRUE→1, FALSE→0) — NDA requires 0/1 not booleans
+    # Coerce logical/boolean-string columns to integer (TRUE→1, FALSE→0)
     if (!is.null(df) && is.data.frame(df)) {
-      logical_cols <- names(df)[vapply(df, is.logical, logical(1))]
-      if (length(logical_cols) > 0) {
-        for (col in logical_cols) df[[col]] <- as.integer(df[[col]])
-        base::assign(measure, df, envir = origin_env)
-        base::assign(measure, df, envir = wizaRdry_env)
-      }
+      df <- convert_logical_to_integer(df)
+      base::assign(measure, df, envir = origin_env)
+      base::assign(measure, df, envir = wizaRdry_env)
     }
 
     # Re-integrate ndaValidator with proper environment management
@@ -1096,8 +1093,9 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         }
       }
 
-      # Update local df variable (DataEnvironment already handled the environments)
+      # Update local df variable and sync .GlobalEnv so createNdaSubmissionTemplate sees normalized data
       df <- validation_state$get_df()
+      base::assign(measure, df, envir = .GlobalEnv)
       if (DEBUG) {
         message(sprintf("[DEBUG] Retrieved dataframe from ValidationState (nrow=%d, ncol=%d)",
                        nrow(df), ncol(df)))
@@ -1153,8 +1151,8 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
       message(sprintf("\nNew structure '%s' (not found in NDA data dictionary)", measure))
       message("Creating ValidationState for new structure with metadata only")
 
-      # Get dataframe
-      df <- base::get0(measure)
+      # Get dataframe — use wizaRdry_env which holds the normalized version
+      df <- base::get(measure, envir = wizaRdry_env)
 
       # Create mock NDA structure
       mock_structure <- list(
@@ -1232,12 +1230,16 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
         }
       }
 
+      # Sync .GlobalEnv so createNdaSubmissionTemplate sees the final normalized df
+      base::assign(measure, validation_state$get_df(), envir = .GlobalEnv)
+
       # Create NDA files using simplified helper function
       create_nda_files(validation_state, strict = strict, verbose = verbose)
     }
 
-    # Update local df variable
+    # Final df sync
     df <- validation_state$get_df()
+    base::assign(measure, df, envir = .GlobalEnv)
 
     # Add de-identification summary (verbose mode only)
     if (limited_dataset == FALSE && verbose) {

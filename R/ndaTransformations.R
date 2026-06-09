@@ -285,11 +285,19 @@ standardize_binary <- function(value) {
 #' @param verbose Logical - print detailed output
 #' @return Data frame with logical columns converted to character
 #' @noRd
-convert_logical_to_character <- function(df, verbose = FALSE) {
-  for(col in names(df)) {
-    if(is.logical(df[[col]])) {
-      if(verbose) cat(sprintf("\nConverting logical column %s to character", col))
-      df[[col]] <- as.character(df[[col]])
+convert_logical_to_integer <- function(df, verbose = FALSE) {
+  bool_strings <- c("TRUE", "FALSE", "true", "false", "True", "False")
+  for (col in names(df)) {
+    x <- df[[col]]
+    if (is.logical(x)) {
+      if (verbose) cat(sprintf("\nConverting logical column %s to integer", col))
+      df[[col]] <- as.integer(x)
+    } else if (is.character(x)) {
+      non_na <- x[!is.na(x) & nzchar(x)]
+      if (length(non_na) > 0 && all(non_na %in% bool_strings)) {
+        if (verbose) cat(sprintf("\nConverting boolean-string column %s to integer", col))
+        df[[col]] <- as.integer(x %in% c("TRUE", "true", "True"))
+      }
     }
   }
   return(df)
@@ -409,36 +417,30 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
   # Track all transformations for summary
   transformations <- list()
   
-  # Handle index -> trial conversion
-  if ("index" %in% names(df)) {
-    if(verbose) cat("\n\nProcessing 'index' to 'trial' conversion...")
-    
-    # Store original state for summary
-    orig_values <- head(df$index, 3)
-    
-    # Convert to numeric if not already
-    df$index <- as.numeric(df$index)
-    
-    # Create trial column
-    df$trial <- df$index
-    
-    # Set non-positive values to NA
-    df$trial[df$index <= 0] <- NA
-    
-    # Count transformations
-    total_rows <- length(df$index)
-    positive_rows <- sum(df$index > 0, na.rm = TRUE)
-    
-    # Store transformation summary
-    transformations[["index_to_trial"]] <- list(
-      from = "index",
-      to = "trial",
-      total = total_rows,
-      valid = positive_rows,
+  # Handle index/trial_index -> trial conversion
+  index_source <- if ("trial_index" %in% names(df)) "trial_index" else if ("index" %in% names(df)) "index" else NULL
+  if (!is.null(index_source) && !"trial" %in% names(df)) {
+    if(verbose) cat(sprintf("\n\nProcessing '%s' to 'trial' conversion...", index_source))
+
+    orig_values <- head(df[[index_source]], 3)
+    raw_index   <- suppressWarnings(as.numeric(df[[index_source]]))
+
+    # Convert 0-based jsPsych indices to 1-based trial numbers
+    df$trial <- raw_index + 1L
+    df$trial[is.na(raw_index)] <- NA_integer_
+
+    total_rows   <- length(raw_index)
+    positive_rows <- sum(!is.na(df$trial))
+
+    transformations[[paste0(index_source, "_to_trial")]] <- list(
+      from          = index_source,
+      to            = "trial",
+      total         = total_rows,
+      valid         = positive_rows,
       sample_before = orig_values,
-      sample_after = head(df$trial, 3)
+      sample_after  = head(df$trial, 3)
     )
-    
+
     if(verbose) {
       cat(sprintf("\n  Total rows: %d", total_rows))
       cat(sprintf("\n  Valid rows: %d", positive_rows))
@@ -446,9 +448,8 @@ standardize_field_names <- function(df, measure_name, verbose = FALSE) {
       cat(sprintf("\n    Before: %s", paste(orig_values, collapse=", ")))
       cat(sprintf("\n    After:  %s", paste(head(df$trial, 3), collapse=", ")))
     }
-    
-    # Remove original column
-    df$index <- NULL
+
+    df[[index_source]] <- NULL
   }
   
   # Print summary if any transformations occurred

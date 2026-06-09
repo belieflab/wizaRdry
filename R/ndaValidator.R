@@ -93,8 +93,8 @@ ndaValidator <- function(measure_name,
     df <- convert_problematic_column_types(df, measure_name, verbose)
     state$set_df(df)
     
-    # Convert logical columns to character
-    df <- convert_logical_to_character(df, verbose)
+    # Convert logical/boolean-string columns to integer (NDA requires 0/1, not TRUE/FALSE)
+    df <- convert_logical_to_integer(df, verbose)
     state$set_df(df)
     
     # ============================================================================
