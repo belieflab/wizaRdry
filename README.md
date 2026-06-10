@@ -291,6 +291,56 @@ if (!"visit" %in% names(rgpts01)) {
 # Additional NDA-specific processing...
 ```
 
+## Testing
+
+wizaRdry ships with a testthat suite that exercises every data-source interface
+(CSV, REDCap, Qualtrics, MongoDB, SQL, Oracle) through both the `clean()` and
+`nda()` workflows. From a clone of this repository:
+
+```r
+# Run the full suite
+devtools::test()
+
+# Run a single test file
+testthat::test_file("tests/testthat/test-nda-interfaces.R")
+
+# Run the suite as part of CRAN checks
+devtools::check()
+```
+
+The default suite is fully offline: each test bootstraps a throwaway project
+with `scry()` in a temp directory, and the NDA data dictionary API is served by
+a local mock (webfakes), so no credentials or network access are needed.
+
+### Live integration tests
+
+An optional live layer (`tests/testthat/test-live-interfaces.R`) runs the real
+`redcap()`, `qualtrics()`, `mongo()`, `sql()`, and `oracle()` functions plus
+full `clean()`/`nda()` runs against your own study project and the real NDA
+API. It is skipped entirely unless you opt in with environment variables:
+
+```sh
+WIZARDRY_LIVE_PROJECT=~/path/to/your/project \
+WIZARDRY_LIVE_REDCAP=your_instrument \
+WIZARDRY_LIVE_QUALTRICS=your_survey_alias \
+WIZARDRY_LIVE_NDA=your_structure01 \
+Rscript -e 'testthat::test_file("tests/testthat/test-live-interfaces.R")'
+```
+
+| Variable | Meaning |
+|---|---|
+| `WIZARDRY_LIVE_PROJECT` | Path to a configured wizaRdry project (config.yml + secrets.R). Required for any live test. |
+| `WIZARDRY_LIVE_REDCAP` | REDCap instrument name to pull with `redcap()` |
+| `WIZARDRY_LIVE_QUALTRICS` | Qualtrics survey alias to pull with `qualtrics()` |
+| `WIZARDRY_LIVE_MONGO` | MongoDB collection name to pull with `mongo()` |
+| `WIZARDRY_LIVE_SQL` | SQL table name to pull with `sql()` |
+| `WIZARDRY_LIVE_ORACLE` | Oracle table name to pull with `oracle()` |
+| `WIZARDRY_LIVE_CLEAN` | Measure with an existing `clean/{api}/` script, run end-to-end |
+| `WIZARDRY_LIVE_NDA` | Structure with an existing `nda/{api}/` script, validated against the real NDA data dictionary |
+
+Tests for unset variables are skipped, so you can run as much or as little of
+the live layer as your project supports.
+
 ## Citation
 
 If you use wizaRdry in your research, please cite it:
