@@ -20,13 +20,19 @@ for (api in apis) {
 
     submission <- file.path(proj, "tmp", paste0(measure, "_submission.csv"))
     expect_true(file.exists(submission))
-    # First line carries the structure name; headers are on line 2
-    expect_match(readLines(submission, n = 1), "wizardry")
+    # NDA submission format: line 1 = "structurename,version", headers on line 2
+    expect_equal(readLines(submission, n = 1), "wizardry,01")
     sub_df <- utils::read.csv(submission, skip = 1)
-    expect_true(all(
-      c("subjectkey", "src_subject_id", "interview_date", "interview_age", "sex")
-      %in% names(sub_df)
-    ))
+    expect_setequal(
+      names(sub_df),
+      c("subjectkey", "src_subject_id", "interview_date", "interview_age",
+        "sex", "wizardry01_score")
+    )
+    # Data must survive the pipeline unchanged
     expect_equal(nrow(sub_df), 3)
+    expect_equal(sub_df$src_subject_id, c("SUB001", "SUB002", "SUB003"))
+    expect_equal(sub_df$wizardry01_score, 1:3)
+    expect_equal(sub_df$interview_age, rep(300L, 3))
+    expect_true(all(grepl("^NDAR_INV", sub_df$subjectkey)))
   })
 }

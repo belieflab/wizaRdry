@@ -22,7 +22,23 @@ test_that("nda() treats an unknown structure as NEW and skips the submission fil
 
   expect_true(any(grepl("Structure Type: NEW", msgs)))
   expect_false(file.exists(file.path(proj, "tmp", paste0(measure, "_submission.csv"))))
-  expect_true(file.exists(file.path(proj, "tmp", paste0(measure, "_definitions.xlsx"))))
+
+  # Registration bundle: data definition, subject count, category/description
+  defs_path <- file.path(proj, "tmp", paste0(measure, "_definitions.xlsx"))
+  expect_true(file.exists(defs_path))
+  defs <- openxlsx2::wb_to_df(openxlsx2::wb_load(defs_path), sheet = "Data Definitions")
+  expect_true(all(
+    c("subjectkey", "src_subject_id", "interview_date", "interview_age",
+      "sex", paste0(measure, "_score")) %in% defs$ElementName
+  ))
+
+  count_path <- file.path(proj, "tmp", paste0(measure, "_subject_count.txt"))
+  expect_true(file.exists(count_path))
+  expect_equal(trimws(readLines(count_path, n = 1)), "3")
+
+  expect_true(file.exists(
+    file.path(proj, "tmp", paste0(measure, "_category-and-description.xlsx"))
+  ))
 })
 
 test_that("nda() strict mode fails validation and creates no submission file when required data is missing", {
@@ -72,10 +88,50 @@ test_that("nda() lenient mode creates draft submission and data definition for M
   msgs <- capture_messages(nda(measure, skip_prompt = TRUE, strict = FALSE))
 
   expect_true(any(grepl("Structure Type: MODIFIED", msgs)))
-  expect_true(file.exists(file.path(proj, "tmp", paste0(measure, "_submission_draft.csv"))))
-  expect_true(file.exists(file.path(proj, "tmp", paste0(measure, "_definitions.xlsx"))))
   # Modified structures must NOT produce a final submission file
   expect_false(file.exists(file.path(proj, "tmp", paste0(measure, "_submission.csv"))))
+
+  # The draft must keep the NDA two-row format and preserve the violating
+  # values verbatim (they are what the DCC needs to approve)
+  draft_path <- file.path(proj, "tmp", paste0(measure, "_submission_draft.csv"))
+  expect_true(file.exists(draft_path))
+  expect_equal(readLines(draft_path, n = 1), "wizardry,01")
+  draft <- utils::read.csv(draft_path, skip = 1)
+  expect_equal(draft$wizardry01_score, c(150L, 200L, 175L))
+  expect_equal(draft$src_subject_id, c("SUB001", "SUB002", "SUB003"))
+
+  # The data definition must describe every submitted field
+  defs_path <- file.path(proj, "tmp", paste0(measure, "_definitions.xlsx"))
+  expect_true(file.exists(defs_path))
+  defs <- openxlsx2::wb_to_df(openxlsx2::wb_load(defs_path), sheet = "Data Definitions")
+  expect_setequal(
+    defs$ElementName,
+    c("subjectkey", "src_subject_id", "interview_date", "interview_age",
+      "sex", "wizardry01_score")
+  )
+  expect_equal(defs$DataType[defs$ElementName == "wizardry01_score"], "Integer")
+})
+
+test_that("nda() with limited_dataset=FALSE date-shifts and age-caps the submission file", {
+  skip_if_no_nda_mock()
+  proj <- local_wizardry_project()
+  measure <- "wizardry01"
+  local_globalenv_cleanup(measure)
+  withr::local_options(wizaRdry.nda_base_url = nda_mock_url())
+  df <- make_nda_fixture_df(measure)
+  df$interview_date <- "06/15/2024"
+  df$interview_age <- c(300L, 900L, 1100L)
+  write_pathway_script(proj, "nda", "redcap", measure, df)
+
+  capture_messages(nda(measure, skip_prompt = TRUE, limited_dataset = FALSE))
+
+  submission <- file.path(proj, "tmp", paste0(measure, "_submission.csv"))
+  expect_true(file.exists(submission))
+  sub_df <- utils::read.csv(submission, skip = 1)
+  # Date-shifting: day collapses to 01 (MM/DD/YYYY -> MM/01/YYYY)
+  expect_equal(unique(sub_df$interview_date), "06/01/2024")
+  # Age-capping: ages above 1068 months (89 years) are capped; others untouched
+  expect_equal(sub_df$interview_age, c(300L, 900L, 1068L))
 })
 
 test_that("nda() lenient mode creates files despite validation failures", {

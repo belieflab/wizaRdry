@@ -22,6 +22,14 @@ for (api in apis) {
     expect_s3_class(df_clean, "data.frame")
     expect_equal(nrow(df_clean), 3)
     expect_true(paste0(measure, "_score") %in% names(df_clean))
-    expect_true(file.exists(file.path(proj, "tmp", paste0(clean_name, ".csv"))))
+
+    # The exported CSV must round-trip the cleaned data frame
+    csv_path <- file.path(proj, "tmp", paste0(clean_name, ".csv"))
+    expect_true(file.exists(csv_path))
+    exported <- utils::read.csv(csv_path)
+    expect_equal(nrow(exported), nrow(df_clean))
+    expect_setequal(names(exported), names(df_clean))
+    expect_equal(exported$src_subject_id, df_clean$src_subject_id)
+    expect_equal(exported[[paste0(measure, "_score")]], df_clean[[paste0(measure, "_score")]])
   })
 }
