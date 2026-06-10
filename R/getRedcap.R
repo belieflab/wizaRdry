@@ -390,6 +390,18 @@ redcap <- function(instrument_name = NULL, ..., raw_or_label = "raw",
     } else {
       df <- superkey_response$data
     }
+    # Guard: consolidation yields NULL (or an empty frame) when no subjects were
+    # found, which would otherwise crash much later with a cryptic ncol() error.
+    if (is.null(df) || nrow(df) == 0) {
+      if (!(primary_key_col %in% names(superkey_response$data))) {
+        stop(sprintf(
+          "Superkey form '%s' is missing the primary key column '%s'.\nCheck that redcap.primary_key in config.yml matches the project's record ID field\nand that the API token has export rights to it.",
+          config$redcap$superkey, primary_key_col), call. = FALSE)
+      }
+      stop(sprintf(
+        "Superkey form '%s' returned no rows from REDCap; cannot consolidate superkey data.",
+        config$redcap$superkey), call. = FALSE)
+    }
     if (!is.null(redcap_event_name) && "redcap_event_name" %in% names(superkey_response$data)) {
       event_subjects <- unique(
         superkey_response$data[
