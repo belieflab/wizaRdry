@@ -1,0 +1,120 @@
+{
+  "title": "Research Subject",
+  "shortName": "ndar_subject01",
+  "sources": ["NDA"],
+  "categories": ["Evaluated Data"],
+  "dataType": "Clinical Assessments",
+  "status": "Published",
+  "publicStatus": "Published",
+  "publishDate": "2010-01-01",
+  "dataElements": [
+    {
+      "id": 1,
+      "name": "subjectkey",
+      "type": "GUID",
+      "size": null,
+      "required": "Required",
+      "description": "The NDAR Global Unique Identifier (GUID) for research subject",
+      "valueRange": "NDAR*",
+      "notes": null,
+      "aliases": [],
+      "position": 1
+    },
+    {
+      "id": 2,
+      "name": "src_subject_id",
+      "type": "String",
+      "size": 20,
+      "required": "Required",
+      "description": "Subject ID how it's defined in lab/project",
+      "valueRange": null,
+      "notes": null,
+      "aliases": [],
+      "position": 2
+    },
+    {
+      "id": 3,
+      "name": "interview_date",
+      "type": "Date",
+      "size": null,
+      "required": "Required",
+      "description": "Date on which the interview/genetic test/sampling/imaging/biospecimen was completed. MM/DD/YYYY",
+      "valueRange": null,
+      "notes": "Required field",
+      "aliases": [],
+      "position": 3
+    },
+    {
+      "id": 4,
+      "name": "interview_age",
+      "type": "Integer",
+      "size": null,
+      "required": "Required",
+      "description": "Age in months at the time of the interview/test/sampling/imaging",
+      "valueRange": "0::1260",
+      "notes": "Age is rounded to chronological month",
+      "aliases": [],
+      "position": 4
+    },
+    {
+      "id": 5,
+      "name": "sex",
+      "type": "String",
+      "size": 20,
+      "required": "Required",
+      "description": "Sex of subject at birth",
+      "valueRange": "M;F;O;NR",
+      "notes": "M = Male; F = Female; O = Other; NR = Not reported",
+      "aliases": ["gender"],
+      "position": 5
+    },
+    {
+      "id": 6,
+      "name": "race",
+      "type": "String",
+      "size": 30,
+      "required": "Required",
+      "description": "Race of study subject",
+      "valueRange": "American Indian/Alaska Native; Asian; Hawaiian or Pacific Islander; Black or African American; White; More than one race; Unknown or not reported; Other Non-White; Other",
+      "notes": null,
+      "aliases": [],
+      "position": 6
+    },
+    {
+      "id": 7,
+      "name": "phenotype",
+      "type": "String",
+      "size": 50,
+      "required": "Required",
+      "description": "Phenotype/diagnosis for the subject",
+      "valueRange": null,
+      "notes": null,
+      "aliases": [],
+      "position": 7
+    },
+    {
+      "id": 8,
+      "name": "ethnic_group",
+      "type": "String",
+      "size": 30,
+      "required": "Recommended",
+      "description": "Ethnic group",
+      "valueRange": null,
+      "notes": null,
+      "aliases": [],
+      "position": 8
+    },
+    {
+      "id": 9,
+      "name": "site",
+      "type": "String",
+      "size": 100,
+      "required": "Recommended",
+      "description": "Site of data collection",
+      "valueRange": null,
+      "notes": null,
+      "aliases": [],
+      "position": 9
+    }
+  ]
+}

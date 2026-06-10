@@ -361,11 +361,18 @@ tmp/                # Output directory for generated files
 
 ### Testing Philosophy
 
-Runtime validation over unit tests:
-- Config/secrets validation on function entry
-- Data quality checks via `testSuite()` during `clean()`
-- NDA compliance validation during `nda()`
-- Memory checks before large operations
+Two layers:
+
+1. **testthat suite** (`tests/testthat/`, run with `devtools::test()`):
+   - Tests each interface (csv, redcap, qualtrics, mongo, sql, oracle) through both `clean()` and `nda()` pathways
+   - Mocked layer is offline/CRAN-safe: temp projects via `scry()`, fixture-backed scripts, NDA dictionary API mocked with a local webfakes server (URL injected via the `wizaRdry.nda_base_url` option, resolved by `get_nda_base_url()` in `R/ndaApi.R`)
+   - Live layer (`test-live-interfaces.R`) runs only when `WIZARDRY_LIVE_PROJECT` (+ per-interface vars like `WIZARDRY_LIVE_REDCAP`) are set
+
+2. **Runtime validation**:
+   - Config/secrets validation on function entry
+   - Data quality checks via `testSuite()` during `clean()`
+   - NDA compliance validation during `nda()`
+   - Memory checks before large operations
 
 ---
 

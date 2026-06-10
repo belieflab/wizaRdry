@@ -155,7 +155,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   
   # Try to fetch the structure to see which fields it contains
   tryCatch({
-    nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+    nda_base_url <- get_nda_base_url()
     structure_url <- sprintf("%s/datastructure/%s", nda_base_url, structure_name)
     structure_response <- httr::GET(structure_url, httr::timeout(10))
     if (httr::status_code(structure_response) == 200) {
@@ -174,7 +174,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
   # Get required fields from ndar_subject01 that exist in the current structure
   if (length(structure_field_names) > 0) {
     tryCatch({
-      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      nda_base_url <- get_nda_base_url()
       url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
       
       response <- httr::GET(url, httr::timeout(10))
@@ -256,7 +256,7 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     if (verbose) {
       message("Fetching current ndar_subject01 required elements from NDA API...")
     }
-    nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+    nda_base_url <- get_nda_base_url()
     url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
     
     response <- httr::GET(url, httr::timeout(10))

@@ -20,12 +20,12 @@ createExtract <- function(df, df_name, csv=NULL, rdata=NULL, spss=NULL) {
   
   
   if (!is.null(csv) && csv) {
-    createCsv(df, df_name)
+    to.csv(df, df_name)
   }
   if (!is.null(rdata) && rdata) {
-    createRds(df, df_name)
+    to.rds(df, df_name)
   }
   if (!is.null(spss) && spss) {
-    createSpss(df, df_name)
+    to.sav(df, df_name)
   }
 }

@@ -491,7 +491,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     # If not found in nda_structure, try to fetch from API directly
     if (is.null(required_metadata)) {
       message("Fetching current ndar_subject01 required elements from NDA API...")
-      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      nda_base_url <- get_nda_base_url()
       url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
 
       response <- httr::GET(url, httr::timeout(10))
@@ -568,7 +568,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     # Get required fields from ndar_subject01 that exist in the current structure
     ndar_required_in_structure <- character(0)
     tryCatch({
-      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      nda_base_url <- get_nda_base_url()
       url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
       response <- httr::GET(url, httr::timeout(10))
       if (httr::status_code(response) == 200) {
@@ -625,7 +625,7 @@ createNdaDataDefinition <- function(submission_template, nda_structure = NULL, m
     # Get list of required fields from ndar_subject01 (for filtering logic)
     ndar_required_all <- character(0)
     tryCatch({
-      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      nda_base_url <- get_nda_base_url()
       url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
       response <- httr::GET(url, httr::timeout(10))
       if (httr::status_code(response) == 200) {
@@ -2134,7 +2134,7 @@ exportDataDefinition <- function(data_definition) {
              nda_element_exists_api <- function(el_name) {
                if (!nzchar(el_name)) return(FALSE)
                if (!is.null(.nda_exists_cache[[el_name]])) return(.nda_exists_cache[[el_name]])
-               base_url <- "https://nda.nih.gov/api/datadictionary/v2/datastructure/dataElement/"
+               base_url <- paste0(get_nda_base_url(), "/datastructure/dataElement/")
                url <- paste0(base_url, utils::URLencode(el_name, reserved = TRUE))
                exists_flag <- FALSE
                try({
@@ -2203,7 +2203,7 @@ exportDataDefinition <- function(data_definition) {
              nda_fetch_element <- function(el_name) {
                if (!nzchar(el_name)) return(NULL)
                if (!is.null(.nda_meta_cache[[el_name]])) return(.nda_meta_cache[[el_name]])
-               base_url <- "https://nda.nih.gov/api/datadictionary/v2/dataelement/"
+               base_url <- paste0(get_nda_base_url(), "/dataelement/")
                url <- paste0(base_url, utils::URLencode(el_name, reserved = TRUE))
                out <- NULL
                try({

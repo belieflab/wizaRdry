@@ -48,4 +48,7 @@ URL: https://github.com/belieflab/wizaRdry
 BugReports: https://github.com/belieflab/wizaRdry/issues
 Suggests:
     rmarkdown,
-    yaml
+    yaml,
+    webfakes,
+    withr
+Config/testthat/edition: 3

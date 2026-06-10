@@ -23,7 +23,7 @@
 ndaValidator <- function(measure_name,
                          api,
                          limited_dataset = FALSE,
-                             nda_base_url = "https://nda.nih.gov/api/datadictionary/v2",
+                             nda_base_url = get_nda_base_url(),
                              verbose = FALSE,
                              debug = FALSE,
                              auto_drop_unknown = FALSE,

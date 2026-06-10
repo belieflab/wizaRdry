@@ -17,37 +17,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **REQUIRED WORKFLOW:**
 1. Make commits locally ✅
 2. Show user what was committed ✅
-3. **ASK:** "Would you like me to push to remote?" 
+3. **ASK:** "Would you like me to push to remote?"
 4. **WAIT** for explicit "yes" or "push it"
 5. Only then execute `git push`
 
-**Example:**
-```
-AI: "Committed changes. Would you like me to push to origin/main?"
-[WAIT FOR USER]
-User: "yes"
-AI: [now pushes]
-```
-
 ### Rule 2: Text Editor - vim ONLY
 
-**REQUIRED:**
+- ✅ Use programmatic tools (Edit tool, Write tool, sed, awk) when possible
 - ✅ If interactive editing needed: **vim ONLY**
-- ✅ CORRECT: "Edit with `vim file.txt`"
-
-**FORBIDDEN:**
-- ❌ NEVER suggest nano
-- ❌ NEVER suggest emacs
-- ❌ NEVER suggest any other editor
-
-**PREFERRED:**
-- Use programmatic tools (Edit tool, Write tool, sed, awk) when possible
-- But if terminal editor needed: **vim only**
-
-**Why These Rules Exist:**
-- Git push without permission can publish broken code to production
-- User exclusively uses vim and hates nano
-- User must control what goes to shared repository
+- ❌ NEVER suggest nano, emacs, or any other editor
 
 **ALWAYS ASK BEFORE PUSHING. NO EXCEPTIONS.**
 
@@ -55,276 +33,145 @@ AI: [now pushes]
 
 ## Project Overview
 
-wizaRdry is an R package for NIH-funded computational psychiatry, neuroscience, and psychology research. It provides a comprehensive data analysis framework with built-in NIH Data Archive (NDA) integration. The package unifies access to multiple data sources (REDCap, MongoDB, Qualtrics, SQL/Oracle) and provides workflows for both data cleaning and NDA submission preparation.
+wizaRdry is a CRAN R package for NIH-funded computational psychiatry, neuroscience, and psychology research. It provides a data analysis framework with built-in NIH Data Archive (NDA) integration: unified access to multiple data sources (REDCap, MongoDB, Qualtrics, SQL/MariaDB, Oracle) plus workflows for data cleaning and NDA submission preparation.
+
+A parallel `AGENTS.md` exists for other AI assistants; keep the two in sync when documenting major changes.
 
 ## Development Commands
 
-### Building and Testing
+There is no Makefile or test runner; development uses devtools from an R session (see `dev/build.R` for the full workflow):
 
 ```r
-# Remove previous version and restart R session
-remove.packages("wizaRdry")
-rstudioapi::restartSession()
+remove.packages("wizaRdry")        # remove previous version
+rstudioapi::restartSession()       # restart R
 
-# Generate documentation from roxygen comments
-devtools::document()
-
-# Load package for testing
-devtools::load_all()
-
-# Run CRAN checks
-devtools::check()
-
-# Build package
-devtools::build()
-
-# Install locally
-devtools::install()
-
-# Spell check
-devtools::spell_check()
-
-# Check on Windows
-devtools::check_win_devel()
+devtools::document()               # regenerate man/ from roxygen comments
+devtools::load_all()               # load package for interactive testing
+devtools::check()                  # run CRAN checks
+devtools::build()                  # build tarball
+devtools::install()                # install locally
+devtools::spell_check()            # spell check (wordlist in inst/WORDLIST)
+devtools::check_win_devel()        # Windows check before CRAN release
 ```
-
-See `dev/build.R` for the complete build workflow.
-
-### Installing Development Version
 
 ```r
-# From GitHub
-remove.packages("wizaRdry")
-rstudioapi::restartSession()
-if(!require(devtools)) {install.packages("devtools")}; library(devtools)
-devtools::install_github("belieflab/wizaRdry")
+devtools::test()                   # run the testthat suite (tests/testthat/)
+testthat::test_file("tests/testthat/test-nda-interfaces.R")  # single file
 ```
+
+The package also relies on runtime validation (config/secrets validation on entry, `testSuite()` during `clean()`, NDA compliance checks during `nda()`).
+
+After changing roxygen comments, always run `devtools::document()` before `check()`.
+
+### Test Suite
+
+`tests/testthat/` exercises each data-source interface (csv, redcap, qualtrics, mongo, sql, oracle) through both `clean()` and `nda()` pathways:
+
+- **Mocked layer** (CRAN-safe, offline): each test bootstraps a temp project via `scry()`, writes a fixture-backed script into `clean/{api}/` or `nda/{api}/`, and runs the workflow. The NDA dictionary API is mocked by a local webfakes server (`setup-nda-mock.R` + `fixtures/*.json`); all NDA calls resolve the URL via `get_nda_base_url()` (`R/ndaApi.R`), which reads the `wizaRdry.nda_base_url` option.
+- **Live layer** (`test-live-interfaces.R`): skipped unless `WIZARDRY_LIVE_PROJECT` points at a real configured project; per-interface env vars (`WIZARDRY_LIVE_REDCAP`, etc.) name measures to pull against real APIs.
+- Key trap: prompt guards are `if (!skip_prompt | !user_prefs$auto_*)`, so tests must pre-seed `.wizaRdry_prefs` with all `auto_*` flags TRUE (done by `local_wizardry_project()` in `helper-project.R`) or `readline()` spins forever headless.
+- Hardcoding `https://nda.nih.gov` in R/ is a regression: `grep -rn "nda.nih.gov" R/` must return only `zzz.R` and the `get_nda_base_url()` fallback.
 
 ## Architecture Overview
 
-### Configuration System (R6 Classes)
+### Configuration System (R6 classes)
 
-The package uses two R6 class-based configuration systems that validate and manage settings:
-
-**ConfigEnv** (`R/ConfigEnv.R`): Manages `config.yml` configuration
-- Validates API configurations (mongo, qualtrics, redcap, sql, oracle)
-- Handles variable substitutions like `${study_alias}`
-- Defines missing data code mappings with category aliases
-- Accessed via `validate_config()` throughout the codebase
-
-**SecretsEnv** (`R/SecretsEnv.R`): Manages `secrets.R` credentials
-- Validates API credentials (tokens, connection strings, API keys)
-- Determines which APIs are configured by checking config.yml
-- Only validates secrets for APIs that are actually configured
-- Accessed via `validate_secrets()` and `get_secret()` functions
-
-Both systems work together: ConfigEnv validates structural settings while SecretsEnv validates credentials.
+- **ConfigEnv** (`R/ConfigEnv.R`): validates `config.yml` — API configurations (mongo, qualtrics, redcap, sql, oracle), `${study_alias}` variable substitution, missing data code mappings. Accessed via `validate_config()`.
+- **SecretsEnv** (`R/SecretsEnv.R`): validates `secrets.R` credentials, but only for APIs actually present in config.yml. Accessed via `validate_secrets()` / `get_secret()`.
 
 ### Data Access Layer
 
-Core data retrieval functions follow a consistent pattern:
+One function per source, all following the same pattern: loading animation, optional column filtering via `...`, identifiers/superkeys returned first, timing display.
 
-**REDCap** (`R/getRedcap.R`): `redcap(instrument_name, ...)`
-- Fetches REDCap instruments via REDCapR
-- Supports event filtering with `redcap_event_name` parameter (single string or vector)
-- Propagates subject identifiers across events
-- Optionally filters to complete cases using `...` column specification
+- `redcap(instrument_name, ...)` (`R/getRedcap.R`) — `redcap_event_name` accepts a single string OR a vector of events
+- `qualtrics(qualtrics_alias, ...)` (`R/getQualtrics.R`) — multi-institution support; survey IDs mapped in config.yml
+- `mongo(collection_name, ...)` (`R/getMongo.R`) — memory-aware chunking and parallel processing for large collections
+- `sql(table_name, ...)` (`R/getSql.R`) — auto-joins primary keys table; PII field filtering from config.yml
+- `oracle(table_name, ...)` (`R/getOracle.R`) — DSN, DBQ (TNS alias), or host-based connections
 
-**Qualtrics** (`R/getQualtrics.R`): `qualtrics(qualtrics_alias, ...)`
-- Multi-institution support via institution parameter
-- Survey IDs mapped in config.yml under `qualtrics.survey_ids`
-- Automatic institution detection if not specified
-- Supports label conversion, interview_date filtering, and complete-only filtering
-
-**MongoDB** (`R/getMongo.R`): `mongo(collection_name, ...)`
-- Uses mongolite package
-- Implements memory-aware parallel processing for large datasets
-- Cross-platform memory detection (Windows, macOS, Linux)
-- Automatic chunking based on available system memory
-
-**SQL/MariaDB** (`R/getSql.R`): `sql(table_name, ...)`
-- Auto-joins with primary keys table when configured
-- Supports custom WHERE clauses and field selection
-- PII field filtering based on config.yml settings
-- Batch processing for large datasets
-
-**Oracle** (`R/getOracle.R`): `oracle(table_name, ...)`
-- Supports DSN, DBQ (TNS alias), or host-based connections
-- Automatic driver detection with validation
-- Similar interface to sql() function with auto-joining
-
-All data retrieval functions:
-- Use loading animations via `initializeLoadingAnimation()`
-- Support optional column filtering with `...` parameters
-- Return data frames with superkeys/identifiers first
-- Display timing information on completion
+Companion utilities follow `source.util()` naming: `redcap.dict()`, `qualtrics.index()`, `qualtrics.rune()`, etc.
 
 ### Workflow Functions
 
-**Data Cleaning Workflow** (`R/dataRequest.R`): `clean(..., csv=FALSE, rdata=FALSE, spss=FALSE)`
-- Executes cleaning scripts from `./clean/{api_type}/` directories
-- Automatically detects data source (CSV, REDCap, Qualtrics, MongoDB, Oracle, SQL)
-- Runs validation tests via `testSuite.R`
-- Interactive script creation for missing measures
-- User preferences stored in `.wizaRdry_prefs` file
-- Expects cleaned datasets to be named with `_clean` suffix
+**`clean(..., csv=FALSE, rdata=FALSE, spss=FALSE)`** (`R/dataRequest.R`):
+- Executes user scripts from `./clean/{csv|mongo|qualtrics|redcap|oracle|sql}/scriptname.R`
+- Each script must create a `scriptname_clean` data frame
+- Runs validation via `testSuite.R`; offers interactive script creation for missing measures
+- User preferences stored in `.wizaRdry_prefs`
 
-**NDA Submission Workflow** (`R/ndaRequest.R`): `nda(..., csv=FALSE, rdata=FALSE, spss=FALSE, limited_dataset=FALSE)`
+**`nda(..., csv=FALSE, rdata=FALSE, spss=FALSE, limited_dataset=TRUE, skip_prompt=TRUE, verbose=FALSE, strict=TRUE, dcc=FALSE)`** (`R/ndaRequest.R`):
+- Executes user scripts from `./nda/{api}/structure01.R`; each script must create a data frame named `structure01`
+- Fetches structure definitions from the NDA data dictionary API (`https://nda.nih.gov/api/datadictionary/v2`, configurable via `wizaRdry.nda_base_url` option)
+- Performs date-shifting (MM/DD/YYYY → MM/01/YYYY) and age-capping unless `limited_dataset=TRUE` (the default)
+- Replaces missing data codes per config.yml; strips API-specific columns; normalizes race values
 
-The NDA workflow has **three distinct pathways** based on whether the data structure exists in the NDA data dictionary:
+### NDA Validation System (modular, in `R/nda*.R`)
 
-#### Pathway 1: Existing NDA Structure (Full Validation)
-When a data structure already exists in the NDA data dictionary:
+`ndaValidator()` (`R/ndaValidator.R`) orchestrates; the heavy lifting lives in internal modules:
 
-1. **Structure Enhancement** (`ndaRequest.R:1003-1010`):
-   - Fetches structure definition from `https://nda.nih.gov/api/datadictionary/v2`
-   - Calls `addNdarSubjectElements()` to fetch ALL required + common recommended fields from ndar_subject01
-   - Merges ndar_subject01 metadata into existing structure via `mergeNdarSubjectIntoExisting()`
-   - This ensures ndar_subject01 fields override any conflicting definitions in the original structure
+- `ValidationState.R` (R6): accumulates validation results, violations, and `bypassed_validation` flag
+- `NdaDataStructure.R` (R6): typed struct for a single NDA field definition; factory functions `nda_structure_from_nda()` / `nda_structure_from_data()`; `to_excel_row()` for export
+- `ndaValidationHelpers.R`: value range checking, GUID validation, field completeness
+- `ndaTransformations.R`: date/age standardization, type conversions, `convert_array_fields()` (bracket-notation arrays → numeric NDA codes)
+- `ndaFieldMapping.R`: field detection and similarity matching
+- `ndaFieldSelection.R`: centralized interactive prompts for field selection
+- `ndaFileCreation.R`: `should_create_nda_files()` validation gate + submission/definition file creation
 
-2. **Full Validation** (`ndaRequest.R:1014`):
-   - Runs `ndaValidator()` with the enhanced structure
-   - Validates data types, value ranges, required fields
-   - Detects value range violations (e.g., data contains codes not in NDA valueRange)
-   - Handles array field conversions (bracket notation → numeric codes)
-   - Returns validation results with `value_range_violations` tracked
+Validator also enriches metadata from REDCap (`redcap.dict()`, checkbox `parent___1` handling) and Qualtrics (`qualtrics.dict()` question text).
 
-3. **File Creation** (`ndaRequest.R:1065-1232`):
-   - **Always creates**: Submission File (`measure_submission.csv`) via `createNdaSubmissionTemplate()`
-     - CSV file with structure name in first line, headers in second line, data below
-     - Ready for upload to NDA submission portal
-   - **Conditionally creates**: Data Definition (`measure_data-definition.xlsx`) via `createNdaDataDefinition()`
-     - Only created if structure is **modified**:
-       - New fields detected (not in original NDA structure)
-       - Value range violations found (data values exceed NDA-defined ranges)
-     - Skipped for unmodified structures
-     - Excel file with field metadata for registering structure changes with NDA
+### Field Constants (`R/zzz.R`)
 
-4. **Output**: `tmp/measure_submission.csv` (always), `tmp/measure_data-definition.xlsx` (if modified)
+- `SUPER_REQUIRED_FIELDS` (5, mandatory for ALL submissions): `subjectkey`, `src_subject_id`, `interview_date`, `interview_age`, `sex`. Sourced from ndar_subject01 and added to every structure.
+- `DCC_REQUIRED_FIELDS` (7) + `DCC_RECOMMENDED_FIELDS` (4) = `DCC_FIELDS` (11): only merged/validated when `dcc=TRUE`; otherwise excluded and shown as "new" fields in Excel output.
+- `NDAR_SKIP_FIELDS`: DCC fields plus internal tracking fields (`state`, `lost_to_followup`, `study_status`) silently dropped during field mapping.
 
-#### Pathway 2: New NDA Structure (Bypass Validation)
-When a data structure is NOT found in the NDA data dictionary:
+**Validation scope:** only super required fields (and DCC fields when `dcc=TRUE`) are checked for completeness. Structure-level required fields (e.g., `phq9_1`) are NOT validated, to prevent false positives.
 
-1. **Structure Detection** (`ndaRequest.R:1076-1117`):
-   - API returns 404 or empty response for structure lookup
-   - Sets `bypassed_validation = TRUE` in validation results
-   - Creates mock NDA structure with empty dataElements
+**Strict vs lenient:** both modes set `is_valid=FALSE` on violations; the difference is that `strict=TRUE` skips file creation while `strict=FALSE` creates files anyway with warnings.
 
-2. **Metadata Enhancement**:
-   - Calls `addNdarSubjectElements()` to fetch ndar_subject01 metadata
-   - Calls `mergeRequiredMetadata()` to inject required + recommended field definitions
-   - This provides complete field metadata even without an existing structure
+### NDA Decision Tree and File Outputs
 
-3. **File Creation**:
-   - **Skips**: Submission Template (cannot submit data for non-existent structure)
-   - **Always creates**: Data Definition (`measure_data-definition.xlsx`)
-     - Uses computed metadata from data frame types + ndar_subject01
-     - Required for registering the new structure with NDA before data submission
+```
+Does structure exist in NDA data dictionary?
+│
+├─ YES, unmodified
+│  ├─ strict=TRUE  → files only if validation passes: *_submission.csv
+│  └─ strict=FALSE → *_submission.csv (despite data errors)
+│
+├─ YES, but MODIFIED (new fields OR value range violations)
+│  ├─ strict=TRUE  → skip all files
+│  └─ strict=FALSE → *_submission_draft.csv + *_definitions.xlsx
+│
+└─ NO (new structure; validation bypassed, mock structure built)
+   ├─ strict=TRUE  → *_definitions.xlsx only (register structure first)
+   └─ strict=FALSE → *_submission_draft.csv + *_definitions.xlsx
+```
 
-4. **Output**: `tmp/measure_data-definition.xlsx` only
+- `*_submission.csv` — upload directly to the NDA portal (structure name on line 1, headers on line 2)
+- `*_submission_draft.csv` — test file requiring DCC approval (new/modified structures)
+- `*_definitions.xlsx` — field metadata for registering new structures or structure changes with NDA
 
-#### Pathway 3: Data Definition Creation Logic
-The decision to create a data definition file is made in `ndaRequest.R:1132-1232`:
+All outputs go to `tmp/`. "Modified" is detected by comparing data frame columns against the structure's dataElements (excluding `*_complete` and super-required fields) and by `value_range_violations` from the validator.
 
-**For NEW structures** (Pathway 2):
-- Always create data definition
-- Reason: Must register structure with NDA before submitting data
+Key internal functions in `R/ndaRequest.R`: `addNdarSubjectElements()` (fetch ndar_subject01 metadata), `mergeNdarSubjectIntoExisting()` (override existing structure fields), `mergeRequiredMetadata()` (inject metadata into new/mock structures).
 
-**For EXISTING structures** (Pathway 1):
-- Only create if **modified** by checking:
+### Project Setup & Utilities
 
-  a) **New fields detected** (`ndaRequest.R:1160-1171`):
-     - Compares data frame columns vs. NDA structure's dataElements
-     - Excludes REDCap completion fields (`*_complete`) and super-required fields from "new" count
-     - If new fields exist → `is_modified_structure = TRUE`
+- `scry()` (`R/scry.R`) — initializes the wizaRdry project structure (`clean/`, `nda/`, `tmp/`, config.yml, secrets.R templates); `repair=TRUE` fixes incomplete structures
+- `sift()` (`R/dataFilter.R`), `meld()` (`R/dataMerge.R`), `qualtrics.rune()` (`R/dataParse.R`)
+- Exports: `to.csv()`, `to.rds()`, `to.sav()`, `to.nda()`
+- `zzz.R` lifecycle: `.onLoad()` sets mongolite options and sources `secrets.R`; `.onAttach()` checks project structure and duplicate script names
 
-  b) **Value range violations** (`ndaRequest.R:1174-1199`):
-     - Checks `validation_results$value_range_violations` from ndaValidator
-     - If violations exist (data values outside NDA-defined ranges) → `is_modified_structure = TRUE`
-     - Example: NDA structure defines valueRange="1;2;3" but data contains "9999"
+## Code Conventions
 
-- If unmodified → skip data definition (only submission file needed)
+- **Exported:** single-word verbs for workflows (`clean()`, `nda()`, `scry()`), source names for data access (`redcap()`), `source.util()` for utilities, `to.format()` for exports
+- **Internal:** `verb_noun()` snake_case helpers with `@noRd`; module docs use `@keywords internal`; R6 classes are PascalCase
+- **Environment hygiene:** never assign to `globalenv()` — use `.pkg_env$.wizaRdry_env` for internal storage (CRAN requirement); data frames are assigned to the calling environment for user convenience
+- `@examples` requiring external data must be wrapped in `\dontrun{}`
+- Preserve backward compatibility — many active research projects depend on this package
 
-**Key Functions**:
-- `addNdarSubjectElements()`: Fetches and adds ndar_subject01 required/recommended fields (`ndaRequest.R:1273`)
-- `mergeNdarSubjectIntoExisting()`: Overrides existing structure fields with ndar_subject01 definitions (`ndaRequest.R:1515`)
-- `mergeRequiredMetadata()`: Merges ndar_subject01 metadata into new structures (`ndaRequest.R:1468`)
-- `createNdaSubmissionTemplate()` / `to.nda()`: Creates CSV for data upload (`R/createNdaSubmissionTemplate.R`)
-- `createNdaDataDefinition()`: Creates Excel metadata for structure registration (`R/createNdaDataDefinition.R`)
+## Configuration Files (user projects, not this repo)
 
-**Common Operations**:
-- Executes NDA remediation scripts from `./nda/{api_type}/` directories
-- Handles missing data code replacements based on config.yml
-- Performs date-shifting (MM/DD/YYYY → MM/01/YYYY) and age-capping unless `limited_dataset=TRUE`
-- Removes API-specific columns (REDCap: primary_key & redcap_event_name; Qualtrics: Progress, ResponseId, etc.)
-- Normalizes race values ("Native Hawaiian or Pacific Islander" → "Hawaiian or Pacific Islander")
-
-### Key Validation Systems
-
-**ndaValidator** (`R/ndaValidator.R`):
-- Comprehensive validation against NDA data dictionaries
-- **Type checking**: Ensures Integer/Float/String/Date types match NDA expectations
-- **Range validation**: Checks data values against NDA-defined valueRanges
-  - Tracks violations in `validation_results$value_range_violations`
-  - Used to determine if data definition file is needed
-- **Required field verification**: Ensures all NDA-required fields are present and non-empty
-- **Array field handling** (`ndaValidator.R:66-306`):
-  - Detects array fields in bracket notation (e.g., `"[Left, Middle, Right]"`)
-  - Parses array content and maps to numeric codes via `convert_array_fields()`
-  - Supports both notes-based mapping and position-based mapping
-  - Robust error handling for fields with many NAs (branching logic)
-- **Missing field handling** (`ndaValidator.R:308-350`):
-  - Auto-adds missing required fields with appropriate missing data codes
-  - Extracts missing codes from NDA field notes (e.g., "999 = Missing")
-- **Field standardization** (`ndaValidator.R:352-399`):
-  - Converts "index" → "trial" for behavioral task data
-  - Handles other common field transformations
-- **REDCap integration**:
-  - Fetches metadata via `redcap.dict()` to enrich field descriptions
-  - Handles checkbox fields (parent___1 format) with choice mappings
-  - Parses REDCap validation rules to derive value ranges
-- **Qualtrics integration**:
-  - Fetches column map via `qualtrics.dict()` for question text descriptions
-- **Safe readline implementation**: Handles Ctrl+C interrupts gracefully without crashing
-- **Detailed error reporting**: Shows line numbers, field names, and specific violations
-
-**testSuite** (`R/testSuite.R`):
-- Validates cleaned data frames
-- Checks for required identifiers
-- Verifies data quality standards
-
-### Utility Functions
-
-**Project Setup**:
-- `scry()` - Initialize wizaRdry directory structure (`R/scry.R`)
-  - Creates `clean/`, `nda/`, `tmp/` directories
-  - Generates config.yml and secrets.R templates
-  - Optionally creates R project file
-  - Repair mode for incomplete structures
-
-**Data Manipulation**:
-- `sift()` - Filter data by rows and columns (`R/dataFilter.R`)
-- `meld()` - Merge datasets (`R/dataMerge.R`)
-- `qualtrics.rune()` - Parse multi-survey Qualtrics data by prefix (`R/dataParse.R`)
-
-**Data Export**:
-- `to.csv()` - Export to CSV (`R/createCsv.R`)
-- `to.rds()` - Export to R data file (`R/createRda.R`)
-- `to.sav()` - Export to SPSS (`R/createSpss.R`)
-
-### Package Lifecycle
-
-**Startup** (`R/zzz.R`):
-- `.onLoad()`: Sets mongolite options, loads secrets.R if exists
-- `.onAttach()`: Checks for project structure, suggests `scry()` or `scry(repair=TRUE)`
-- Validates structure completeness on startup
-- Checks for duplicate script names across folders
-
-## Important Patterns
-
-### Configuration Files
-
-**config.yml structure**:
 ```yaml
 default:
   study_alias: studyname
@@ -351,111 +198,11 @@ default:
     undefined: [-555]
 ```
 
-### Script Organization
+## Common Gotchas
 
-Cleaning scripts go in: `clean/{csv|mongo|qualtrics|redcap|oracle|sql}/scriptname.R`
-- Should create a `scriptname_clean` data frame
-- Accessed via: `clean("scriptname")`
-
-NDA scripts go in: `nda/{csv|mongo|qualtrics|redcap|oracle|sql}/structure01.R`
-- Should create a `structure01` data frame matching NDA requirements
-- Accessed via: `nda("structure01")`
-
-### Common Gotchas
-
-1. **Oracle connections**: Support DSN, DBQ (TNS alias), or host. Use uppercase field names (DSN, DBQ) in secrets.R per Oracle convention.
-
-2. **REDCap event filtering**: The `redcap_event_name` parameter accepts either a single string OR a vector of event names (e.g., `c("baseline_arm_1", "followup_arm_1")`). A vector will filter to multiple events.
-
-3. **Missing data codes**: Config supports multiple categories (skipped, refused, missing, undefined) with aliases. NDA validator automatically replaces these with NDA-specific codes.
-
-4. **Memory-aware processing**: MongoDB queries automatically chunk based on available system memory to prevent OOM errors.
-
-5. **Parallel processing**: The package uses future/future.apply for parallel operations with automatic worker scaling.
-
-6. **User preferences**: Stored in `.wizaRdry_prefs` file, controls auto-creation prompts and tree display preferences.
-
-## Dependencies
-
-Core dependencies include:
-- Data access: REDCapR, qualtRics, mongolite, DBI, RMariaDB, odbc
-- Data manipulation: dplyr, haven
-- Configuration: config, R6
-- Parallel processing: future, future.apply, parallel
-- Utilities: cli, stringdist, lubridate, knitr, openxlsx/openxlsx2
-
-## Testing Philosophy
-
-The package implements runtime validation rather than traditional unit tests:
-- Config/secrets validation on function entry
-- Data quality checks via testSuite during clean()
-- NDA compliance validation during nda()
-- Memory checks before large operations
-
-## NDA Workflow Decision Tree
-
-Understanding which pathway the `nda()` function will take:
-
-```
-Does structure exist in NDA data dictionary?
-│
-├─ YES (Existing Structure - Pathway 1)
-│  │
-│  ├─ Run full ndaValidator()
-│  ├─ Create submission file (CSV)
-│  │
-│  └─ Is structure modified?
-│     │
-│     ├─ YES (new fields OR value range violations)
-│     │  └─ Create data definition (Excel)
-│     │     → Output: measure_submission.csv + measure_data-definition.xlsx
-│     │
-│     └─ NO (unmodified)
-│        └─ Skip data definition
-│           → Output: measure_submission.csv only
-│
-└─ NO (New Structure - Pathway 2)
-   │
-   ├─ Bypass validation (no structure to validate against)
-   ├─ Skip submission file (can't submit to non-existent structure)
-   │
-   └─ Create data definition (Excel)
-      → Output: measure_data-definition.xlsx only
-```
-
-**File Outputs (as of v0.6.2)**:
-- `*_submission.csv` - Final submission file ready for NDA upload
-- `*_submission_draft.csv` - Draft file (lenient mode with NEW/MODIFIED structures)
-- `*_definitions.xlsx` - Data definitions for DCC registration/approval
-
-**File Creation Logic:**
-```
-NEW structure:
-├─ strict=TRUE  → Skip submission file, create data definition
-└─ strict=FALSE → Create *_submission_draft.csv + data definition
-
-MODIFIED structure:
-├─ strict=TRUE  → Skip all files (validation failed)
-└─ strict=FALSE → Create *_submission_draft.csv + data definition
-
-EXISTING structure (unmodified):
-├─ strict=TRUE  → Skip all files (validation failed)
-└─ strict=FALSE → Create *_submission.csv, skip data definition
-```
-
-**When to use each output file**:
-- **Submission File** (`*_submission.csv`): Upload to NDA submission portal for existing structures
-- **Draft Submission** (`*_submission_draft.csv`): Test file requiring DCC approval (NEW/MODIFIED)
-- **Data Definition** (`*_definitions.xlsx`):
-  - For new structures: Submit to NDA to register the structure
-  - For modified structures: Submit to NDA to update the structure definition
-  - Use this to communicate new fields or expanded value ranges to NDA
-
-**Common scenarios**:
-
-1. **First-time structure submission**: Pathway 2 → Creates data definition only (strict) or draft + definition (lenient)
-2. **Reusing existing NDA structure unchanged**: Pathway 1 → Creates submission file only
-3. **Adding fields to existing structure**: Pathway 1 with modifications → Creates draft + definition (lenient)
-4. **Data has codes not in NDA valueRange**: Pathway 1 with violations → Creates draft + definition (lenient)
-
-**BREAKING CHANGE (v0.6.2):** Renamed `*_template.csv` → `*_submission.csv` for clarity
+1. **Oracle secrets use UPPERCASE field names** (`DSN`, `DBQ`) per Oracle convention.
+2. **`redcap_event_name`** accepts a single string or a vector (e.g., `c("baseline_arm_1", "followup_arm_1")`).
+3. **Missing data codes** support category aliases; the NDA validator auto-replaces them with NDA-specific codes.
+4. **Value ranges:** a field with no valueRange defined and an unbounded type (String/GUID/Date/Integer/Float) is valid — only data outside a *defined* valueRange is a violation.
+5. **MongoDB queries** auto-chunk based on available system memory (cross-platform detection) to avoid OOM.
+6. **`limited_dataset` defaults to TRUE** in `nda()` — date-shifting/age-capping only happens when it is FALSE.

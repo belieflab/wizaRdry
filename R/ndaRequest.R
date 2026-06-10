@@ -147,7 +147,7 @@ nda <- function(..., csv = FALSE, rdata = FALSE, spss = FALSE, limited_dataset =
         original_name <- script_name  # Store the original name for tracking changes
 
         # Improved validation function for NDA data structure names
-        validate_script_name <- function(script_name, nda_base_url = "https://nda.nih.gov/api/datadictionary/v2") {
+        validate_script_name <- function(script_name, nda_base_url = get_nda_base_url()) {
 
           # First, check if it's a valid structure name directly
           url <- sprintf("%s/datastructure/%s", nda_base_url, script_name)
@@ -968,7 +968,7 @@ processNda <- function(measure, api, csv, rdata, spss, identifier, start_time, l
     nda_structure <- NULL
 
     tryCatch({
-      nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+      nda_base_url <- get_nda_base_url()
       url <- sprintf("%s/datastructure/%s", nda_base_url, measure)
 
       response <- httr::GET(url, httr::timeout(10))
@@ -1517,7 +1517,7 @@ addNdarSubjectElements <- function(df, measure, verbose = FALSE, dcc = FALSE) {
   tryCatch({
     message("Fetching required and recommended elements from ndar_subject01 API...")
 
-    nda_base_url <- "https://nda.nih.gov/api/datadictionary/v2"
+    nda_base_url <- get_nda_base_url()
     url <- sprintf("%s/datastructure/ndar_subject01", nda_base_url)
 
     response <- httr::GET(url, httr::timeout(10))
