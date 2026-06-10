@@ -153,3 +153,117 @@ test_that("nda() lenient mode creates files despite validation failures", {
   )
   expect_gt(length(submission_files), 0)
 })
+
+test_that("nda() recodes config missing_data_codes to NDA special codes in the submission file", {
+  skip_if_no_nda_mock()
+  proj <- local_wizardry_project()
+  measure <- "wizardry01"
+  local_globalenv_cleanup(measure)
+  withr::local_options(wizaRdry.nda_base_url = nda_mock_url())
+  # The scry template ships missing_data_codes commented out; define them
+  writeLines(c(
+    "default:",
+    "  study_alias: testproj",
+    "  identifier: src_subject_id",
+    "  missing_data_codes:",
+    "    missing: [-777]",
+    "    refused: [-9999]"
+  ), file.path(proj, "config.yml"))
+
+  df <- make_nda_fixture_df(measure)
+  # wizardry01_missing has valueRange "0::4;-9" -> -9 is the NDA special code
+  df$wizardry01_missing <- c(0L, -777L, 4L)
+  # wizardry01_score has valueRange "0::100" with NO special code -> blanked
+  df$wizardry01_score <- c(1L, 2L, -9999L)
+  write_pathway_script(proj, "nda", "redcap", measure, df)
+
+  msgs <- capture_messages(nda(measure, skip_prompt = TRUE))
+
+  expect_true(any(grepl("Status: PASSED", msgs)))
+  sub_df <- utils::read.csv(
+    file.path(proj, "tmp", paste0(measure, "_submission.csv")), skip = 1
+  )
+  expect_equal(sub_df$wizardry01_missing, c(0L, -9L, 4L))
+  expect_equal(sub_df$wizardry01_score, c(1L, 2L, NA))
+})
+
+test_that("nda() strips Qualtrics standard-output columns from the submission file", {
+  skip_if_no_nda_mock()
+  proj <- local_wizardry_project()
+  measure <- "wizardry01"
+  local_globalenv_cleanup(measure)
+  withr::local_options(wizaRdry.nda_base_url = nda_mock_url())
+  df <- make_nda_fixture_df(measure)
+  df$ResponseId <- sprintf("R_%05d", 1:3)
+  df$Finished <- TRUE
+  write_pathway_script(proj, "nda", "qualtrics", measure, df)
+
+  msgs <- capture_messages(nda(measure, skip_prompt = TRUE))
+
+  expect_true(any(grepl("Status: PASSED", msgs)))
+  sub_df <- utils::read.csv(
+    file.path(proj, "tmp", paste0(measure, "_submission.csv")), skip = 1
+  )
+  expect_false(any(c("ResponseId", "Finished") %in% names(sub_df)))
+  expect_equal(nrow(sub_df), 3)
+})
+
+test_that("nda() strips REDCap standard-output columns from the submission file", {
+  skip_if_no_nda_mock()
+  proj <- local_wizardry_project()
+  measure <- "wizardry01"
+  local_globalenv_cleanup(measure)
+  withr::local_options(wizaRdry.nda_base_url = nda_mock_url())
+  df <- make_nda_fixture_df(measure)
+  df$redcap_event_name <- "baseline_arm_1"
+  df$record_id <- 1:3
+  df$wizardry01_complete <- 2L
+  write_pathway_script(proj, "nda", "redcap", measure, df)
+
+  msgs <- capture_messages(nda(measure, skip_prompt = TRUE))
+
+  expect_true(any(grepl("Status: PASSED", msgs)))
+  sub_df <- utils::read.csv(
+    file.path(proj, "tmp", paste0(measure, "_submission.csv")), skip = 1
+  )
+  expect_false(any(
+    c("redcap_event_name", "record_id", "wizardry01_complete") %in% names(sub_df)
+  ))
+  expect_equal(nrow(sub_df), 3)
+})
+
+test_that("nda() excludes DCC fields by default and merges them with dcc = TRUE", {
+  skip_if_no_nda_mock()
+  dcc_cols <- c("race", "phenotype", "ethnic_group", "site")
+
+  make_dcc_df <- function() {
+    df <- make_nda_fixture_df("wizardry01")
+    df$race <- "White"
+    df$phenotype <- "CHR"
+    df$ethnic_group <- "Not Hispanic"
+    df$site <- "Yale"
+    df
+  }
+
+  # Default: DCC fields are removed before submission
+  proj <- local_wizardry_project()
+  local_globalenv_cleanup("wizardry01")
+  withr::local_options(wizaRdry.nda_base_url = nda_mock_url())
+  write_pathway_script(proj, "nda", "redcap", "wizardry01", make_dcc_df())
+  msgs <- capture_messages(nda("wizardry01", skip_prompt = TRUE))
+  expect_true(any(grepl("Status: PASSED", msgs)))
+  sub_df <- utils::read.csv(file.path(proj, "tmp", "wizardry01_submission.csv"), skip = 1)
+  expect_false(any(dcc_cols %in% names(sub_df)))
+
+  # dcc = TRUE: DCC fields are merged from ndar_subject01 and submitted
+  proj2 <- local_wizardry_project()
+  local_globalenv_cleanup("wizardry01")
+  write_pathway_script(proj2, "nda", "redcap", "wizardry01", make_dcc_df())
+  msgs2 <- capture_messages(nda("wizardry01", skip_prompt = TRUE, dcc = TRUE))
+  expect_true(any(grepl("Status: PASSED", msgs2)))
+  sub_df2 <- utils::read.csv(file.path(proj2, "tmp", "wizardry01_submission.csv"), skip = 1)
+  expect_true(all(dcc_cols %in% names(sub_df2)))
+  expect_equal(unique(sub_df2$race), "White")
+  # DCC fields are additions to the registered structure -> definitions created
+  expect_true(file.exists(file.path(proj2, "tmp", "wizardry01_definitions.xlsx")))
+})

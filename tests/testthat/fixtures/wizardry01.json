@@ -79,6 +79,18 @@
       "notes": null,
       "aliases": [],
       "position": 6
+    },
+    {
+      "id": 7,
+      "name": "wizardry01_missing",
+      "type": "Integer",
+      "size": null,
+      "required": "Recommended",
+      "description": "Item with an NDA-defined special missing code",
+      "valueRange": "0::4;-9",
+      "notes": "-9 = Missing",
+      "aliases": [],
+      "position": 7
     }
   ]
 }
