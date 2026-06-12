@@ -350,6 +350,13 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     })
   }
 
+  # Format any remaining Date/POSIXt columns as MM/DD/YYYY — write.table would
+  # otherwise serialize them as ISO (YYYY-MM-DD), which NDA rejects
+  date_cols <- vapply(template, function(x) inherits(x, "Date") || inherits(x, "POSIXt"), logical(1))
+  if (any(date_cols)) {
+    template[date_cols] <- lapply(template[date_cols], function(x) format(x, "%m/%d/%Y"))
+  }
+
   # Append the data without column headers
   write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE,
               quote = TRUE, sep = ",", na = "")

@@ -480,6 +480,19 @@ ndaValidator <- function(measure_name,
       df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
     }
 
+    # Other NDA-declared Date fields: reformat to MM/DD/YYYY without day-shifting
+    # (date-shifting for de-identification applies to interview_date only)
+    if (!is.null(elements$type)) {
+      nda_date_cols <- setdiff(
+        intersect(elements$name[elements$type == "Date"], names(df)),
+        "interview_date"
+      )
+      if (length(nda_date_cols) > 0) {
+        df <- standardize_dates(df, date_cols = nda_date_cols, verbose = verbose,
+                                limited_dataset = limited_dataset, shift = FALSE)
+      }
+    }
+
     if (limited_dataset) {
       # Limited dataset mode - date format standardized above, skip age-capping/date-shifting
       if (!verbose) {

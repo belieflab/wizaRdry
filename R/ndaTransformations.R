@@ -16,9 +16,11 @@
 #' @param date_cols Character vector of date column names (default: "interview_date")
 #' @param verbose Logical - print detailed output
 #' @param limited_dataset Logical - if FALSE, performs date-shifting for de-identification
+#' @param shift Logical - if FALSE, only reformat to MM/DD/YYYY without day-shifting
+#'   (day-shifting applies to interview_date only; other date fields keep their real day)
 #' @return Data frame with standardized dates
 #' @noRd
-standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRUE, limited_dataset = FALSE) {
+standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRUE, limited_dataset = FALSE, shift = TRUE) {
   date_summary <- list()
   
   for (col in date_cols) {
@@ -62,7 +64,7 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
             if(verbose) cat(sprintf("\n  Detected format: %s", format))
             
             # Choose output format based on limited_dataset flag
-            output_format <- ifelse(limited_dataset, "%m/%d/%Y", "%m/01/%Y")
+            output_format <- if (!shift || limited_dataset) "%m/%d/%Y" else "%m/01/%Y"
             
             # For dates that couldn't be parsed, keep the original value
             new_dates <- rep(NA, length(dates))
@@ -108,7 +110,7 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
   }
   
   if(verbose && length(date_summary) > 0) {
-    if(limited_dataset == FALSE) message("\n\nDe-identifying interview_date using date-shifting...")
+    if(shift && limited_dataset == FALSE) message("\n\nDe-identifying interview_date using date-shifting...")
     cat("Date standardization summary:")
     for(field in names(date_summary)) {
       cat(sprintf("\n- %s", field))
@@ -322,9 +324,15 @@ convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) 
       if (inherits(df[[col]], "POSIXt") ||
           inherits(df[[col]], "Date") ||
           length(class(df[[col]])) > 1) {
-        
-        if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
-        df[[col]] <- as.character(df[[col]])
+
+        if (inherits(df[[col]], "Date") || inherits(df[[col]], "POSIXt")) {
+          # NDA requires MM/DD/YYYY; plain as.character() on Date/POSIXt yields ISO
+          if(verbose) message(sprintf("Column '%s' is a date class. Converting to MM/DD/YYYY character.", col))
+          df[[col]] <- format(df[[col]], "%m/%d/%Y")
+        } else {
+          if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
+          df[[col]] <- as.character(df[[col]])
+        }
       }
       
       # Test if column is accessible
