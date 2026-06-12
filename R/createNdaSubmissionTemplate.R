@@ -357,6 +357,20 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     template[date_cols] <- lapply(template[date_cols], function(x) format(x, "%m/%d/%Y"))
   }
 
+  # Character columns holding ISO date strings (e.g., fields not declared as
+  # Date in the NDA structure) must also be MM/DD/YYYY. Only convert columns
+  # where every non-empty value is unambiguously an ISO date.
+  iso_pattern <- "^\\d{4}-\\d{2}-\\d{2}([ T].*)?$"
+  char_cols <- names(template)[vapply(template, is.character, logical(1))]
+  for (col in char_cols) {
+    vals <- template[[col]]
+    non_empty <- vals[!is.na(vals) & nzchar(vals)]
+    if (length(non_empty) > 0 && all(grepl(iso_pattern, non_empty))) {
+      parsed <- as.Date(substr(vals, 1, 10), format = "%Y-%m-%d")
+      template[[col]] <- ifelse(!is.na(parsed), format(parsed, "%m/%d/%Y"), vals)
+    }
+  }
+
   # Append the data without column headers
   write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE,
               quote = TRUE, sep = ",", na = "")
