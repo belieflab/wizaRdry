@@ -18,9 +18,10 @@ if (requireNamespace("webfakes", quietly = TRUE)) {
     )
   }
   nda_app$locals$fixtures <- list(
-    ndar_subject01     = read_fixture("ndar_subject01.json"),
-    wizardry01         = read_fixture("wizardry01.json"),
-    datastructure_list = read_fixture("datastructure_list.json")
+    ndar_subject01      = read_fixture("ndar_subject01.json"),
+    wizardry01          = read_fixture("wizardry01.json"),
+    wizardry_dates01    = read_fixture("wizardry_dates01.json"),
+    datastructure_list  = read_fixture("datastructure_list.json")
   )
 
   # Route order matters: most specific first.
@@ -38,6 +39,11 @@ if (requireNamespace("webfakes", quietly = TRUE)) {
   nda_app$get("/datastructure/wizardry01", function(req, res) {
     res$set_header("Content-Type", "application/json")
     res$send(res$app$locals$fixtures$wizardry01)
+  })
+
+  nda_app$get("/datastructure/wizardry_dates01", function(req, res) {
+    res$set_header("Content-Type", "application/json")
+    res$send(res$app$locals$fixtures$wizardry_dates01)
   })
 
   nda_app$get("/datastructure", function(req, res) {
