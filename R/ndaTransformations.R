@@ -126,6 +126,79 @@ standardize_dates <- function(df, date_cols = c("interview_date"), verbose = TRU
   return(df)
 }
 
+#' Format a vector as MM/DD/YYYY if it is date-like
+#'
+#' @description
+#' NDA requires MM/DD/YYYY for all dates. Date/POSIXt vectors are formatted
+#' directly. Character vectors are converted only when every non-empty value
+#' is unambiguously an ISO date or datetime (YYYY-MM-DD[ T...]), so free text
+#' and non-date strings are never altered. Anything else passes through.
+#'
+#' @param x A vector
+#' @return The vector, with date-like values as MM/DD/YYYY character
+#' @noRd
+format_mdy <- function(x) {
+  if (inherits(x, "Date") || inherits(x, "POSIXt")) {
+    return(format(x, "%m/%d/%Y"))
+  }
+  if (is.character(x)) {
+    non_empty <- x[!is.na(x) & nzchar(x)]
+    iso_pattern <- "^\\d{4}-\\d{2}-\\d{2}([ T].*)?$"
+    if (length(non_empty) > 0 && all(grepl(iso_pattern, non_empty))) {
+      parsed <- as.Date(substr(x, 1, 10), format = "%Y-%m-%d")
+      return(ifelse(!is.na(parsed), format(parsed, "%m/%d/%Y"), x))
+    }
+  }
+  x
+}
+
+#' Enforce NDA's MM/DD/YYYY date format across a data frame
+#'
+#' @description
+#' Applies format_mdy() to every column. Final guarantee that no ISO dates
+#' reach an NDA submission file, regardless of which pathway produced the
+#' data frame.
+#'
+#' @param df Data frame
+#' @return Data frame with all date-like columns as MM/DD/YYYY character
+#' @noRd
+enforce_nda_date_format <- function(df) {
+  df[] <- lapply(df, format_mdy)
+  df
+}
+
+#' Standardize all structure-declared date fields for NDA submission
+#'
+#' @description
+#' Runs standardize_dates() over interview_date (with day-shifting to
+#' MM/01/YYYY when de-identifying) and over every other field the NDA
+#' structure declares as type Date (reformat only - real day preserved).
+#' Handles non-ISO source formats (mdy, dmy, etc.) via standardize_dates'
+#' format detection.
+#'
+#' @param df Data frame
+#' @param elements NDA structure dataElements (needs name and type columns)
+#' @param verbose Logical - print detailed output
+#' @param limited_dataset Logical - if FALSE, day-shifts interview_date
+#' @return Data frame with standardized dates
+#' @noRd
+standardize_structure_dates <- function(df, elements, verbose = TRUE, limited_dataset = FALSE) {
+  if ("interview_date" %in% names(df)) {
+    df <- standardize_dates(df, verbose = verbose, limited_dataset = limited_dataset)
+  }
+  if (!is.null(elements$type)) {
+    other_date_cols <- setdiff(
+      intersect(elements$name[elements$type == "Date"], names(df)),
+      "interview_date"
+    )
+    if (length(other_date_cols) > 0) {
+      df <- standardize_dates(df, date_cols = other_date_cols, verbose = verbose,
+                              limited_dataset = limited_dataset, shift = FALSE)
+    }
+  }
+  df
+}
+
 #' Standardize interview_age for NDA submission
 #'
 #' @description
@@ -328,7 +401,7 @@ convert_problematic_column_types <- function(df, measure_name, verbose = FALSE) 
         if (inherits(df[[col]], "Date") || inherits(df[[col]], "POSIXt")) {
           # NDA requires MM/DD/YYYY; plain as.character() on Date/POSIXt yields ISO
           if(verbose) message(sprintf("Column '%s' is a date class. Converting to MM/DD/YYYY character.", col))
-          df[[col]] <- format(df[[col]], "%m/%d/%Y")
+          df[[col]] <- format_mdy(df[[col]])
         } else {
           if(verbose) message(sprintf("Column '%s' has a complex class structure. Converting to character.", col))
           df[[col]] <- as.character(df[[col]])

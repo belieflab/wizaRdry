@@ -350,26 +350,9 @@ to.nda <- function(df, path = ".", skip_prompt = TRUE, selected_fields = NULL, s
     })
   }
 
-  # Format any remaining Date/POSIXt columns as MM/DD/YYYY — write.table would
-  # otherwise serialize them as ISO (YYYY-MM-DD), which NDA rejects
-  date_cols <- vapply(template, function(x) inherits(x, "Date") || inherits(x, "POSIXt"), logical(1))
-  if (any(date_cols)) {
-    template[date_cols] <- lapply(template[date_cols], function(x) format(x, "%m/%d/%Y"))
-  }
-
-  # Character columns holding ISO date strings (e.g., fields not declared as
-  # Date in the NDA structure) must also be MM/DD/YYYY. Only convert columns
-  # where every non-empty value is unambiguously an ISO date.
-  iso_pattern <- "^\\d{4}-\\d{2}-\\d{2}([ T].*)?$"
-  char_cols <- names(template)[vapply(template, is.character, logical(1))]
-  for (col in char_cols) {
-    vals <- template[[col]]
-    non_empty <- vals[!is.na(vals) & nzchar(vals)]
-    if (length(non_empty) > 0 && all(grepl(iso_pattern, non_empty))) {
-      parsed <- as.Date(substr(vals, 1, 10), format = "%Y-%m-%d")
-      template[[col]] <- ifelse(!is.na(parsed), format(parsed, "%m/%d/%Y"), vals)
-    }
-  }
+  # NDA rejects ISO dates: format any remaining Date/POSIXt columns and any
+  # character columns holding ISO date strings as MM/DD/YYYY before writing
+  template <- enforce_nda_date_format(template)
 
   # Append the data without column headers
   write.table(template, file_path, row.names = FALSE, col.names = FALSE, append = TRUE,
