@@ -12,7 +12,15 @@ scry(
   show_tree = NULL,
   create_project = FALSE,
   examples = FALSE,
-  skip_prompt = TRUE
+  skip_prompt = TRUE,
+  clean_repo = NULL,
+  clean_branch = NULL,
+  replace_clean = FALSE,
+  github = FALSE,
+  github_account = "belieflab",
+  private = TRUE,
+  pem = NULL,
+  hooks = TRUE
 )
 }
 \arguments{
@@ -37,6 +45,32 @@ If FALSE (default), will not create an R project.}
 If FALSE (default when repairing), will skip creating example scripts.}
 
 \item{skip_prompt}{Logical. If TRUE (default), will skip the initial confirmation prompt if y/n preferences are not set yet. FALSE if specified.}
+
+\item{clean_repo}{Character string. Git URL (or local path) of a cleaning-script library to use as
+the \code{clean/} folder, added as a git submodule, e.g.
+\code{"git@github.com:CAPR-Consortium/clean.git"}. The library is checked with
+\code{validate_clean_library()} and removed again if it does not conform. Initialises a git
+repository, installs the pre-commit hook, writes a README and an R project, and commits.}
+
+\item{clean_branch}{Character string. Optional branch of \code{clean_repo} to track.}
+
+\item{replace_clean}{Logical. If TRUE, an existing \code{clean/} folder that contains scripts is moved
+to \code{clean.bak-<timestamp>/} before the submodule is added. If FALSE (default), scry() stops
+instead. Nothing is ever deleted.}
+
+\item{github}{Logical. If TRUE, creates a GitHub repository with the gh CLI and pushes to it, after a
+y/n confirmation. Requires gh to be installed and authenticated, and a camelCase project folder name.}
+
+\item{github_account}{Character string. GitHub user or organization for the new repository.
+Defaults to "belieflab".}
+
+\item{private}{Logical. If TRUE (default), the GitHub repository is private.}
+
+\item{pem}{Character string. Path to the MongoDB .pem file to copy into the project root.
+Defaults to ~/Downloads/rds-combined-ca-bundle.pem when that file exists.}
+
+\item{hooks}{Logical. If TRUE (default), installs the pre-commit hook that blocks secrets.R and *.pem
+and adds a collaborator header to .R files. Only applies with \code{clean_repo} or \code{github}.}
 }
 \value{
 Invisible TRUE if successful.
@@ -91,6 +125,12 @@ scry(repair = TRUE, examples = TRUE)
 
 # Skip the confirmation prompt
 scry(skip_prompt = TRUE)
+
+# Use a shared cleaning-script library as clean/ (git submodule)
+scry(clean_repo = "git@github.com:CAPR-Consortium/clean.git")
+
+# ...and create a private GitHub repository for the analysis
+scry(clean_repo = "git@github.com:CAPR-Consortium/clean.git", github = TRUE)
 }
 
 }

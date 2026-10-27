@@ -155,6 +155,15 @@ NDAR_SUBJECT01_EXEMPT_FIELDS <- c("interview_age", "interview_date")
         file.path(current_dir, "secrets.R"),
         file.path(current_dir, "main.R")
       )
+      # A clean/ script library from a submodule owns its own layout
+      clean_submodule <- tryCatch(.scry_clean_submodule(current_dir), error = function(e) NULL)
+      if (!is.null(clean_submodule)) {
+        dirs_to_check <- dirs_to_check[!startsWith(dirs_to_check, file.path(current_dir, "clean"))]
+        if (length(list.files(file.path(current_dir, "clean"), all.files = TRUE, no.. = TRUE)) == 0) {
+          packageStartupMessage("clean/ submodule not initialised: run `git submodule update --init` in a terminal.")
+        }
+      }
+
       structure_complete <- all(sapply(dirs_to_check, dir.exists)) &&
         all(sapply(files_to_check, file.exists))
 

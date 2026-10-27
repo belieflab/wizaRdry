@@ -18,6 +18,24 @@
 #' @param examples Logical. If TRUE (default when not repairing), will create example script templates.
 #'        If FALSE (default when repairing), will skip creating example scripts.
 #' @param skip_prompt Logical. If TRUE (default), will skip the initial confirmation prompt if y/n preferences are not set yet. FALSE if specified.
+#' @param clean_repo Character string. Git URL (or local path) of a cleaning-script library to use as
+#'        the \code{clean/} folder, added as a git submodule, e.g.
+#'        \code{"git@github.com:CAPR-Consortium/clean.git"}. The library is checked with
+#'        \code{validate_clean_library()} and removed again if it does not conform. Initialises a git
+#'        repository, installs the pre-commit hook, writes a README and an R project, and commits.
+#' @param clean_branch Character string. Optional branch of \code{clean_repo} to track.
+#' @param replace_clean Logical. If TRUE, an existing \code{clean/} folder that contains scripts is moved
+#'        to \code{clean.bak-<timestamp>/} before the submodule is added. If FALSE (default), scry() stops
+#'        instead. Nothing is ever deleted.
+#' @param github Logical. If TRUE, creates a GitHub repository with the gh CLI and pushes to it, after a
+#'        y/n confirmation. Requires gh to be installed and authenticated, and a camelCase project folder name.
+#' @param github_account Character string. GitHub user or organization for the new repository.
+#'        Defaults to "belieflab".
+#' @param private Logical. If TRUE (default), the GitHub repository is private.
+#' @param pem Character string. Path to the MongoDB .pem file to copy into the project root.
+#'        Defaults to ~/Downloads/rds-combined-ca-bundle.pem when that file exists.
+#' @param hooks Logical. If TRUE (default), installs the pre-commit hook that blocks secrets.R and *.pem
+#'        and adds a collaborator header to .R files. Only applies with \code{clean_repo} or \code{github}.
 #'
 #' @return Invisible TRUE if successful.
 #'
@@ -60,11 +78,20 @@
 #'
 #' # Skip the confirmation prompt
 #' scry(skip_prompt = TRUE)
+#'
+#' # Use a shared cleaning-script library as clean/ (git submodule)
+#' scry(clean_repo = "git@github.com:CAPR-Consortium/clean.git")
+#'
+#' # ...and create a private GitHub repository for the analysis
+#' scry(clean_repo = "git@github.com:CAPR-Consortium/clean.git", github = TRUE)
 #' }
 #'
 #' @export
 scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FALSE, show_tree = NULL,
-                 create_project = FALSE, examples = FALSE, skip_prompt = TRUE) {
+                 create_project = FALSE, examples = FALSE, skip_prompt = TRUE,
+                 clean_repo = NULL, clean_branch = NULL, replace_clean = FALSE,
+                 github = FALSE, github_account = "belieflab", private = TRUE,
+                 pem = NULL, hooks = TRUE) {
   # Check for user preferences file
   user_prefs_file <- file.path(path, ".wizaRdry_prefs")
   user_prefs <- list(shown_tree = FALSE, auto_create = FALSE)
@@ -127,6 +154,17 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     }
   }
 
+  # Git/GitHub setup: run every check that can fail before anything is written
+  use_git <- !is.null(clean_repo) || github
+  if (use_git) {
+    preflight <- .scry_git_preflight(path, clean_repo, clean_branch, github, github_account,
+                                     pem, replace_clean)
+    create_project <- TRUE
+  }
+
+  # A clean/ script library from a submodule owns its own layout
+  clean_external <- !is.null(clean_repo) || !is.null(.scry_clean_submodule(path))
+
   # Define directory structure
   expected_dirs <- c(
     file.path(path, "clean"),
@@ -145,6 +183,9 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     file.path(path, "nda", "sql"),
     file.path(path, "tmp")
   )
+  if (clean_external) {
+    expected_dirs <- expected_dirs[!startsWith(expected_dirs, file.path(path, "clean"))]
+  }
 
   # Define expected files
   expected_files <- c(
@@ -450,8 +491,8 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
 
   # Create example template files only if examples=TRUE
   if (examples) {
-    # Create clean templates
-    for (template_name in names(clean_templates)) {
+    # Create clean templates (not inside a clean/ library that comes from a submodule)
+    for (template_name in names(clean_templates)[!clean_external]) {
       template <- clean_templates[[template_name]]
       if (!file.exists(template$path)) {
         writeLines(template$content, template$path)
@@ -517,6 +558,12 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
     }
   }
 
+  # Git repository, clean/ submodule, hooks, README, commit, and GitHub
+  if (use_git) {
+    git_result <- .scry_git_setup(path, preflight, clean_repo, clean_branch, github, github_account,
+                                  private, hooks, skip_prompt)
+  }
+
   # Determine appropriate message based on action
   if (structure_exists && !structure_complete && repair) {
     header_message <- "The wizaRdry crystal ball has repaired your project structure:"
@@ -550,6 +597,15 @@ scry <- function(study_alias = NULL, path = ".", overwrite = FALSE, repair = FAL
 
   if (create_project && length(rproj_files) == 0) {
     message("5. Open the newly created .Rproj file to work in this project environment")
+  }
+
+  if (!is.null(.scry_clean_submodule(path))) {
+    message("\nclean/ is a git submodule:")
+    message("- Use scry.sync() to pull updates for the project and its cleaning-script library")
+    message("- Collaborators should clone with: git clone --recurse-submodules <repo-url>")
+    if (use_git && !is.null(git_result$backup_dir)) {
+      message("- Your previous clean/ scripts are in ", basename(git_result$backup_dir), "/")
+    }
   }
 
   return(invisible(TRUE))
